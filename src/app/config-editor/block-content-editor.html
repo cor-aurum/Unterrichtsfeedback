@@ -1,0 +1,36 @@
+@if (type() === 'image') {
+  <div class="image-block">
+    @if (content().image; as image) {
+      <img [src]="image.dataUrl" alt="Bild für das PDF" [style.width.px]="image.widthMm * 2" />
+      <div class="image-settings">
+        <label>
+          Breite im PDF (mm)
+          <input type="number" min="5" [max]="maxImageWidth" [value]="image.widthMm" (change)="setWidth($event)" />
+        </label>
+        <label>
+          Ausrichtung
+          <select [value]="image.align" (change)="imageSettingsChange.emit({ align: $any(valueOf($event)) })">
+            <option value="left">Links</option>
+            <option value="center">Mittig</option>
+            <option value="right">Rechts</option>
+          </select>
+        </label>
+        <div class="row">
+          <button class="secondary" (click)="fileInput.click()">Bild ersetzen</button>
+          <button class="secondary" (click)="contentChange.emit({ image: undefined })">Entfernen</button>
+        </div>
+      </div>
+    } @else {
+      <p class="muted no-image">Kein Bild, an dieser Stelle erscheint nichts.</p>
+      <button class="secondary" (click)="fileInput.click()">Bild auswählen</button>
+    }
+    <input #fileInput type="file" accept="image/*" hidden (change)="chooseImage(fileInput)" />
+  </div>
+} @else {
+  <textarea
+    [value]="content().text"
+    (change)="contentChange.emit({ text: valueOf($event) })"
+    [placeholder]="placeholder()"
+    aria-label="Fester Text"
+  ></textarea>
+}

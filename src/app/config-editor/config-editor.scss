@@ -96,32 +96,52 @@ code {
   }
 }
 
-.image-block {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  align-items: flex-start;
-
-  img {
-    max-width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-  }
+.variant {
+  margin-top: 0.9rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
 }
 
-.image-settings {
+.variant-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.instrument-choice {
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
 
   label {
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.9rem;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
   }
+}
 
-  input[type='number'] {
-    width: 7rem;
-  }
+.add-variant {
+  margin-top: 0.75rem;
+}
+
+.default-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.instruments {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }

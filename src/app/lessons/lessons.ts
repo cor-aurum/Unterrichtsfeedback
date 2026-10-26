@@ -1,7 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ConfigStore } from '../config.store';
-import { formatDate, Lesson, Student } from '../model';
+import { defaultInstrument, formatDate, Instrument, instrumentOf, Lesson, Student } from '../model';
 import { sortedLessons, StudentsStore } from '../students.store';
 
 @Component({
@@ -14,17 +14,28 @@ export class Lessons {
   protected readonly store = inject(StudentsStore);
   protected readonly config = inject(ConfigStore).config;
   protected readonly formatDate = formatDate;
+  protected readonly defaultInstrumentId = computed(() => defaultInstrument(this.config()).id);
 
   protected readonly lessonsOfSelected = computed(() => {
     const student = this.store.selectedStudent();
     return student ? sortedLessons(student).reverse() : [];
   });
 
-  protected addStudent(input: HTMLInputElement): void {
-    const name = input.value.trim();
+  /** Nach dem Anlegen steht die Auswahl wieder auf dem Standardinstrument. */
+  protected addStudent(nameInput: HTMLInputElement, instrumentSelect: HTMLSelectElement): void {
+    const name = nameInput.value.trim();
     if (!name) return;
-    this.store.addStudent(name);
-    input.value = '';
+    this.store.addStudent(name, instrumentSelect.value);
+    nameInput.value = '';
+    instrumentSelect.value = this.defaultInstrumentId();
+  }
+
+  protected setInstrument(student: Student, event: Event): void {
+    this.store.setInstrument(student.id, (event.target as HTMLSelectElement).value);
+  }
+
+  protected instrumentOf(student: Student): Instrument {
+    return instrumentOf(student, this.config());
   }
 
   protected renameStudent(student: Student, event: Event): void {

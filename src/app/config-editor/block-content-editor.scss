@@ -1,0 +1,38 @@
+:host {
+  display: block;
+}
+
+.image-block {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+
+  img {
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+}
+
+.image-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.9rem;
+  }
+
+  input[type='number'] {
+    width: 7rem;
+  }
+}
+
+.no-image {
+  margin: 0;
+  align-self: center;
+}

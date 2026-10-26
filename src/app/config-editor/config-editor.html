@@ -27,11 +27,62 @@
   </p>
 </section>
 
+<h2 class="group-title">Instrumente</h2>
+<p class="muted group-hint">
+  Stehen beim Anlegen einer Person zur Auswahl, ersetzen den Platzhalter <code>{{ '{instrument}' }}</code>
+  und steuern die Varianten der festen Inhalte. Jede Person hat ein Instrument; das Standardinstrument
+  ist beim Anlegen vorausgewählt.
+</p>
+
+<section class="card">
+  <ul class="instruments">
+    @for (instrument of store.config().instruments; track instrument.id; let first = $first, last = $last) {
+      <li class="row">
+        <label class="default-choice" title="Standardinstrument für neue Personen">
+          <input
+            type="radio"
+            name="default-instrument"
+            [checked]="instrument.id === defaultInstrumentId()"
+            (change)="store.setDefaultInstrument(instrument.id)"
+          />
+          Standard
+        </label>
+        <input
+          type="text"
+          class="grow"
+          [value]="instrument.name"
+          (change)="store.renameInstrument(instrument.id, valueOf($event))"
+          aria-label="Name des Instruments"
+        />
+        <button class="icon" [disabled]="first" (click)="store.moveInstrument(instrument.id, -1)" title="Nach oben">↑</button>
+        <button class="icon" [disabled]="last" (click)="store.moveInstrument(instrument.id, 1)" title="Nach unten">↓</button>
+        <button
+          class="icon"
+          [disabled]="first && last"
+          (click)="removeInstrument(instrument)"
+          [title]="first && last ? 'Mindestens ein Instrument wird gebraucht' : 'Instrument löschen'"
+        >✕</button>
+      </li>
+    }
+  </ul>
+  <div class="row">
+    <input
+      #newInstrument
+      type="text"
+      class="grow"
+      placeholder="Neues Instrument"
+      (keydown.enter)="addInstrument(newInstrument)"
+    />
+    <button class="secondary" (click)="addInstrument(newInstrument)">Hinzufügen</button>
+  </div>
+</section>
+
 <h2 class="group-title">Feste Inhalte im PDF</h2>
 <p class="muted group-hint">
   Erscheinen bei jeder Person: „Am Anfang“ unter der Überschrift, „Am Ende“ nach der letzten Stunde.
   Dazwischen, vor den Stunden, steht der allgemeine Teil mit den Abschnitten, die dafür eingestellt
-  sind.
+  sind. Mit Varianten lässt sich ein Inhalt je Instrument austauschen; ist der Standardinhalt leer,
+  erscheint der Block nur bei den Instrumenten der Varianten.
 </p>
 
 @for (block of store.config().blocks; track block.id; let first = $first, last = $last) {
@@ -41,7 +92,7 @@
       <select
         class="grow"
         [value]="block.position"
-        (change)="store.updateBlock(block.id, { position: $any(valueOf($event)) })"
+        (change)="store.setBlockPosition(block.id, $any(valueOf($event)))"
         aria-label="Position im PDF"
       >
         <option value="start">Am Anfang</option>
@@ -52,42 +103,50 @@
       <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
     </div>
 
-    @if (block.image; as image) {
-      <div class="image-block">
-        <img [src]="image.dataUrl" alt="Bild für das PDF" [style.width.px]="image.widthMm * 2" />
-        <div class="image-settings">
-          <label>
-            Breite im PDF (mm)
-            <input
-              type="number"
-              min="5"
-              [max]="maxImageWidth"
-              [value]="image.widthMm"
-              (change)="setImageWidth(block, $event)"
-            />
-          </label>
-          <label>
-            Ausrichtung
-            <select
-              [value]="image.align"
-              (change)="store.updateBlockImage(block.id, { align: $any(valueOf($event)) })"
-            >
-              <option value="left">Links</option>
-              <option value="center">Mittig</option>
-              <option value="right">Rechts</option>
-            </select>
-          </label>
-          <button class="secondary" (click)="replaceInput.click()">Bild ersetzen</button>
-          <input #replaceInput type="file" accept="image/*" hidden (change)="replaceImage(block, replaceInput)" />
+    @if (block.variants.length > 0) {
+      <p class="variant-label">Standard (alle anderen Instrumente)</p>
+    }
+    <app-block-content-editor
+      [type]="block.type"
+      [content]="block"
+      placeholder="z. B. Hallo {vorname},"
+      (contentChange)="store.updateContent({ blockId: block.id, variantId: null }, $event)"
+      (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: null }, $event)"
+      (error)="showError($event)"
+    />
+
+    @for (variant of block.variants; track variant.id) {
+      <div class="variant">
+        <div class="row">
+          <p class="variant-label grow">Variante für</p>
+          <button class="icon" (click)="store.removeVariant(block.id, variant.id)" title="Variante löschen">✕</button>
         </div>
+        <div class="instrument-choice">
+          @for (instrument of store.config().instruments; track instrument.id) {
+            <label>
+              <input
+                type="checkbox"
+                [checked]="variant.instrumentIds.includes(instrument.id)"
+                (change)="store.toggleVariantInstrument(block.id, variant.id, instrument.id)"
+              />
+              {{ instrument.name }}
+            </label>
+          }
+        </div>
+        <app-block-content-editor
+          [type]="block.type"
+          [content]="variant"
+          (contentChange)="store.updateContent({ blockId: block.id, variantId: variant.id }, $event)"
+          (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: variant.id }, $event)"
+          (error)="showError($event)"
+        />
       </div>
-    } @else {
-      <textarea
-        [value]="block.text"
-        (change)="store.updateBlock(block.id, { text: valueOf($event) })"
-        placeholder="z. B. Hallo {vorname},"
-        aria-label="Fester Text"
-      ></textarea>
+    }
+
+    @if (store.config().instruments.length > 0) {
+      <button class="secondary add-variant" (click)="store.addVariant(block.id)">
+        + Variante für bestimmte Instrumente
+      </button>
     }
   </section>
 }

@@ -39,6 +39,19 @@
   }
 }
 
+.new-student {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.instrument {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: normal;
+}
+
 .badge {
   min-width: 1.6rem;
   padding: 0 0.4rem;

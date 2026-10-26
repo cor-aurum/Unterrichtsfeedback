@@ -4,7 +4,9 @@ import {
   BlockImage,
   BlockPosition,
   FeedbackConfig,
+  contentFor,
   fillPlaceholders,
+  instrumentOf,
   Lesson,
   Section,
   Student,
@@ -75,11 +77,15 @@ function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Studen
 
 function writeFixedBlocks(writer: PdfWriter, config: FeedbackConfig, position: BlockPosition, student: Student): void {
   for (const block of config.blocks.filter((b) => b.position === position)) {
-    if (block.image) {
+    const content = contentFor(block, instrumentOf(student, config));
+    const text = fillPlaceholders(content.text, student, config).trim();
+    if (block.type === 'image' && content.image) {
       // Am Ende soll ein Bild nicht allein auf eine neue Seite rutschen.
-      writer.image(block.image, position === 'end');
+      writer.image(content.image, position === 'end');
+    } else if (block.type === 'text' && text) {
+      writeFixedText(writer, text);
     } else {
-      writeFixedText(writer, fillPlaceholders(block.text, student));
+      continue;
     }
     writer.gap(6, false);
   }
@@ -93,7 +99,7 @@ function writeFixedBlocks(writer: PdfWriter, config: FeedbackConfig, position: B
 function writeGeneralPart(writer: PdfWriter, config: FeedbackConfig, lessons: Lesson[], student: Student): void {
   const paragraphs = config.sections
     .filter((section) => section.scope === 'general')
-    .map((section) => fillPlaceholders(generalSentencesOf(section, lessons, student).join(' '), student))
+    .map((section) => fillPlaceholders(generalSentencesOf(section, lessons, student).join(' '), student, config))
     .filter((paragraph) => paragraph.length > 0);
   if (paragraphs.length === 0) return;
   writeParagraphs(writer, paragraphs, { indent: 0, rail: false });
@@ -145,7 +151,7 @@ function writeParagraphs(writer: PdfWriter, paragraphs: string[], layout: { inde
 function paragraphsOf(config: FeedbackConfig, lesson: Lesson, student: Student): string[] {
   return config.sections
     .filter((section) => section.scope === 'lesson')
-    .map((section) => fillPlaceholders(sentencesOf(section, lesson).join(' '), student))
+    .map((section) => fillPlaceholders(sentencesOf(section, lesson).join(' '), student, config))
     .filter((paragraph) => paragraph.length > 0);
 }
 

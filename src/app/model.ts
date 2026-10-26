@@ -35,31 +35,70 @@ export interface BlockImage {
   align: ImageAlign;
 }
 
-/** Fester Text oder festes Bild, das bei jedem Export am Anfang oder Ende erscheint. */
-export interface FixedBlock {
+export interface BlockContent {
+  text: string;
+  image?: BlockImage;
+}
+
+/** Ersetzt den Inhalt eines festen Blocks für Personen mit einem der Instrumente. */
+export interface BlockVariant extends BlockContent {
+  id: string;
+  instrumentIds: string[];
+}
+
+/**
+ * Fester Text oder festes Bild, das bei jedem Export am Anfang oder Ende erscheint.
+ * Wie bei switch/case gewinnt die erste Variante, die das Instrument der Person enthält;
+ * sonst gilt der Standardinhalt (`text`/`image`). Ist dieser leer, entfällt der Block.
+ */
+export interface FixedBlock extends BlockContent {
   id: string;
   type: 'text' | 'image';
   position: BlockPosition;
-  text: string;
-  image?: BlockImage;
+  variants: BlockVariant[];
+}
+
+export function contentFor(block: FixedBlock, instrument: Instrument): BlockContent {
+  return block.variants.find((variant) => variant.instrumentIds.includes(instrument.id)) ?? block;
+}
+
+export interface Instrument {
+  id: string;
+  name: string;
 }
 
 export interface FeedbackConfig {
   version: 1;
   title: string;
+  /** Enthält immer mindestens ein Instrument. */
+  instruments: Instrument[];
+  defaultInstrumentId: string;
   blocks: FixedBlock[];
   sections: Section[];
+}
+
+export function defaultInstrument(config: FeedbackConfig): Instrument {
+  return config.instruments.find((i) => i.id === config.defaultInstrumentId) ?? config.instruments[0];
+}
+
+/** Instrument der Person; fehlt es (ältere Daten, gelöschtes Instrument), gilt das Standardinstrument. */
+export function instrumentOf(student: Student, config: FeedbackConfig): Instrument {
+  return config.instruments.find((i) => i.id === student.instrumentId) ?? defaultInstrument(config);
 }
 
 export const PLACEHOLDERS = [
   { key: '{vorname}', description: 'Vorname (erstes Wort des Namens)' },
   { key: '{name}', description: 'vollständiger Name' },
+  { key: '{instrument}', description: 'Instrument der Person' },
 ];
 
 /** Ersetzt die Platzhalter aus `PLACEHOLDERS` durch die Daten der Person. */
-export function fillPlaceholders(text: string, student: Student): string {
+export function fillPlaceholders(text: string, student: Student, config: FeedbackConfig): string {
   const firstName = student.name.trim().split(/\s+/)[0] ?? '';
-  return text.replace(/\{vorname\}/gi, firstName).replace(/\{name\}/gi, student.name.trim());
+  return text
+    .replace(/\{vorname\}/gi, firstName)
+    .replace(/\{name\}/gi, student.name.trim())
+    .replace(/\{instrument\}/gi, instrumentOf(student, config).name);
 }
 
 export interface Lesson {
@@ -75,6 +114,8 @@ export interface Lesson {
 export interface Student {
   id: string;
   name: string;
+  /** ID eines Instruments aus `FeedbackConfig.instruments`; immer über `instrumentOf` auswerten. */
+  instrumentId: string | null;
   /** Freitext der allgemeinen Abschnitte, gilt für alle Stunden (Abschnitts-ID → Text) */
   generalTexts: Record<string, string>;
   lessons: Lesson[];

@@ -1,15 +1,24 @@
 <div class="layout">
   <section class="card">
     <h2>Personen</h2>
-    <div class="row">
-      <input
-        #nameInput
-        type="text"
-        class="grow"
-        placeholder="Name der Person"
-        (keydown.enter)="addStudent(nameInput)"
-      />
-      <button (click)="addStudent(nameInput)" title="Person hinzufügen">+</button>
+    <div class="new-student">
+      <div class="row">
+        <input
+          #nameInput
+          type="text"
+          class="grow"
+          placeholder="Name der Person"
+          (keydown.enter)="addStudent(nameInput, instrumentSelect)"
+        />
+        <button (click)="addStudent(nameInput, instrumentSelect)" title="Person hinzufügen">+</button>
+      </div>
+      <select #instrumentSelect aria-label="Instrument der neuen Person">
+        @for (instrument of config().instruments; track instrument.id) {
+          <option [value]="instrument.id" [selected]="instrument.id === defaultInstrumentId()">
+            {{ instrument.name }}
+          </option>
+        }
+      </select>
     </div>
     <ul class="list">
       @for (student of store.sortedStudents(); track student.id) {
@@ -17,7 +26,10 @@
           [class.selected]="student.id === store.selectedStudentId()"
           (click)="store.selectStudent(student.id)"
         >
-          <span class="grow">{{ student.name }}</span>
+          <span class="grow">
+            {{ student.name }}
+            <span class="instrument">{{ instrumentOf(student).name }}</span>
+          </span>
           <span class="badge" title="Unterrichtsstunden">{{ student.lessons.length }}</span>
         </li>
       } @empty {
@@ -52,6 +64,14 @@
           [value]="student.name"
           (change)="renameStudent(student, $event)"
         />
+        <label class="muted" for="student-instrument">Instrument</label>
+        <select id="student-instrument" (change)="setInstrument(student, $event)">
+          @for (instrument of config().instruments; track instrument.id) {
+            <option [value]="instrument.id" [selected]="instrument.id === instrumentOf(student).id">
+              {{ instrument.name }}
+            </option>
+          }
+        </select>
         <button class="danger" (click)="removeStudent(student)">Person löschen</button>
       </div>
     </section>
@@ -99,14 +119,14 @@
               <textarea
                 [value]="generalTextOf(student, section.id)"
                 (input)="setGeneralText(student, section.id, $event)"
-                placeholder="Platzhalter: {vorname}, {name}"
+                placeholder="Platzhalter: {vorname}, {name}, {instrument}"
               ></textarea>
               <p class="muted field-hint">Gilt für alle Stunden von {{ student.name }}.</p>
             } @else {
               <textarea
                 [value]="textOf(lesson, section.id)"
                 (input)="setText(student, lesson, section.id, $event)"
-                placeholder="Platzhalter: {vorname}, {name}"
+                placeholder="Platzhalter: {vorname}, {name}, {instrument}"
               ></textarea>
             }
           </fieldset>

@@ -18,14 +18,18 @@ export class StudentsStore {
     this.selectedStudent()?.lessons.find((l) => l.id === this.selectedLessonId()),
   );
 
-  addStudent(name: string): void {
-    const student: Student = { id: newId(), name, generalTexts: {}, lessons: [] };
+  addStudent(name: string, instrumentId: string | null): void {
+    const student: Student = { id: newId(), name, instrumentId, generalTexts: {}, lessons: [] };
     this.students.update((students) => [...students, student]);
     this.selectStudent(student.id);
   }
 
   renameStudent(studentId: string, name: string): void {
     this.mutateStudent(studentId, (student) => (student.name = name));
+  }
+
+  setInstrument(studentId: string, instrumentId: string | null): void {
+    this.mutateStudent(studentId, (student) => (student.instrumentId = instrumentId));
   }
 
   removeStudent(studentId: string): void {
@@ -101,6 +105,7 @@ export function parseStudents(data: unknown): Student[] {
     return {
       id: typeof student.id === 'string' ? student.id : newId(),
       name: student.name,
+      instrumentId: typeof student.instrumentId === 'string' ? student.instrumentId : null,
       // Ältere Daten haben noch keine allgemeinen Freitexte.
       generalTexts: isRecord(student.generalTexts) ? student.generalTexts : {},
       lessons: student.lessons.map(parseLesson),
