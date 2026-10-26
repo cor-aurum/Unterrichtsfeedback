@@ -1,1 +1,142 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --primary: #f57115;
+  /* Dunklerer Ton für orangen Text auf hellem Grund, damit er lesbar bleibt */
+  --primary-text: #b34f00;
+  --primary-light: #fff1e6;
+  --danger: #b3261e;
+  --border: #d6dbe1;
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --text: #1f2933;
+  --muted: #66727f;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+  accent-color: var(--primary);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+}
+
+h3 {
+  font-size: 1rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.message {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+  background: var(--primary-light);
+
+  &.error {
+    background: #fbe9e7;
+    color: var(--danger);
+  }
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+input[type='text'],
+input[type='date'],
+input[type='number'],
+select,
+textarea {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  color: inherit;
+
+  &:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: -1px;
+  }
+}
+
+textarea {
+  width: 100%;
+  min-height: 5rem;
+  resize: vertical;
+}
+
+button {
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background: var(--primary);
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &.secondary {
+    background: white;
+    border-color: var(--primary-text);
+    color: var(--primary-text);
+  }
+
+  &.danger {
+    background: white;
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  &.icon {
+    padding: 0.3rem 0.55rem;
+    background: white;
+    border-color: var(--border);
+    color: var(--muted);
+  }
+}

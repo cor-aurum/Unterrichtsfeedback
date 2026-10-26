@@ -1,0 +1,165 @@
+<div class="row head">
+  <h1 class="grow">Konfiguration</h1>
+  <button class="secondary" (click)="store.exportToFile()">Exportieren</button>
+  <button class="secondary" (click)="fileInput.click()">Importieren</button>
+  <input #fileInput type="file" accept=".json,application/json" hidden (change)="importFile(fileInput)" />
+  <button class="danger" (click)="reset()">Zurücksetzen</button>
+</div>
+
+@if (message(); as msg) {
+  <p class="message" [class.error]="msg.error">{{ msg.text }}</p>
+}
+
+<section class="card">
+  <label for="config-title"><strong>Überschrift im PDF</strong></label>
+  <input
+    id="config-title"
+    type="text"
+    class="full"
+    [value]="store.config().title"
+    (change)="store.setTitle(valueOf($event))"
+  />
+  <p class="muted small">
+    Platzhalter für feste Texte, Textbausteine und Freitextfelder:
+    @for (placeholder of placeholders; track placeholder.key; let lastPlaceholder = $last) {
+      <code>{{ placeholder.key }}</code> ({{ placeholder.description }}){{ lastPlaceholder ? '' : ',' }}
+    }
+  </p>
+</section>
+
+<h2 class="group-title">Feste Inhalte im PDF</h2>
+<p class="muted group-hint">
+  Erscheinen bei jeder Person: „Am Anfang“ unter der Überschrift, „Am Ende“ nach der letzten Stunde.
+  Dazwischen, vor den Stunden, steht der allgemeine Teil mit den Textbausteinen, die dafür
+  eingestellt sind.
+</p>
+
+@for (block of store.config().blocks; track block.id; let first = $first, last = $last) {
+  <section class="card section">
+    <div class="row block-head">
+      <span class="type">{{ block.type === 'image' ? 'Bild' : 'Fester Text' }}</span>
+      <select
+        class="grow"
+        [value]="block.position"
+        (change)="store.updateBlock(block.id, { position: $any(valueOf($event)) })"
+        aria-label="Position im PDF"
+      >
+        <option value="start">Am Anfang</option>
+        <option value="end">Am Ende</option>
+      </select>
+      <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1)" title="Nach oben">↑</button>
+      <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1)" title="Nach unten">↓</button>
+      <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
+    </div>
+
+    @if (block.image; as image) {
+      <div class="image-block">
+        <img [src]="image.dataUrl" alt="Bild für das PDF" [style.width.px]="image.widthMm * 2" />
+        <div class="image-settings">
+          <label>
+            Breite im PDF (mm)
+            <input
+              type="number"
+              min="5"
+              [max]="maxImageWidth"
+              [value]="image.widthMm"
+              (change)="setImageWidth(block, $event)"
+            />
+          </label>
+          <label>
+            Ausrichtung
+            <select
+              [value]="image.align"
+              (change)="store.updateBlockImage(block.id, { align: $any(valueOf($event)) })"
+            >
+              <option value="left">Links</option>
+              <option value="center">Mittig</option>
+              <option value="right">Rechts</option>
+            </select>
+          </label>
+          <button class="secondary" (click)="replaceInput.click()">Bild ersetzen</button>
+          <input #replaceInput type="file" accept="image/*" hidden (change)="replaceImage(block, replaceInput)" />
+        </div>
+      </div>
+    } @else {
+      <textarea
+        [value]="block.text"
+        (change)="store.updateBlock(block.id, { text: valueOf($event) })"
+        placeholder="z. B. Hallo {vorname},"
+        aria-label="Fester Text"
+      ></textarea>
+    }
+  </section>
+}
+
+<div class="row add">
+  <button class="secondary" (click)="store.addTextBlock()">+ Fester Text</button>
+  <button class="secondary" (click)="imageInput.click()">+ Bild</button>
+  <input #imageInput type="file" accept="image/*" hidden (change)="addImage(imageInput)" />
+</div>
+
+<h2 class="group-title">Abschnitte je Unterrichtsstunde</h2>
+
+@for (section of store.config().sections; track section.id; let first = $first, last = $last) {
+  <section class="card section">
+    <div class="row">
+      <span class="type">{{ section.type === 'checklist' ? 'Textbausteine' : 'Freitext' }}</span>
+      <input
+        type="text"
+        class="grow title"
+        [value]="section.title"
+        (change)="store.renameSection(section.id, valueOf($event))"
+        aria-label="Titel des Abschnitts"
+      />
+      <button class="icon" [disabled]="first" (click)="store.moveSection(section.id, -1)" title="Nach oben">↑</button>
+      <button class="icon" [disabled]="last" (click)="store.moveSection(section.id, 1)" title="Nach unten">↓</button>
+      <button class="icon" (click)="removeSection(section)" title="Abschnitt löschen">✕</button>
+    </div>
+
+    @if (section.type === 'checklist') {
+      <label class="scope">
+        Im PDF
+        <select
+          [value]="section.scope"
+          (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
+        >
+          <option value="lesson">bei der jeweiligen Stunde</option>
+          <option value="general">im allgemeinen Teil (einmal, sobald in einer Stunde angehakt)</option>
+        </select>
+      </label>
+      <ul class="items">
+        @for (item of section.items; track item.id; let firstItem = $first, lastItem = $last) {
+          <li class="row">
+            <input
+              type="text"
+              class="grow"
+              [value]="item.text"
+              (change)="store.updateItem(section.id, item.id, valueOf($event))"
+              aria-label="Text des Bausteins"
+            />
+            <button class="icon" [disabled]="firstItem" (click)="store.moveItem(section.id, item.id, -1)" title="Nach oben">↑</button>
+            <button class="icon" [disabled]="lastItem" (click)="store.moveItem(section.id, item.id, 1)" title="Nach unten">↓</button>
+            <button class="icon" (click)="store.removeItem(section.id, item.id)" title="Baustein löschen">✕</button>
+          </li>
+        }
+      </ul>
+      <div class="row">
+        <input
+          #newItem
+          type="text"
+          class="grow"
+          placeholder="Neuer Textbaustein"
+          (keydown.enter)="addItem(section, newItem)"
+        />
+        <button class="secondary" (click)="addItem(section, newItem)">Hinzufügen</button>
+      </div>
+    } @else {
+      <p class="muted small">Während der Stunde erscheint hier ein Freitextfeld.</p>
+    }
+  </section>
+}
+
+<div class="row add">
+  <button (click)="store.addSection('checklist')">+ Abschnitt mit Textbausteinen</button>
+  <button (click)="store.addSection('text')">+ Freitextfeld</button>
+</div>

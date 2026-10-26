@@ -1,0 +1,134 @@
+.layout {
+  display: grid;
+  grid-template-columns: 240px 220px 1fr;
+  gap: 1rem;
+  align-items: start;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--bg);
+    }
+
+    &.selected {
+      background: var(--primary-light);
+      color: var(--primary-text);
+      font-weight: 600;
+    }
+
+    &.empty {
+      cursor: default;
+      background: none;
+    }
+  }
+}
+
+.badge {
+  min-width: 1.6rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.8rem;
+  text-align: center;
+  font-weight: normal;
+}
+
+.full {
+  width: 100%;
+}
+
+.person-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.editor-head {
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+fieldset {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.9rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+
+  legend {
+    padding: 0 0.3rem;
+    font-weight: 600;
+  }
+}
+
+.check {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.35rem 0.4rem;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg);
+  }
+
+  input {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+  }
+}
+
+.scope-badge {
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-text);
+  font-size: 0.75rem;
+  font-weight: normal;
+}
+
+.other-lesson {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.placeholder {
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.wide {
+  grid-column: span 2;
+
+  @media (max-width: 900px) {
+    grid-column: auto;
+  }
+}

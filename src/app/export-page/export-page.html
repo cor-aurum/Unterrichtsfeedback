@@ -1,0 +1,53 @@
+<h1>Export &amp; Sicherung</h1>
+
+<section class="card">
+  <h2>PDF-Export</h2>
+  @if (store.students().length === 0) {
+    <p class="muted">
+      Noch keine Personen erfasst. <a routerLink="/stunden">Stunden erfassen</a>
+    </p>
+  } @else {
+    <label class="option">
+      <input type="radio" name="scope" value="all" [checked]="scope() === 'all'" (change)="setScope($event)" />
+      <span class="grow">Alle Personen ({{ store.students().length }}), jede Person beginnt auf einer neuen Seite</span>
+    </label>
+
+    <label class="option">
+      <input type="radio" name="scope" value="single" [checked]="scope() === 'single'" (change)="setScope($event)" />
+      <span>Nur eine Person:</span>
+      <select (change)="selectStudent($event)" aria-label="Person">
+        <option value="" disabled [selected]="!studentId()">Bitte wählen</option>
+        @for (student of store.sortedStudents(); track student.id) {
+          <option [value]="student.id" [selected]="student.id === studentId()">
+            {{ student.name }} ({{ student.lessons.length }})
+          </option>
+        }
+      </select>
+    </label>
+
+    <div class="row actions">
+      <span class="grow muted">
+        {{ studentsToExport().length }} Person(en), {{ lessonCount() }} Unterrichtsstunde(n)
+      </span>
+      <button [disabled]="studentsToExport().length === 0" (click)="exportPdf()">PDF erstellen</button>
+    </div>
+  }
+</section>
+
+<section class="card">
+  <h2>Datensicherung</h2>
+  <p class="muted">
+    Die Sicherung enthält alle Personen und Unterrichtsstunden sowie die Konfiguration. Beim Import
+    werden die Daten in diesem Browser vollständig ersetzt.
+  </p>
+
+  @if (message(); as msg) {
+    <p class="message" [class.error]="msg.error">{{ msg.text }}</p>
+  }
+
+  <div class="row">
+    <button (click)="backup.exportToFile()">Daten exportieren</button>
+    <button class="secondary" (click)="backupInput.click()">Daten importieren</button>
+    <input #backupInput type="file" accept=".json,application/json" hidden (change)="importBackup(backupInput)" />
+  </div>
+</section>

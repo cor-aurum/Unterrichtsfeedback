@@ -1,59 +1,41 @@
-# UnterrichtFeedback
+# Unterrichtsfeedback
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.9.
+Angular-App zum Erfassen von Feedback für Schülerinnen und Schüler im Einzelunterricht. Sie läuft
+komplett im Browser, ohne Backend: Die Daten liegen im Local Storage, das Feedback wird als PDF
+exportiert.
 
-## Development server
-
-To start a local development server, run:
-
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Entwicklung
 
 ```bash
-ng generate component component-name
+npm install
+npm start
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Die App läuft dann unter `http://localhost:4200/`.
 
-```bash
-ng generate --help
-```
+## Veröffentlichen auf GitHub Pages
 
-## Building
+Der Workflow `.github/workflows/deploy.yml` baut die App bei jedem Push auf `master` oder `main` und
+veröffentlicht sie auf GitHub Pages.
 
-To build the project run:
+Einmalig einrichten:
 
-```bash
-ng build
-```
+1. Repository auf GitHub anlegen und den Code pushen.
+2. Im Repository unter **Settings → Pages** bei **Source** „GitHub Actions“ auswählen.
+3. Den Workflow unter **Actions → Deploy to GitHub Pages** starten (oder erneut pushen).
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+Die App ist danach unter `https://<benutzer>.github.io/<repository>/` erreichbar.
 
-## Running unit tests
+Damit das ohne Server-Konfiguration funktioniert:
 
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
+- Der Produktions-Build nutzt `baseHref: "./"`, die App läuft also unter jedem Repository-Namen.
+- Die Routen sind Hash-URLs (`#/stunden`, `#/export`). GitHub Pages kennt keine Weiterleitung auf
+  `index.html`, sonst würde das Neuladen einer Unterseite einen 404-Fehler liefern.
 
-```bash
-ng test
-```
+## Daten
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- Personen, Stunden und Konfiguration liegen im Local Storage des Browsers. Sie gehören zur Adresse
+  der App: Was lokal erfasst wurde, ist auf GitHub Pages nicht vorhanden. Für den Umzug unter
+  **Export & Sicherung** die Daten exportieren und dort wieder importieren.
+- Beim Löschen der Browserdaten gehen die Daten verloren. Regelmäßig eine Datensicherung
+  herunterladen.

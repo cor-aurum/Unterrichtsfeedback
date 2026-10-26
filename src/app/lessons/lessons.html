@@ -1,0 +1,123 @@
+<div class="layout">
+  <section class="card">
+    <h2>Personen</h2>
+    <div class="row">
+      <input
+        #nameInput
+        type="text"
+        class="grow"
+        placeholder="Name der Person"
+        (keydown.enter)="addStudent(nameInput)"
+      />
+      <button (click)="addStudent(nameInput)" title="Person hinzufügen">+</button>
+    </div>
+    <ul class="list">
+      @for (student of store.sortedStudents(); track student.id) {
+        <li
+          [class.selected]="student.id === store.selectedStudentId()"
+          (click)="store.selectStudent(student.id)"
+        >
+          <span class="grow">{{ student.name }}</span>
+          <span class="badge" title="Unterrichtsstunden">{{ student.lessons.length }}</span>
+        </li>
+      } @empty {
+        <li class="empty muted">Noch keine Personen angelegt.</li>
+      }
+    </ul>
+  </section>
+
+  @if (store.selectedStudent(); as student) {
+    <section class="card">
+      <h2>Stunden</h2>
+      <button class="full" (click)="store.addLesson(student.id)">+ Neue Stunde</button>
+      <ul class="list">
+        @for (lesson of lessonsOfSelected(); track lesson.id) {
+          <li
+            [class.selected]="lesson.id === store.selectedLessonId()"
+            (click)="store.selectedLessonId.set(lesson.id)"
+          >
+            <span class="grow">{{ formatDate(lesson.date) }}</span>
+            <span class="badge" title="Einträge">{{ entryCount(lesson) }}</span>
+          </li>
+        } @empty {
+          <li class="empty muted">Noch keine Stunden.</li>
+        }
+      </ul>
+
+      <div class="person-settings">
+        <label class="muted" for="student-name">Name ändern</label>
+        <input
+          id="student-name"
+          type="text"
+          [value]="student.name"
+          (change)="renameStudent(student, $event)"
+        />
+        <button class="danger" (click)="removeStudent(student)">Person löschen</button>
+      </div>
+    </section>
+
+    @if (store.selectedLesson(); as lesson) {
+      <section class="card editor">
+        <div class="row editor-head">
+          <h2 class="grow">{{ student.name }}</h2>
+          <input
+            type="date"
+            [value]="lesson.date"
+            (change)="setDate(student, lesson, $event)"
+            aria-label="Datum der Stunde"
+          />
+          <button class="danger" (click)="removeLesson(student, lesson)">Stunde löschen</button>
+        </div>
+
+        @for (section of config().sections; track section.id) {
+          <fieldset>
+            <legend>
+              {{ section.title }}
+              @if (section.scope === 'general') {
+                <span class="scope-badge" title="Erscheint einmal im allgemeinen Teil des PDFs">allgemein</span>
+              }
+            </legend>
+            @if (section.type === 'checklist') {
+              @for (item of section.items; track item.id) {
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    [checked]="isChecked(lesson, section.id, item.id)"
+                    (change)="store.toggleItem(student.id, lesson.id, section.id, item.id)"
+                  />
+                  <span>
+                    {{ item.text }}
+                    @if (section.scope === 'general' && checkedInOtherLesson(student, lesson, section.id, item.id)) {
+                      <span class="other-lesson">schon in einer anderen Stunde angehakt</span>
+                    }
+                  </span>
+                </label>
+              } @empty {
+                <p class="muted">Für diesen Abschnitt sind keine Textbausteine konfiguriert.</p>
+              }
+            } @else {
+              <textarea
+                [value]="textOf(lesson, section.id)"
+                (input)="setText(student, lesson, section.id, $event)"
+                placeholder="Platzhalter: {vorname}, {name}"
+              ></textarea>
+            }
+          </fieldset>
+        } @empty {
+          <p class="muted">
+            Es sind noch keine Abschnitte konfiguriert.
+            <a routerLink="/konfiguration">Zur Konfiguration</a>
+          </p>
+        }
+      </section>
+    } @else {
+      <section class="card editor placeholder muted">
+        Stunde auswählen oder mit „+ Neue Stunde“ anlegen.
+      </section>
+    }
+  } @else {
+    <section class="card editor placeholder muted wide">
+      Person auswählen oder links neu anlegen.
+    </section>
+  }
+</div>

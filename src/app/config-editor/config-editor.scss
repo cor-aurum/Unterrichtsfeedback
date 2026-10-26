@@ -1,0 +1,118 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.head {
+  flex-wrap: wrap;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.full {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+}
+
+.section .title {
+  font-weight: 600;
+}
+
+.type {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-text);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.items {
+  list-style: none;
+  margin: 0.75rem 0;
+  padding: 0 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.small {
+  margin: 0.6rem 0 0;
+  font-size: 0.9rem;
+}
+
+.add {
+  flex-wrap: wrap;
+}
+
+.scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+
+  select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.group-title {
+  margin: 1rem 0 -0.5rem;
+}
+
+.group-hint {
+  margin: 0;
+}
+
+code {
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.block-head {
+  margin-bottom: 0.75rem;
+
+  select {
+    max-width: 12rem;
+  }
+}
+
+.image-block {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+
+  img {
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+}
+
+.image-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.9rem;
+  }
+
+  input[type='number'] {
+    width: 7rem;
+  }
+}
