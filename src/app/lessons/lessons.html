@@ -95,6 +95,13 @@
               } @empty {
                 <p class="muted">Für diesen Abschnitt sind keine Textbausteine konfiguriert.</p>
               }
+            } @else if (section.scope === 'general') {
+              <textarea
+                [value]="generalTextOf(student, section.id)"
+                (input)="setGeneralText(student, section.id, $event)"
+                placeholder="Platzhalter: {vorname}, {name}"
+              ></textarea>
+              <p class="muted field-hint">Gilt für alle Stunden von {{ student.name }}.</p>
             } @else {
               <textarea
                 [value]="textOf(lesson, section.id)"

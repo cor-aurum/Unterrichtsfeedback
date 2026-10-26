@@ -7,8 +7,8 @@ export interface ChecklistItem {
 
 /**
  * `lesson`: erscheint im PDF bei jeder Stunde.
- * `general`: nur für Textbausteine; jeder Baustein, der in irgendeiner Stunde angehakt ist,
- * erscheint einmal im allgemeinen Teil vor den Stunden.
+ * `general`: erscheint einmal im allgemeinen Teil vor den Stunden. Bei Textbausteinen jeder Baustein,
+ * der in irgendeiner Stunde angehakt ist; bei Freitext ein Text je Person (`Student.generalTexts`).
  */
 export type SectionScope = 'lesson' | 'general';
 
@@ -18,6 +18,8 @@ export interface Section {
   title: string;
   type: SectionType;
   scope: SectionScope;
+  /** Nur Freitext: Titel im PDF vor den Text setzen („Titel: Text“) */
+  showTitle: boolean;
   items: ChecklistItem[];
 }
 
@@ -73,6 +75,8 @@ export interface Lesson {
 export interface Student {
   id: string;
   name: string;
+  /** Freitext der allgemeinen Abschnitte, gilt für alle Stunden (Abschnitts-ID → Text) */
+  generalTexts: Record<string, string>;
   lessons: Lesson[];
 }
 

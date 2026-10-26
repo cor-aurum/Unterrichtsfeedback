@@ -17,6 +17,7 @@ export class ConfigStore {
         title: type === 'checklist' ? 'Neue Textbausteine' : 'Neues Freitextfeld',
         type,
         scope: 'lesson',
+        showTitle: true,
         items: [],
       }),
     );
@@ -28,6 +29,10 @@ export class ConfigStore {
 
   setSectionScope(sectionId: string, scope: SectionScope): void {
     this.mutateSection(sectionId, (section) => (section.scope = scope));
+  }
+
+  setShowTitle(sectionId: string, showTitle: boolean): void {
+    this.mutateSection(sectionId, (section) => (section.showTitle = showTitle));
   }
 
   removeSection(sectionId: string): void {
@@ -166,8 +171,9 @@ function parseSection(data: Partial<Section>): Section {
     id: typeof data.id === 'string' ? data.id : newId(),
     title: data.title,
     type: data.type,
-    // Ältere Konfigurationen kennen den allgemeinen Teil noch nicht; Freitext gibt es nur je Stunde.
-    scope: data.type === 'checklist' && data.scope === 'general' ? 'general' : 'lesson',
+    // Ältere Konfigurationen kennen den allgemeinen Teil noch nicht.
+    scope: data.scope === 'general' ? 'general' : 'lesson',
+    showTitle: data.showTitle !== false,
     items: items
       .filter((item) => typeof item?.text === 'string')
       .map((item) => ({ id: typeof item.id === 'string' ? item.id : newId(), text: item.text })),
@@ -180,9 +186,10 @@ function defaultConfig(): FeedbackConfig {
     title,
     type: 'checklist',
     scope,
+    showTitle: true,
     items: texts.map((text) => ({ id: newId(), text })),
   });
-  const text = (title: string): Section => ({ id: newId(), title, type: 'text', scope: 'lesson', items: [] });
+  const text = (title: string): Section => ({ id: newId(), title, type: 'text', scope: 'lesson', showTitle: true, items: [] });
 
   return {
     version: 1,

@@ -30,8 +30,8 @@
 <h2 class="group-title">Feste Inhalte im PDF</h2>
 <p class="muted group-hint">
   Erscheinen bei jeder Person: „Am Anfang“ unter der Überschrift, „Am Ende“ nach der letzten Stunde.
-  Dazwischen, vor den Stunden, steht der allgemeine Teil mit den Textbausteinen, die dafür
-  eingestellt sind.
+  Dazwischen, vor den Stunden, steht der allgemeine Teil mit den Abschnitten, die dafür eingestellt
+  sind.
 </p>
 
 @for (block of store.config().blocks; track block.id; let first = $first, last = $last) {
@@ -98,7 +98,7 @@
   <input #imageInput type="file" accept="image/*" hidden (change)="addImage(imageInput)" />
 </div>
 
-<h2 class="group-title">Abschnitte je Unterrichtsstunde</h2>
+<h2 class="group-title">Abschnitte</h2>
 
 @for (section of store.config().sections; track section.id; let first = $first, last = $last) {
   <section class="card section">
@@ -116,17 +116,22 @@
       <button class="icon" (click)="removeSection(section)" title="Abschnitt löschen">✕</button>
     </div>
 
-    @if (section.type === 'checklist') {
-      <label class="scope">
-        Im PDF
-        <select
-          [value]="section.scope"
-          (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
-        >
-          <option value="lesson">bei der jeweiligen Stunde</option>
+    <label class="scope">
+      Im PDF
+      <select
+        [value]="section.scope"
+        (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
+      >
+        <option value="lesson">bei der jeweiligen Stunde</option>
+        @if (section.type === 'checklist') {
           <option value="general">im allgemeinen Teil (einmal, sobald in einer Stunde angehakt)</option>
-        </select>
-      </label>
+        } @else {
+          <option value="general">im allgemeinen Teil (ein Text je Person für alle Stunden)</option>
+        }
+      </select>
+    </label>
+
+    @if (section.type === 'checklist') {
       <ul class="items">
         @for (item of section.items; track item.id; let firstItem = $first, lastItem = $last) {
           <li class="row">
@@ -154,7 +159,21 @@
         <button class="secondary" (click)="addItem(section, newItem)">Hinzufügen</button>
       </div>
     } @else {
-      <p class="muted small">Während der Stunde erscheint hier ein Freitextfeld.</p>
+      <label class="show-title">
+        <input
+          type="checkbox"
+          [checked]="section.showTitle"
+          (change)="store.setShowTitle(section.id, $any($event.target).checked)"
+        />
+        Überschrift im PDF voranstellen („{{ section.title }}: …“)
+      </label>
+      <p class="muted small">
+        @if (section.scope === 'general') {
+          Beim Erfassen erscheint hier ein Freitextfeld, das für alle Stunden der Person gilt.
+        } @else {
+          Während der Stunde erscheint hier ein Freitextfeld.
+        }
+      </p>
     }
   </section>
 }

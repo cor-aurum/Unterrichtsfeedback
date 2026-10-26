@@ -4,7 +4,7 @@ import { storedSignal } from './stored-signal';
 
 @Injectable({ providedIn: 'root' })
 export class StudentsStore {
-  readonly students = storedSignal<Student[]>('feedback.students', () => []);
+  readonly students = storedSignal<Student[]>('feedback.students', () => [], parseStudents);
   readonly selectedStudentId = storedSignal<string | null>('feedback.selectedStudent', () => null);
   readonly selectedLessonId = storedSignal<string | null>('feedback.selectedLesson', () => null);
 
@@ -19,7 +19,7 @@ export class StudentsStore {
   );
 
   addStudent(name: string): void {
-    const student: Student = { id: newId(), name, lessons: [] };
+    const student: Student = { id: newId(), name, generalTexts: {}, lessons: [] };
     this.students.update((students) => [...students, student]);
     this.selectStudent(student.id);
   }
@@ -67,6 +67,10 @@ export class StudentsStore {
     this.mutateLesson(studentId, lessonId, (lesson) => (lesson.texts[sectionId] = text));
   }
 
+  setGeneralText(studentId: string, sectionId: string, text: string): void {
+    this.mutateStudent(studentId, (student) => (student.generalTexts[sectionId] = text));
+  }
+
   private mutateLesson(studentId: string, lessonId: string, change: (lesson: Lesson) => void): void {
     this.mutateStudent(studentId, (student) => {
       const lesson = student.lessons.find((l) => l.id === lessonId);
@@ -97,6 +101,8 @@ export function parseStudents(data: unknown): Student[] {
     return {
       id: typeof student.id === 'string' ? student.id : newId(),
       name: student.name,
+      // Ältere Daten haben noch keine allgemeinen Freitexte.
+      generalTexts: isRecord(student.generalTexts) ? student.generalTexts : {},
       lessons: student.lessons.map(parseLesson),
     };
   });

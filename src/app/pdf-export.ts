@@ -22,6 +22,8 @@ const CONTENT_BOTTOM = PAGE_HEIGHT - 22;
 /** Senkrechte Linie links, an der die Unterrichtsstunden wie auf einer Zeitleiste hängen. */
 const RAIL_X = MARGIN + 2;
 const LESSON_INDENT = 8;
+/** Kleiner als diese Höhe in mm wird ein Bild am Ende nicht, sonst wäre es nicht mehr erkennbar. */
+const MIN_SHRUNK_IMAGE_HEIGHT = 15;
 
 const COLORS = {
   accent: '#f57115',
@@ -45,7 +47,8 @@ export class PdfExport {
 
 /**
  * Mehrere Stunden erscheinen als Zeitleiste mit Datum je Stunde. Bei nur einer Stunde entfällt die
- * Zeitleiste und das Datum steht im Kopf.
+ * Zeitleiste und das Datum steht im Kopf. Hat keine Stunde eigene Notizen, entfällt der Teil mit den
+ * Stunden ganz.
  */
 function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Student): void {
   const lessons = sortedLessons(student);
@@ -58,6 +61,8 @@ function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Studen
 
   if (lessons.length === 0) {
     writer.text('Es sind noch keine Unterrichtsstunden erfasst.', { size: 11, italic: true, color: COLORS.muted });
+  } else if (!lessons.some((lesson) => paragraphsOf(config, lesson, student).length > 0)) {
+    // Keine Stunde hat eigene Notizen: weder Zeitleiste noch „keine Notizen“-Hinweise.
   } else if (lessons.length === 1) {
     writeParagraphs(writer, paragraphsOf(config, lessons[0], student), { indent: 0, rail: false });
     writer.gap(8, false);
@@ -71,7 +76,8 @@ function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Studen
 function writeFixedBlocks(writer: PdfWriter, config: FeedbackConfig, position: BlockPosition, student: Student): void {
   for (const block of config.blocks.filter((b) => b.position === position)) {
     if (block.image) {
-      writer.image(block.image);
+      // Am Ende soll ein Bild nicht allein auf eine neue Seite rutschen.
+      writer.image(block.image, position === 'end');
     } else {
       writeFixedText(writer, fillPlaceholders(block.text, student));
     }
@@ -80,23 +86,26 @@ function writeFixedBlocks(writer: PdfWriter, config: FeedbackConfig, position: B
 }
 
 /**
- * Allgemeiner Teil vor den Stunden: Jeder Baustein eines allgemeinen Abschnitts, der in irgendeiner
- * Stunde angehakt ist, erscheint genau einmal. Ein Absatz je Abschnitt.
+ * Allgemeiner Teil vor den Stunden, ein Absatz je Abschnitt: Jeder Baustein eines allgemeinen
+ * Abschnitts, der in irgendeiner Stunde angehakt ist, erscheint genau einmal; Freitext kommt aus
+ * den allgemeinen Texten der Person.
  */
 function writeGeneralPart(writer: PdfWriter, config: FeedbackConfig, lessons: Lesson[], student: Student): void {
   const paragraphs = config.sections
     .filter((section) => section.scope === 'general')
-    .map((section) => checkedInAnyLesson(section, lessons).map((text) => asSentence(normalize(text))).join(' '))
-    .map((paragraph) => fillPlaceholders(paragraph, student))
+    .map((section) => fillPlaceholders(generalSentencesOf(section, lessons, student).join(' '), student))
     .filter((paragraph) => paragraph.length > 0);
   if (paragraphs.length === 0) return;
   writeParagraphs(writer, paragraphs, { indent: 0, rail: false });
   writer.gap(8, false);
 }
 
-function checkedInAnyLesson(section: Section, lessons: Lesson[]): string[] {
+function generalSentencesOf(section: Section, lessons: Lesson[], student: Student): string[] {
+  if (section.type === 'text') {
+    return freeTextSentence(section, student.generalTexts[section.id]);
+  }
   const checked = new Set(lessons.flatMap((lesson) => lesson.checked[section.id] ?? []));
-  return section.items.filter((item) => checked.has(item.id)).map((item) => item.text);
+  return section.items.filter((item) => checked.has(item.id)).map((item) => asSentence(normalize(item.text)));
 }
 
 /** Leerzeilen trennen Absätze, einfache Zeilenumbrüche bleiben erhalten. */
@@ -142,17 +151,23 @@ function paragraphsOf(config: FeedbackConfig, lesson: Lesson, student: Student):
 
 /**
  * Liefert die Einträge eines Abschnitts als Sätze für den Fließtext. Textbausteine sind bereits
- * Sätze; Freitext bekommt den Abschnittstitel vorangestellt, damit er im Fließtext verständlich bleibt.
+ * Sätze; Freitext bekommt den Abschnittstitel vorangestellt, wenn das in der Konfiguration
+ * eingestellt ist, damit er im Fließtext verständlich bleibt.
  */
 function sentencesOf(section: Section, lesson: Lesson): string[] {
   if (section.type === 'text') {
-    const text = normalize(lesson.texts[section.id] ?? '');
-    return text ? [asSentence(`${section.title}: ${text}`)] : [];
+    return freeTextSentence(section, lesson.texts[section.id]);
   }
   const checked = lesson.checked[section.id] ?? [];
   return section.items
     .filter((item) => checked.includes(item.id))
     .map((item) => asSentence(normalize(item.text)));
+}
+
+function freeTextSentence(section: Section, text: string | undefined): string[] {
+  const normalized = normalize(text ?? '');
+  if (!normalized) return [];
+  return [asSentence(section.showTitle ? `${section.title}: ${normalized}` : normalized)];
 }
 
 function normalize(text: string): string {
@@ -225,9 +240,18 @@ class PdfWriter {
     this.y += height;
   }
 
-  image(image: BlockImage): void {
+  /**
+   * Mit `shrinkToFit` wird ein Bild, das nicht mehr auf die Seite passt, auf den restlichen Platz
+   * verkleinert statt allein auf die nächste Seite umzubrechen. Nur wenn selbst
+   * `MIN_SHRUNK_IMAGE_HEIGHT` nicht mehr passt, folgt doch ein Seitenwechsel.
+   */
+  image(image: BlockImage, shrinkToFit = false): void {
     const width = Math.min(image.widthMm, CONTENT_WIDTH);
-    const height = Math.min(width * (image.heightPx / image.widthPx), CONTENT_BOTTOM - MARGIN - 10);
+    let height = Math.min(width * (image.heightPx / image.widthPx), CONTENT_BOTTOM - MARGIN - 10);
+    const remaining = CONTENT_BOTTOM - this.y;
+    if (shrinkToFit && height > remaining && remaining >= MIN_SHRUNK_IMAGE_HEIGHT) {
+      height = remaining;
+    }
     const scaledWidth = height * (image.widthPx / image.heightPx);
     const x = {
       left: MARGIN,

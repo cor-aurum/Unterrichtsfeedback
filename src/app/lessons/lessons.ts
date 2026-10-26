@@ -53,6 +53,14 @@ export class Lessons {
     this.store.setText(student.id, lesson.id, sectionId, (event.target as HTMLTextAreaElement).value);
   }
 
+  protected setGeneralText(student: Student, sectionId: string, event: Event): void {
+    this.store.setGeneralText(student.id, sectionId, (event.target as HTMLTextAreaElement).value);
+  }
+
+  protected generalTextOf(student: Student, sectionId: string): string {
+    return student.generalTexts[sectionId] ?? '';
+  }
+
   protected textOf(lesson: Lesson, sectionId: string): string {
     return lesson.texts[sectionId] ?? '';
   }

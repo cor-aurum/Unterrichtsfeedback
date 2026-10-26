@@ -65,6 +65,15 @@
   }
 }
 
+.show-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
 .group-title {
   margin: 1rem 0 -0.5rem;
 }
