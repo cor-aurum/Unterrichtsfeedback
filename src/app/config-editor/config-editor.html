@@ -176,19 +176,25 @@
     </div>
 
     <label class="scope">
-      Im PDF
-      <select
-        [value]="section.scope"
-        (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
-      >
-        <option value="lesson">bei der jeweiligen Stunde</option>
-        @if (section.type === 'checklist') {
-          <option value="general">im allgemeinen Teil (einmal, sobald in einer Stunde angehakt)</option>
-        } @else {
-          <option value="general">im allgemeinen Teil (ein Text je Person für alle Stunden)</option>
-        }
-      </select>
-    </label>
+  Im PDF
+  <select
+    (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
+  >
+    <option value="lesson" [selected]="section.scope === 'lesson'">
+      bei der jeweiligen Stunde
+    </option>
+    @if (section.type === 'checklist') {
+      <option value="general" [selected]="section.scope === 'general'">
+        im allgemeinen Teil (einmal, sobald in einer Stunde angehakt)
+      </option>
+    } @else {
+      <option value="general" [selected]="section.scope === 'general'">
+        im allgemeinen Teil (ein Text je Person für alle Stunden)
+      </option>
+    }
+  </select>
+</label>
+
 
     @if (section.type === 'checklist') {
       <ul class="items">
