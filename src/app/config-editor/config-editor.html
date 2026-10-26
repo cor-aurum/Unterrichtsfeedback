@@ -178,7 +178,7 @@
     <label class="scope">
       Im PDF
       <select
-        [value]="store.getSectionScope(section.id)"
+        [value]="section.scope"
         (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
       >
         <option value="lesson">bei der jeweiligen Stunde</option>
