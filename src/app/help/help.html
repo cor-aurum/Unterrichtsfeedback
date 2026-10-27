@@ -47,6 +47,11 @@
   <ul>
     <li><strong>Überschrift und Themenfarbe</strong> bestimmen, wie das PDF und die App aussehen.</li>
     <li>
+      <strong>Kopf- und Fußzeile:</strong> Hier legst du den Untertitel unter der Überschrift, die Kopfzeile ab
+      der zweiten Seite und die Fußzeile fest, zum Beispiel mit deinem Namen links und der Seitenzahl rechts.
+      Ein leeres Feld blendet die Zeile aus.
+    </li>
+    <li>
       <strong>Instrumente:</strong> Jede Person hat ein Instrument. Das als <em>Standard</em> markierte ist beim
       Anlegen einer Person schon ausgewählt.
     </li>
@@ -67,7 +72,11 @@
   </ul>
 
   <h3>Platzhalter</h3>
-  <p>Schreibst du einen Platzhalter in einen Text, setzt das PDF dafür die Angaben der jeweiligen Person ein:</p>
+  <p>
+    Platzhalter kannst du in jedem Text verwenden, der im PDF erscheint: in der Überschrift, in Kopf- und
+    Fußzeile, in festen Texten, Textbausteinen und Freitextfeldern. Das PDF setzt dafür die passenden
+    Angaben ein:
+  </p>
   <table>
     <tbody>
       @for (placeholder of placeholders; track placeholder.key) {
@@ -103,18 +112,23 @@
       Konfiguration herunter. <strong>Daten importieren</strong> stellt eine Sicherung wieder her und ersetzt
       dabei alles, was gerade in der App ist.
     </li>
+    <li>
+      In der <strong>Android-App</strong> öffnet sich beim PDF und beim Export stattdessen der Teilen-Dialog.
+      Dort kannst du die Datei zum Beispiel per Mail verschicken oder in Google Drive oder unter „Dateien“
+      speichern.
+    </li>
   </ul>
 </section>
 
 <section class="card important">
   <h2>Wo sind meine Daten?</h2>
   <p>
-    Deine Daten liegen <strong>nur in diesem Browser auf diesem Gerät</strong>. Sie werden nirgendwohin
-    hochgeladen. Das heißt auch:
+    Deine Daten liegen <strong>nur in diesem Browser bzw. in dieser App auf diesem Gerät</strong>. Sie
+    werden nirgendwohin hochgeladen. Das heißt auch:
   </p>
   <ul>
-    <li>Ein anderer Browser oder ein anderes Gerät sieht deine Daten nicht.</li>
-    <li>Löschst du die Browserdaten, sind auch deine Einträge weg.</li>
+    <li>Ein anderer Browser, die Android-App oder ein anderes Gerät sieht deine Daten nicht.</li>
+    <li>Löschst du die Browserdaten oder deinstallierst du die App, sind auch deine Einträge weg.</li>
     <li>
       Lade deshalb regelmäßig unter <a routerLink="/export">Export &amp; Sicherung</a> eine Datensicherung
       herunter. Mit ihr ziehst du auch auf ein anderes Gerät um.

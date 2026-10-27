@@ -1,7 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ConfigStore } from '../config.store';
-import { defaultInstrument, formatDate, Instrument, instrumentOf, Lesson, Student } from '../model';
+import { defaultInstrument, formatDate, Instrument, instrumentOf, Lesson, PLACEHOLDERS, Student } from '../model';
 import { sortedLessons, StudentsStore } from '../students.store';
 
 @Component({
@@ -14,6 +14,7 @@ export class Lessons {
   protected readonly store = inject(StudentsStore);
   protected readonly config = inject(ConfigStore).config;
   protected readonly formatDate = formatDate;
+  protected readonly placeholderHint = 'Platzhalter: ' + PLACEHOLDERS.map((p) => p.key).join(', ');
   protected readonly defaultInstrumentId = computed(() => defaultInstrument(this.config()).id);
 
   protected readonly lessonsOfSelected = computed(() => {

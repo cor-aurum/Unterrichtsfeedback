@@ -4,16 +4,19 @@ import {
   BlockImage,
   BlockPosition,
   BlockVariant,
+  DEFAULT_PDF_LAYOUT,
   defaultInstrument,
   FeedbackConfig,
   FixedBlock,
   Instrument,
+  PdfLayout,
   newId,
   Section,
   SectionScope,
   SectionType,
 } from './model';
-import { downloadFile, storedSignal } from './stored-signal';
+import { saveFile } from './save-file';
+import { storedSignal } from './stored-signal';
 import { DEFAULT_THEME_COLOR, isHexColor, themeFrom } from './theme';
 
 /** Standardinhalt (`variantId` = null) oder eine Variante eines festen Blocks */
@@ -30,6 +33,14 @@ export class ConfigStore {
 
   setTitle(title: string): void {
     this.mutate((config) => (config.title = title));
+  }
+
+  setPdfLayout(change: Partial<PdfLayout>): void {
+    this.mutate((config) => Object.assign(config.pdfLayout, change));
+  }
+
+  resetPdfLayout(): void {
+    this.mutate((config) => (config.pdfLayout = { ...DEFAULT_PDF_LAYOUT }));
   }
 
   setThemeColor(color: string): void {
@@ -88,9 +99,9 @@ export class ConfigStore {
     this.mutateSection(sectionId, (section) => move(section.items, itemId, offset));
   }
 
-  exportToFile(): void {
+  exportToFile(): Promise<void> {
     const json = JSON.stringify(this.config(), null, 2);
-    downloadFile('feedback-konfiguration.json', new Blob([json], { type: 'application/json' }));
+    return saveFile('feedback-konfiguration.json', new Blob([json], { type: 'application/json' }));
   }
 
   /** Übernimmt eine exportierte Konfiguration. Wirft einen Fehler, wenn die Datei kein gültiges Format hat. */
@@ -237,11 +248,26 @@ export function parseConfig(data: unknown): FeedbackConfig {
     version: 1,
     title: typeof config.title === 'string' ? config.title : 'Unterrichtsfeedback',
     themeColor: isHexColor(config.themeColor) ? config.themeColor : DEFAULT_THEME_COLOR,
+    pdfLayout: parsePdfLayout(config.pdfLayout),
     instruments,
     defaultInstrumentId,
     // Ältere Konfigurationen haben noch keine festen Blöcke.
     blocks: Array.isArray(config.blocks) ? config.blocks.map(parseBlock) : [],
     sections: config.sections.map(parseSection),
+  };
+}
+
+/** Ältere Konfigurationen haben noch keine Kopf- und Fußzeile; fehlende Werte kommen vom Standard. */
+function parsePdfLayout(data: Partial<PdfLayout> | undefined): PdfLayout {
+  const text = (key: Exclude<keyof PdfLayout, 'showInfoLine'>) =>
+    typeof data?.[key] === 'string' ? data[key] : DEFAULT_PDF_LAYOUT[key];
+  return {
+    subtitle: text('subtitle'),
+    showInfoLine: typeof data?.showInfoLine === 'boolean' ? data.showInfoLine : DEFAULT_PDF_LAYOUT.showInfoLine,
+    runningHeader: text('runningHeader'),
+    footerLeft: text('footerLeft'),
+    footerCenter: text('footerCenter'),
+    footerRight: text('footerRight'),
   };
 }
 
@@ -317,6 +343,7 @@ function defaultConfig(): FeedbackConfig {
     version: 1,
     title: 'Dein Feedback zum Unterricht',
     themeColor: DEFAULT_THEME_COLOR,
+    pdfLayout: { ...DEFAULT_PDF_LAYOUT },
     instruments: [piano, guitar, violin],
     defaultInstrumentId: piano.id,
     blocks: [

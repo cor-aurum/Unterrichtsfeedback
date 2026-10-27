@@ -14,8 +14,25 @@
   color: var(--on-primary);
 
   .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0;
     font-weight: 600;
     font-size: 1.15rem;
+    opacity: 1;
+
+    &:hover {
+      background: none;
+    }
+  }
+
+  // Das Logo ist orange auf hellem Grund und steht deshalb als helle Kachel auf der farbigen Leiste.
+  .logo {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
   }
 
   nav {

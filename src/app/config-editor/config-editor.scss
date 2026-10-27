@@ -20,6 +20,29 @@
   margin-top: 0.4rem;
 }
 
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  label:not(.show-title) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+  }
+
+  .show-title {
+    margin-top: 0;
+  }
+}
+
+.footer-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
 .color-label {
   display: block;
   margin-top: 1rem;

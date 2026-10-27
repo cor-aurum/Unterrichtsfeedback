@@ -37,16 +37,3 @@ function save(key: string, value: unknown): void {
     alert('Der Browserspeicher ist voll, die letzte Änderung wurde nicht gespeichert. Bilder verkleinern oder entfernen.');
   }
 }
-
-export function downloadFile(fileName: string, content: Blob): void {
-  const url = URL.createObjectURL(content);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-export function safeFileName(name: string): string {
-  return name.trim().replace(/[^\p{L}\p{N}_-]+/gu, '_') || 'export';
-}

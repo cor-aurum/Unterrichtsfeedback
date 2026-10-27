@@ -119,14 +119,14 @@
               <textarea
                 [value]="generalTextOf(student, section.id)"
                 (input)="setGeneralText(student, section.id, $event)"
-                placeholder="Platzhalter: {vorname}, {name}, {instrument}"
+                [placeholder]="placeholderHint"
               ></textarea>
               <p class="muted field-hint">Gilt für alle Stunden von {{ student.name }}.</p>
             } @else {
               <textarea
                 [value]="textOf(lesson, section.id)"
                 (input)="setText(student, lesson, section.id, $event)"
-                placeholder="Platzhalter: {vorname}, {name}, {instrument}"
+                [placeholder]="placeholderHint"
               ></textarea>
             }
           </fieldset>

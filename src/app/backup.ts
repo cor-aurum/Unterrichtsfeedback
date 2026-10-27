@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { ConfigStore, parseConfig } from './config.store';
 import { FeedbackConfig, Student, today } from './model';
-import { downloadFile } from './stored-signal';
+import { saveFile } from './save-file';
 import { parseStudents, StudentsStore } from './students.store';
 
 /**
@@ -19,14 +19,14 @@ export class BackupService {
   private readonly configStore = inject(ConfigStore);
   private readonly studentsStore = inject(StudentsStore);
 
-  exportToFile(): void {
+  exportToFile(): Promise<void> {
     const backup: Backup = {
       version: 1,
       config: this.configStore.config(),
       students: this.studentsStore.students(),
     };
     const json = JSON.stringify(backup, null, 2);
-    downloadFile(`unterricht-feedback-sicherung_${today()}.json`, new Blob([json], { type: 'application/json' }));
+    return saveFile(`unterricht-feedback-sicherung_${today()}.json`, new Blob([json], { type: 'application/json' }));
   }
 
   /**

@@ -1,0 +1,82 @@
+# Baut die Android-App (APK) und hängt sie an einen GitHub-Release.
+# Auslöser: ein Tag wie v1.2.0 (erzeugt einen Release) oder manuell unter „Actions“ (nur Download als Artefakt).
+# Voraussetzung: die Secrets für den Signaturschlüssel, siehe README.
+name: Android-App bauen
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Gradle 8.14 läuft mit Java 21, aber noch nicht mit neueren Versionen.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npx cap sync android
+
+      - name: Versionsnummer bestimmen
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            NAME="${GITHUB_REF_NAME#v}"
+          else
+            NAME="0.0.0-test.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Signaturschlüssel bereitstellen
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::Das Secret ANDROID_KEYSTORE_BASE64 fehlt. Einrichtung siehe README."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
+      - name: APK bauen
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease -PversionCode=${{ github.run_number }} -PversionName=${{ steps.version.outputs.name }}
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Unterrichtsfeedback-${{ steps.version.outputs.name }}
+          path: ${{ runner.temp }}/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk
+
+      - name: Release anlegen
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME"
+          "$RUNNER_TEMP/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk"
+          --title "Unterrichtsfeedback ${{ steps.version.outputs.name }}"
+          --generate-notes

@@ -1,5 +1,6 @@
 import { Component, effect, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Capacitor } from '@capacitor/core';
 import { ConfigStore } from './config.store';
 
 @Component({
@@ -10,6 +11,7 @@ import { ConfigStore } from './config.store';
 })
 export class App {
   private readonly theme = inject(ConfigStore).theme;
+  protected readonly nativeApp = Capacitor.isNativePlatform();
 
   constructor() {
     // Überschreibt die Standardwerte der CSS-Variablen aus styles.scss mit der konfigurierten Farbe.

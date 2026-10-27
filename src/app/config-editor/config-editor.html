@@ -47,11 +47,76 @@
   </div>
 
   <p class="muted small">
-    Platzhalter für feste Texte, Textbausteine und Freitextfelder:
+    Platzhalter für alle Texte im PDF (Überschrift, Kopf- und Fußzeile, feste Texte, Textbausteine und
+    Freitextfelder):
     @for (placeholder of placeholders; track placeholder.key; let lastPlaceholder = $last) {
       <code>{{ placeholder.key }}</code> ({{ placeholder.description }}){{ lastPlaceholder ? '' : ',' }}
     }
   </p>
+</section>
+
+<h2 class="group-title">Kopf- und Fußzeile im PDF</h2>
+<p class="muted group-hint">
+  Ein leeres Feld blendet die Zeile aus. Alle Platzhalter von oben sind möglich, zum Beispiel
+  <code>{{ '{seite}' }}</code> und <code>{{ '{seiten}' }}</code> für die Seitenzahl.
+</p>
+
+<section class="card layout">
+  <label>
+    Untertitel unter der Überschrift
+    <input
+      type="text"
+      [value]="store.config().pdfLayout.subtitle"
+      (change)="store.setPdfLayout({ subtitle: valueOf($event) })"
+    />
+  </label>
+  <label class="show-title">
+    <input
+      type="checkbox"
+      [checked]="store.config().pdfLayout.showInfoLine"
+      (change)="store.setPdfLayout({ showInfoLine: $any($event.target).checked })"
+    />
+    Infozeile anzeigen (Anzahl der Stunden und Stand, bei nur einer Stunde ihr Datum)
+  </label>
+  <label>
+    Kopfzeile ab der zweiten Seite
+    <input
+      type="text"
+      [value]="store.config().pdfLayout.runningHeader"
+      (change)="store.setPdfLayout({ runningHeader: valueOf($event) })"
+    />
+  </label>
+  <div class="footer-fields">
+    <label>
+      Fußzeile links
+      <input
+        type="text"
+        [value]="store.config().pdfLayout.footerLeft"
+        (change)="store.setPdfLayout({ footerLeft: valueOf($event) })"
+      />
+    </label>
+    <label>
+      Fußzeile Mitte
+      <input
+        type="text"
+        [value]="store.config().pdfLayout.footerCenter"
+        (change)="store.setPdfLayout({ footerCenter: valueOf($event) })"
+      />
+    </label>
+    <label>
+      Fußzeile rechts
+      <input
+        type="text"
+        [value]="store.config().pdfLayout.footerRight"
+        (change)="store.setPdfLayout({ footerRight: valueOf($event) })"
+      />
+    </label>
+  </div>
+  <div>
+    <button class="secondary" [disabled]="isDefaultPdfLayout()" (click)="store.resetPdfLayout()">
+      Standard wiederherstellen
+    </button>
+  </div>
 </section>
 
 <h2 class="group-title">Instrumente</h2>

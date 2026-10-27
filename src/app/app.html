@@ -1,5 +1,8 @@
 <header class="topbar">
-  <span class="brand">Unterrichtsfeedback</span>
+  <a class="brand" routerLink="/stunden">
+    <img class="logo" src="logo.png" alt="" />
+    Unterrichtsfeedback
+  </a>
   <nav>
     <a routerLink="/stunden" routerLinkActive="active">Stunden erfassen</a>
     <a routerLink="/konfiguration" routerLinkActive="active">Konfiguration</a>
@@ -13,7 +16,12 @@
 </main>
 
 <footer class="hint">
-  Alle Daten liegen nur in diesem Browser (Local Storage) und bleiben auch nach einem Neustart
-  erhalten. Beim Löschen der Browserdaten gehen sie verloren, deshalb regelmäßig unter „Export &amp;
-  Sicherung“ eine Datensicherung herunterladen.
+  @if (nativeApp) {
+    Alle Daten liegen nur in dieser App auf diesem Gerät. Beim Deinstallieren der App gehen sie
+    verloren, deshalb regelmäßig unter „Export &amp; Sicherung“ eine Datensicherung erstellen.
+  } @else {
+    Alle Daten liegen nur in diesem Browser (Local Storage) und bleiben auch nach einem Neustart
+    erhalten. Beim Löschen der Browserdaten gehen sie verloren, deshalb regelmäßig unter „Export &amp;
+    Sicherung“ eine Datensicherung herunterladen.
+  }
 </footer>

@@ -1,6 +1,13 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { ConfigStore } from '../config.store';
-import { defaultInstrument, FixedBlock, Instrument, PLACEHOLDERS, Section } from '../model';
+import {
+  DEFAULT_PDF_LAYOUT,
+  defaultInstrument,
+  FixedBlock,
+  Instrument,
+  PLACEHOLDERS,
+  Section,
+} from '../model';
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
 import { DEFAULT_THEME_COLOR, isHexColor } from '../theme';
@@ -15,6 +22,9 @@ export class ConfigEditor {
   protected readonly store = inject(ConfigStore);
   protected readonly placeholders = PLACEHOLDERS;
   protected readonly defaultThemeColor = DEFAULT_THEME_COLOR;
+  protected readonly isDefaultPdfLayout = computed(
+    () => JSON.stringify(this.store.config().pdfLayout) === JSON.stringify(DEFAULT_PDF_LAYOUT),
+  );
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
   protected readonly defaultInstrumentId = computed(() => defaultInstrument(this.store.config()).id);
 

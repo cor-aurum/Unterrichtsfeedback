@@ -6,13 +6,14 @@ import {
   FeedbackConfig,
   contentFor,
   fillPlaceholders,
+  formatLongDate,
   instrumentOf,
   Lesson,
   Section,
   Student,
   today,
 } from './model';
-import { downloadFile, safeFileName } from './stored-signal';
+import { safeFileName, saveFile } from './save-file';
 import { sortedLessons } from './students.store';
 import { Theme, themeFrom } from './theme';
 
@@ -52,10 +53,16 @@ export class PdfExport {
     // jsPDF ist groß und wird deshalb erst beim ersten Export geladen.
     const { jsPDF } = await import('jspdf');
     const colors = pdfColors(themeFrom(config.themeColor));
-    const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), colors);
-    students.forEach((student) => writeStudent(writer, config, student));
-    writer.addFooters();
-    downloadFile(`${safeFileName(fileName)}_${today()}.pdf`, writer.toBlob());
+    const render = (pageCounts?: number[]) => {
+      const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), colors, pageCounts);
+      students.forEach((student) => writeStudent(writer, config, student));
+      writer.addFooters();
+      return writer;
+    };
+    // {seiten} im Text steht erst fest, wenn alle Seiten geschrieben sind. Deshalb zählt ein erster
+    // Durchlauf die Seiten je Person, der zweite schreibt die echten Zahlen.
+    const writer = render(render().pageCounts());
+    await saveFile(`${safeFileName(fileName)}_${today()}.pdf`, writer.toBlob());
   }
 }
 
@@ -66,10 +73,7 @@ export class PdfExport {
  */
 function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Student): void {
   const lessons = sortedLessons(student);
-  writer.beginStudent(student.name, `${config.title} · ${student.name}`);
-  writer.text(config.title, { size: 22, bold: true });
-  writer.text(`für ${student.name}`, { size: 14, color: writer.colors.accentText, gapAfter: 1.5 });
-  writer.text(subtitle(lessons), { size: 10, color: writer.colors.muted, gapAfter: 10 });
+  writeHeader(writer, config, student, lessons);
   writeFixedBlocks(writer, config, 'start', student);
   writeGeneralPart(writer, config, lessons, student);
 
@@ -135,7 +139,23 @@ function writeFixedText(writer: PdfWriter, text: string): void {
   });
 }
 
-function subtitle(lessons: Lesson[]): string {
+/** Kopf auf der ersten Seite einer Person; Kopf- und Fußzeile der Folgeseiten merkt sich der Writer. */
+function writeHeader(writer: PdfWriter, config: FeedbackConfig, student: Student, lessons: Lesson[]): void {
+  const layout = config.pdfLayout;
+  const fill = (text: string) => fillPlaceholders(text, student, config).trim();
+  writer.beginStudent(fill(layout.runningHeader), {
+    left: fill(layout.footerLeft),
+    center: fill(layout.footerCenter),
+    right: fill(layout.footerRight),
+  });
+  writer.text(fill(config.title), { size: 22, bold: true });
+  const subtitle = fill(layout.subtitle);
+  if (subtitle) writer.text(subtitle, { size: 14, color: writer.colors.accentText, gapAfter: 1.5 });
+  if (layout.showInfoLine) writer.text(infoLine(lessons), { size: 10, color: writer.colors.muted, gapAfter: 0 });
+  writer.gap(10, false);
+}
+
+function infoLine(lessons: Lesson[]): string {
   if (lessons.length === 1) {
     return `Unterrichtsstunde vom ${formatLongDate(lessons[0].date)}`;
   }
@@ -196,15 +216,6 @@ function asSentence(text: string): string {
   return /[.!?…:]$/.test(text) ? text : `${text}.`;
 }
 
-function formatLongDate(isoDate: string): string {
-  return new Date(isoDate + 'T00:00:00').toLocaleDateString('de-DE', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
-
 interface TextStyle {
   size: number;
   bold?: boolean;
@@ -219,23 +230,45 @@ interface TextStyle {
   gapAfter?: number;
 }
 
+function replacePagePlaceholders(text: string, page: number, pageCount: number): string {
+  return text.replace(/\{seite\}/gi, String(page)).replace(/\{seiten\}/gi, String(pageCount));
+}
+
+interface FooterTexts {
+  left: string;
+  center: string;
+  right: string;
+}
+
 /**
  * Schreibt Text fortlaufend von oben nach unten und beginnt bei Bedarf eine neue Seite.
  * Jede Person bekommt eigene Seiten mit eigener Seitenzählung in der Fußzeile.
+ *
+ * {seite} und {seiten} ersetzt der Writer selbst, Zeile für Zeile, weil erst beim Schreiben feststeht,
+ * auf welcher Seite eine Zeile landet. Die Seitenanzahl kommt aus einem vorherigen Durchlauf
+ * (`knownPageCounts`); ohne ihn steht vorläufig „99“ da, damit die Zeilen gleich breit umbrechen.
  */
 class PdfWriter {
   private y = MARGIN;
   private runningHeader = '';
-  private readonly students: { name: string; firstPage: number }[] = [];
+  private readonly students: { footer: FooterTexts; firstPage: number }[] = [];
 
   constructor(
     private readonly doc: jsPDF,
     readonly colors: PdfColors,
+    private readonly knownPageCounts?: number[],
   ) {}
 
-  beginStudent(name: string, runningHeader: string): void {
+  /** Seitenanzahl je Person in der Reihenfolge des Exports */
+  pageCounts(): number[] {
+    const total = this.doc.getNumberOfPages();
+    return this.students.map((student, index) => (this.students[index + 1]?.firstPage ?? total + 1) - student.firstPage);
+  }
+
+  /** `footer` darf noch {seite} und {seiten} enthalten. */
+  beginStudent(runningHeader: string, footer: FooterTexts): void {
     if (this.students.length > 0) this.doc.addPage();
-    this.students.push({ name, firstPage: this.doc.getNumberOfPages() });
+    this.students.push({ footer, firstPage: this.doc.getNumberOfPages() });
     this.runningHeader = runningHeader;
     this.accentBand(8);
     this.y = MARGIN + 8;
@@ -249,7 +282,7 @@ class PdfWriter {
     for (const line of this.doc.splitTextToSize(text, CONTENT_WIDTH - indent) as string[]) {
       if (this.keepTogether(lineHeight)) this.applyStyle(style);
       if (style.rail) this.railSegment(lineHeight);
-      this.doc.text(line, MARGIN + indent, this.y, { baseline: 'top' });
+      this.doc.text(this.fillPagePlaceholders(line), MARGIN + indent, this.y, { baseline: 'top' });
       this.y += lineHeight;
     }
     this.y += style.gapAfter ?? 1;
@@ -299,13 +332,12 @@ class PdfWriter {
   }
 
   addFooters(): void {
-    const total = this.doc.getNumberOfPages();
+    const pageCounts = this.pageCounts();
     this.students.forEach((student, index) => {
-      const lastPage = (this.students[index + 1]?.firstPage ?? total + 1) - 1;
-      const pageCount = lastPage - student.firstPage + 1;
-      for (let page = student.firstPage; page <= lastPage; page++) {
-        this.doc.setPage(page);
-        this.footer(student.name, `Seite ${page - student.firstPage + 1} von ${pageCount}`);
+      for (let page = 1; page <= pageCounts[index]; page++) {
+        const fill = (text: string) => replacePagePlaceholders(text, page, pageCounts[index]);
+        this.doc.setPage(student.firstPage + page - 1);
+        this.footer({ left: fill(student.footer.left), center: fill(student.footer.center), right: fill(student.footer.right) });
       }
     });
   }
@@ -317,19 +349,31 @@ class PdfWriter {
   private newPage(): void {
     this.doc.addPage();
     this.accentBand(3);
-    this.applyStyle({ size: 9, color: this.colors.muted });
-    this.doc.text(this.runningHeader, MARGIN, 10, { baseline: 'top' });
+    if (this.runningHeader) {
+      this.applyStyle({ size: 9, color: this.colors.muted });
+      this.doc.text(this.fillPagePlaceholders(this.runningHeader), MARGIN, 10, { baseline: 'top' });
+    }
     this.y = MARGIN + 2;
   }
 
-  private footer(left: string, right: string): void {
+  /** Setzt Seite und Seitenanzahl der Person ein, für die gerade geschrieben wird. */
+  private fillPagePlaceholders(text: string): string {
+    const index = this.students.length - 1;
+    const page = this.doc.getNumberOfPages() - this.students[index].firstPage + 1;
+    return replacePagePlaceholders(text, page, this.knownPageCounts?.[index] ?? 99);
+  }
+
+  /** Ohne Text entfällt auch die Trennlinie. */
+  private footer(texts: FooterTexts): void {
+    if (!texts.left && !texts.center && !texts.right) return;
     const y = PAGE_HEIGHT - 14;
     this.doc.setDrawColor(this.colors.rail);
     this.doc.setLineWidth(0.3);
     this.doc.line(MARGIN, y - 3, MARGIN + CONTENT_WIDTH, y - 3);
     this.applyStyle({ size: 9, color: this.colors.muted });
-    this.doc.text(left, MARGIN, y, { baseline: 'top' });
-    this.doc.text(right, MARGIN + CONTENT_WIDTH, y, { baseline: 'top', align: 'right' });
+    if (texts.left) this.doc.text(texts.left, MARGIN, y, { baseline: 'top' });
+    if (texts.center) this.doc.text(texts.center, PAGE_WIDTH / 2, y, { baseline: 'top', align: 'center' });
+    if (texts.right) this.doc.text(texts.right, MARGIN + CONTENT_WIDTH, y, { baseline: 'top', align: 'right' });
   }
 
   private accentBand(height: number): void {
