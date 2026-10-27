@@ -20,6 +20,38 @@
   margin-top: 0.4rem;
 }
 
+.color-label {
+  display: block;
+  margin-top: 1rem;
+}
+
+.color-row {
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+
+  input[type='color'] {
+    width: 3rem;
+    height: 2.2rem;
+    padding: 0.1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+  }
+
+  .hex {
+    width: 7rem;
+    font-family: monospace;
+  }
+}
+
+.swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
 .section .title {
   font-weight: 600;
 }

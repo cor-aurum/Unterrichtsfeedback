@@ -1,6 +1,8 @@
 :root {
+  /* Standardwerte für das Orange; die App setzt sie aus der konfigurierten Themenfarbe (theme.ts). */
   --primary: #f57115;
-  /* Dunklerer Ton für orangen Text auf hellem Grund, damit er lesbar bleibt */
+  --on-primary: #ffffff;
+  /* Dunklerer Ton für Text in Themenfarbe auf hellem Grund, damit er lesbar bleibt */
   --primary-text: #b34f00;
   --primary-light: #fff1e6;
   --danger: #b3261e;
@@ -108,7 +110,7 @@ button {
   border: 1px solid var(--primary);
   border-radius: 6px;
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   cursor: pointer;
   white-space: nowrap;
 

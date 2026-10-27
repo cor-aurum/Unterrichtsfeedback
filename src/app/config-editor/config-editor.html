@@ -19,6 +19,33 @@
     [value]="store.config().title"
     (change)="store.setTitle(valueOf($event))"
   />
+
+  <label class="color-label" for="config-color"><strong>Themenfarbe für App und PDF</strong></label>
+  <div class="row color-row">
+    <input
+      id="config-color"
+      type="color"
+      [value]="store.config().themeColor"
+      (input)="store.setThemeColor(valueOf($event))"
+    />
+    <input
+      type="text"
+      class="hex"
+      [value]="store.config().themeColor"
+      (change)="setThemeColorFromText($event)"
+      aria-label="Themenfarbe als Hex-Wert"
+    />
+    <span class="swatch" [style.background]="store.theme().primaryText" title="Text in Themenfarbe"></span>
+    <span class="swatch" [style.background]="store.theme().primaryLight" title="Heller Hintergrund"></span>
+    <button
+      class="secondary"
+      [disabled]="store.config().themeColor === defaultThemeColor"
+      (click)="store.setThemeColor(defaultThemeColor)"
+    >
+      Standardfarbe
+    </button>
+  </div>
+
   <p class="muted small">
     Platzhalter für feste Texte, Textbausteine und Freitextfelder:
     @for (placeholder of placeholders; track placeholder.key; let lastPlaceholder = $last) {

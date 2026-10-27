@@ -1,0 +1,123 @@
+<h1>Hilfe</h1>
+<p class="lead">
+  Mit dieser App hältst du während des Einzelunterrichts fest, wie die Stunde gelaufen ist – meist
+  mit ein paar Klicks. Daraus erstellst du ein PDF, das du deinen Schülerinnen und Schülern mitgibst.
+</p>
+
+<ol class="steps">
+  <li>
+    <strong>Einmal einrichten</strong>
+    <span>Unter <a routerLink="/konfiguration">Konfiguration</a> legst du Textbausteine, Instrumente und feste Texte fest.</span>
+  </li>
+  <li>
+    <strong>Im Unterricht erfassen</strong>
+    <span>Unter <a routerLink="/stunden">Stunden erfassen</a> hakst du Bausteine an und schreibst kurze Notizen.</span>
+  </li>
+  <li>
+    <strong>PDF weitergeben</strong>
+    <span>Unter <a routerLink="/export">Export &amp; Sicherung</a> erstellst du das PDF für eine oder alle Personen.</span>
+  </li>
+</ol>
+
+<section class="card">
+  <h2>Stunden erfassen</h2>
+  <figure>
+    <img src="help/stunden.jpg" alt="Seite „Stunden erfassen“ mit Personenliste, Stundenliste und angehakten Textbausteinen" />
+    <figcaption>Links die Personen, in der Mitte ihre Stunden, rechts die ausgewählte Stunde.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Person anlegen:</strong> Namen eingeben, Instrument wählen und auf <kbd>+</kbd> klicken.</li>
+    <li><strong>Stunde anlegen:</strong> Person anklicken, dann <kbd>+ Neue Stunde</kbd>. Das Datum ist heute, du kannst es ändern.</li>
+    <li><strong>Feedback geben:</strong> Passende Textbausteine anhaken und bei Bedarf etwas in die Freitextfelder schreiben.</li>
+    <li><strong>Speichern musst du nicht</strong> – jede Änderung wird sofort übernommen.</li>
+    <li>
+      Abschnitte mit dem Kennzeichen <span class="tag">allgemein</span> gelten für die Person insgesamt. Ein dort
+      angehakter Baustein steht im PDF nur einmal, egal in wie vielen Stunden er angehakt ist.
+    </li>
+    <li>Name und Instrument einer Person änderst du unter ihrer Stundenliste.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Konfiguration</h2>
+  <figure>
+    <img src="help/konfiguration.jpg" alt="Seite „Konfiguration“ mit Überschrift, Themenfarbe und Instrumenten" />
+    <figcaption>Hier richtest du ein, was du im Unterricht anklicken kannst und was im PDF steht.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Überschrift und Themenfarbe</strong> bestimmen, wie das PDF und die App aussehen.</li>
+    <li>
+      <strong>Instrumente:</strong> Jede Person hat ein Instrument. Das als <em>Standard</em> markierte ist beim
+      Anlegen einer Person schon ausgewählt.
+    </li>
+    <li>
+      <strong>Feste Inhalte</strong> stehen in jedem PDF, zum Beispiel eine Anrede am Anfang, ein Gruß oder
+      ein Logo am Ende. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument austauschen.
+    </li>
+    <li>
+      <strong>Abschnitte</strong> sind entweder <em>Textbausteine</em> zum Anhaken oder ein <em>Freitextfeld</em>.
+      Du legst fest, ob sie bei jeder Stunde oder im allgemeinen Teil erscheinen. Schreibe Bausteine am besten
+      als ganze Sätze, zum Beispiel „Du hast gut geübt.“
+    </li>
+    <li>Mit den Pfeilen änderst du die Reihenfolge – so erscheinen die Inhalte auch im PDF.</li>
+    <li>
+      Über <kbd>Exportieren</kbd> und <kbd>Importieren</kbd> gibst du deine Konfiguration zum Beispiel an
+      Kolleginnen und Kollegen weiter.
+    </li>
+  </ul>
+
+  <h3>Platzhalter</h3>
+  <p>Schreibst du einen Platzhalter in einen Text, setzt das PDF dafür die Angaben der jeweiligen Person ein:</p>
+  <table>
+    <tbody>
+      @for (placeholder of placeholders; track placeholder.key) {
+        <tr>
+          <td><code>{{ placeholder.key }}</code></td>
+          <td>{{ placeholder.description }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  <p class="example">
+    Beispiel: Aus „Hallo {{ '{vorname}' }},“ wird im PDF für Anna Berg „Hallo Anna,“.
+  </p>
+</section>
+
+<section class="card">
+  <h2>Export &amp; Sicherung</h2>
+  <figure>
+    <img src="help/export.jpg" alt="Seite „Export &amp; Sicherung“ mit PDF-Export und Datensicherung" />
+    <figcaption>Oben erstellst du das PDF, unten sicherst du deine Daten.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      <strong>PDF erstellen:</strong> Wähle <em>Alle Personen</em> oder <em>Nur eine Person</em> und klicke auf
+      <kbd>PDF erstellen</kbd>. Jede Person beginnt auf einer neuen Seite.
+    </li>
+    <li>
+      Im PDF stehen nacheinander: die festen Inhalte für den Anfang, der allgemeine Teil, die Stunden als
+      Zeitleiste und die festen Inhalte für das Ende. Bei nur einer Stunde steht ihr Datum oben im Kopf.
+    </li>
+    <li>
+      <strong>Daten exportieren</strong> lädt eine Sicherungsdatei mit allen Personen, Stunden und der
+      Konfiguration herunter. <strong>Daten importieren</strong> stellt eine Sicherung wieder her und ersetzt
+      dabei alles, was gerade in der App ist.
+    </li>
+  </ul>
+</section>
+
+<section class="card important">
+  <h2>Wo sind meine Daten?</h2>
+  <p>
+    Deine Daten liegen <strong>nur in diesem Browser auf diesem Gerät</strong>. Sie werden nirgendwohin
+    hochgeladen. Das heißt auch:
+  </p>
+  <ul>
+    <li>Ein anderer Browser oder ein anderes Gerät sieht deine Daten nicht.</li>
+    <li>Löschst du die Browserdaten, sind auch deine Einträge weg.</li>
+    <li>
+      Lade deshalb regelmäßig unter <a routerLink="/export">Export &amp; Sicherung</a> eine Datensicherung
+      herunter. Mit ihr ziehst du auch auf ein anderes Gerät um.
+    </li>
+  </ul>
+</section>

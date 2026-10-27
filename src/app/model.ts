@@ -70,6 +70,8 @@ export interface Instrument {
 export interface FeedbackConfig {
   version: 1;
   title: string;
+  /** Themenfarbe (Hex, z. B. #f57115) für App und PDF */
+  themeColor: string;
   /** Enthält immer mindestens ein Instrument. */
   instruments: Instrument[];
   defaultInstrumentId: string;

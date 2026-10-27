@@ -11,7 +11,7 @@
   gap: 0.5rem 2rem;
   padding: 0.75rem 1.5rem;
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
 
   .brand {
     font-weight: 600;
@@ -25,7 +25,7 @@
   }
 
   a {
-    color: white;
+    color: var(--on-primary);
     text-decoration: none;
     padding: 0.4rem 0.8rem;
     border-radius: 6px;
@@ -40,6 +40,29 @@
       background: rgb(255 255 255 / 0.22);
       opacity: 1;
     }
+  }
+
+  // Auf schmalen Bildschirmen rutscht die Navigation in eine eigene Zeile, das Fragezeichen bleibt
+  // oben rechts neben dem Namen der App.
+  @media (max-width: 700px) {
+    nav {
+      order: 3;
+      flex-basis: 100%;
+    }
+  }
+
+  .help {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    margin-left: auto;
+    padding: 0;
+    border: 2px solid var(--on-primary);
+    border-radius: 50%;
+    font-weight: 700;
+    line-height: 1;
   }
 }
 

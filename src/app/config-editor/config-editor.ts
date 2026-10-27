@@ -3,6 +3,7 @@ import { ConfigStore } from '../config.store';
 import { defaultInstrument, FixedBlock, Instrument, PLACEHOLDERS, Section } from '../model';
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
+import { DEFAULT_THEME_COLOR, isHexColor } from '../theme';
 
 @Component({
   selector: 'app-config-editor',
@@ -13,11 +14,23 @@ import { readImageFile } from './image-file';
 export class ConfigEditor {
   protected readonly store = inject(ConfigStore);
   protected readonly placeholders = PLACEHOLDERS;
+  protected readonly defaultThemeColor = DEFAULT_THEME_COLOR;
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
   protected readonly defaultInstrumentId = computed(() => defaultInstrument(this.store.config()).id);
 
   protected valueOf(event: Event): string {
     return (event.target as HTMLInputElement).value;
+  }
+
+  protected setThemeColorFromText(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const color = input.value.trim().replace(/^#?/, '#');
+    if (isHexColor(color)) {
+      this.store.setThemeColor(color);
+    } else {
+      input.value = this.store.config().themeColor;
+      this.showError('Bitte die Farbe als Hex-Wert angeben, z. B. #f57115.');
+    }
   }
 
   protected showError(text: string): void {

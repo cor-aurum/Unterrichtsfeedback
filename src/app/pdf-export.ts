@@ -14,6 +14,7 @@ import {
 } from './model';
 import { downloadFile, safeFileName } from './stored-signal';
 import { sortedLessons } from './students.store';
+import { Theme, themeFrom } from './theme';
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
@@ -27,20 +28,31 @@ const LESSON_INDENT = 8;
 /** Kleiner als diese Höhe in mm wird ein Bild am Ende nicht, sonst wäre es nicht mehr erkennbar. */
 const MIN_SHRUNK_IMAGE_HEIGHT = 15;
 
-const COLORS = {
-  accent: '#f57115',
-  accentText: '#b34f00',
-  rail: '#fbd3b4',
-  text: '#1f2933',
-  muted: '#66727f',
-};
+interface PdfColors {
+  accent: string;
+  accentText: string;
+  rail: string;
+  text: string;
+  muted: string;
+}
+
+function pdfColors(theme: Theme): PdfColors {
+  return {
+    accent: theme.primary,
+    accentText: theme.primaryText,
+    rail: theme.rail,
+    text: '#1f2933',
+    muted: '#66727f',
+  };
+}
 
 @Injectable({ providedIn: 'root' })
 export class PdfExport {
   async export(config: FeedbackConfig, students: Student[], fileName: string): Promise<void> {
     // jsPDF ist groß und wird deshalb erst beim ersten Export geladen.
     const { jsPDF } = await import('jspdf');
-    const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }));
+    const colors = pdfColors(themeFrom(config.themeColor));
+    const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), colors);
     students.forEach((student) => writeStudent(writer, config, student));
     writer.addFooters();
     downloadFile(`${safeFileName(fileName)}_${today()}.pdf`, writer.toBlob());
@@ -56,13 +68,13 @@ function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Studen
   const lessons = sortedLessons(student);
   writer.beginStudent(student.name, `${config.title} · ${student.name}`);
   writer.text(config.title, { size: 22, bold: true });
-  writer.text(`für ${student.name}`, { size: 14, color: COLORS.accentText, gapAfter: 1.5 });
-  writer.text(subtitle(lessons), { size: 10, color: COLORS.muted, gapAfter: 10 });
+  writer.text(`für ${student.name}`, { size: 14, color: writer.colors.accentText, gapAfter: 1.5 });
+  writer.text(subtitle(lessons), { size: 10, color: writer.colors.muted, gapAfter: 10 });
   writeFixedBlocks(writer, config, 'start', student);
   writeGeneralPart(writer, config, lessons, student);
 
   if (lessons.length === 0) {
-    writer.text('Es sind noch keine Unterrichtsstunden erfasst.', { size: 11, italic: true, color: COLORS.muted });
+    writer.text('Es sind noch keine Unterrichtsstunden erfasst.', { size: 11, italic: true, color: writer.colors.muted });
   } else if (!lessons.some((lesson) => paragraphsOf(config, lesson, student).length > 0)) {
     // Keine Stunde hat eigene Notizen: weder Zeitleiste noch „keine Notizen“-Hinweise.
   } else if (lessons.length === 1) {
@@ -216,7 +228,10 @@ class PdfWriter {
   private runningHeader = '';
   private readonly students: { name: string; firstPage: number }[] = [];
 
-  constructor(private readonly doc: jsPDF) {}
+  constructor(
+    private readonly doc: jsPDF,
+    readonly colors: PdfColors,
+  ) {}
 
   beginStudent(name: string, runningHeader: string): void {
     if (this.students.length > 0) this.doc.addPage();
@@ -271,9 +286,9 @@ class PdfWriter {
   }
 
   lessonHeading(text: string): void {
-    this.doc.setFillColor(COLORS.accent);
+    this.doc.setFillColor(this.colors.accent);
     this.doc.circle(RAIL_X, this.y + 2.2, 1.8, 'F');
-    this.text(text, { size: 12, bold: true, color: COLORS.accentText, indent: LESSON_INDENT, gapAfter: 2 });
+    this.text(text, { size: 12, bold: true, color: this.colors.accentText, indent: LESSON_INDENT, gapAfter: 2 });
   }
 
   /** Beginnt eine neue Seite, wenn weniger als `height` mm Platz bleiben. Liefert true bei Seitenwechsel. */
@@ -302,28 +317,28 @@ class PdfWriter {
   private newPage(): void {
     this.doc.addPage();
     this.accentBand(3);
-    this.applyStyle({ size: 9, color: COLORS.muted });
+    this.applyStyle({ size: 9, color: this.colors.muted });
     this.doc.text(this.runningHeader, MARGIN, 10, { baseline: 'top' });
     this.y = MARGIN + 2;
   }
 
   private footer(left: string, right: string): void {
     const y = PAGE_HEIGHT - 14;
-    this.doc.setDrawColor(COLORS.rail);
+    this.doc.setDrawColor(this.colors.rail);
     this.doc.setLineWidth(0.3);
     this.doc.line(MARGIN, y - 3, MARGIN + CONTENT_WIDTH, y - 3);
-    this.applyStyle({ size: 9, color: COLORS.muted });
+    this.applyStyle({ size: 9, color: this.colors.muted });
     this.doc.text(left, MARGIN, y, { baseline: 'top' });
     this.doc.text(right, MARGIN + CONTENT_WIDTH, y, { baseline: 'top', align: 'right' });
   }
 
   private accentBand(height: number): void {
-    this.doc.setFillColor(COLORS.accent);
+    this.doc.setFillColor(this.colors.accent);
     this.doc.rect(0, 0, PAGE_WIDTH, height, 'F');
   }
 
   private railSegment(lineHeight: number): void {
-    this.doc.setDrawColor(COLORS.rail);
+    this.doc.setDrawColor(this.colors.rail);
     this.doc.setLineWidth(0.8);
     this.doc.line(RAIL_X, this.y - 1, RAIL_X, this.y + lineHeight - 1);
   }
@@ -332,6 +347,6 @@ class PdfWriter {
     const fontStyle = style.bold ? 'bold' : style.italic ? 'italic' : 'normal';
     this.doc.setFont('helvetica', fontStyle);
     this.doc.setFontSize(style.size);
-    this.doc.setTextColor(style.color ?? COLORS.text);
+    this.doc.setTextColor(style.color ?? this.colors.text);
   }
 }

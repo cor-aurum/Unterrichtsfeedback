@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { computed, Injectable } from '@angular/core';
 import {
   BlockContent,
   BlockImage,
@@ -14,6 +14,7 @@ import {
   SectionType,
 } from './model';
 import { downloadFile, storedSignal } from './stored-signal';
+import { DEFAULT_THEME_COLOR, isHexColor, themeFrom } from './theme';
 
 /** Standardinhalt (`variantId` = null) oder eine Variante eines festen Blocks */
 export interface ContentTarget {
@@ -25,8 +26,14 @@ export interface ContentTarget {
 export class ConfigStore {
   readonly config = storedSignal<FeedbackConfig>('feedback.config', defaultConfig, parseConfig);
 
+  readonly theme = computed(() => themeFrom(this.config().themeColor));
+
   setTitle(title: string): void {
     this.mutate((config) => (config.title = title));
+  }
+
+  setThemeColor(color: string): void {
+    if (isHexColor(color)) this.mutate((config) => (config.themeColor = color.toLowerCase()));
   }
 
   addSection(type: SectionType): void {
@@ -229,6 +236,7 @@ export function parseConfig(data: unknown): FeedbackConfig {
   return {
     version: 1,
     title: typeof config.title === 'string' ? config.title : 'Unterrichtsfeedback',
+    themeColor: isHexColor(config.themeColor) ? config.themeColor : DEFAULT_THEME_COLOR,
     instruments,
     defaultInstrumentId,
     // Ältere Konfigurationen haben noch keine festen Blöcke.
@@ -308,6 +316,7 @@ function defaultConfig(): FeedbackConfig {
   return {
     version: 1,
     title: 'Dein Feedback zum Unterricht',
+    themeColor: DEFAULT_THEME_COLOR,
     instruments: [piano, guitar, violin],
     defaultInstrumentId: piano.id,
     blocks: [

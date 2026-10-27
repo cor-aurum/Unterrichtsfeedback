@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, effect, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ConfigStore } from './config.store';
 
 @Component({
   selector: 'app-root',
@@ -7,4 +8,18 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
-export class App {}
+export class App {
+  private readonly theme = inject(ConfigStore).theme;
+
+  constructor() {
+    // Überschreibt die Standardwerte der CSS-Variablen aus styles.scss mit der konfigurierten Farbe.
+    effect(() => {
+      const theme = this.theme();
+      const style = document.documentElement.style;
+      style.setProperty('--primary', theme.primary);
+      style.setProperty('--on-primary', theme.onPrimary);
+      style.setProperty('--primary-text', theme.primaryText);
+      style.setProperty('--primary-light', theme.primaryLight);
+    });
+  }
+}
