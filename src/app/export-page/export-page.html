@@ -29,7 +29,14 @@
       <span class="grow muted">
         {{ studentsToExport().length }} Person(en), {{ lessonCount() }} Unterrichtsstunde(n)
       </span>
-      <button [disabled]="studentsToExport().length === 0" (click)="exportPdf()">PDF erstellen</button>
+      @if (nativeApp) {
+        <button class="secondary" [disabled]="studentsToExport().length === 0" (click)="exportPdf('share')">
+          PDF teilen
+        </button>
+        <button [disabled]="studentsToExport().length === 0" (click)="exportPdf('open')">PDF öffnen</button>
+      } @else {
+        <button [disabled]="studentsToExport().length === 0" (click)="exportPdf('share')">PDF erstellen</button>
+      }
     </div>
   }
 </section>

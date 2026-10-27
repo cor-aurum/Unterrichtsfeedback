@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { BackupService } from '../backup';
 import { ConfigStore } from '../config.store';
 import { PdfExport } from '../pdf-export';
+import { isNativeApp } from '../save-file';
 import { StudentsStore } from '../students.store';
 
 type Scope = 'all' | 'single';
@@ -17,6 +18,7 @@ export class ExportPage {
   private readonly config = inject(ConfigStore).config;
   private readonly pdf = inject(PdfExport);
   protected readonly store = inject(StudentsStore);
+  protected readonly nativeApp = isNativeApp;
   protected readonly backup = inject(BackupService);
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
 
@@ -57,9 +59,9 @@ export class ExportPage {
     }
   }
 
-  protected exportPdf(): void {
+  protected exportPdf(action: 'open' | 'share'): void {
     const students = this.studentsToExport();
     const fileName = this.scope() === 'all' ? 'Feedback_alle' : `Feedback_${students[0].name}`;
-    this.pdf.export(this.config(), students, fileName);
+    this.pdf.export(this.config(), students, fileName, action);
   }
 }

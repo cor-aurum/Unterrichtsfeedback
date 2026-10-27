@@ -13,7 +13,7 @@ import {
   Student,
   today,
 } from './model';
-import { safeFileName, saveFile } from './save-file';
+import { openFile, safeFileName, saveFile } from './save-file';
 import { sortedLessons } from './students.store';
 import { Theme, themeFrom } from './theme';
 
@@ -49,7 +49,8 @@ function pdfColors(theme: Theme): PdfColors {
 
 @Injectable({ providedIn: 'root' })
 export class PdfExport {
-  async export(config: FeedbackConfig, students: Student[], fileName: string): Promise<void> {
+  /** `open` öffnet das PDF in der Android-App direkt; im Browser wird es in beiden Fällen heruntergeladen. */
+  async export(config: FeedbackConfig, students: Student[], fileName: string, action: 'open' | 'share' = 'share'): Promise<void> {
     // jsPDF ist groß und wird deshalb erst beim ersten Export geladen.
     const { jsPDF } = await import('jspdf');
     const colors = pdfColors(themeFrom(config.themeColor));
@@ -62,7 +63,8 @@ export class PdfExport {
     // {seiten} im Text steht erst fest, wenn alle Seiten geschrieben sind. Deshalb zählt ein erster
     // Durchlauf die Seiten je Person, der zweite schreibt die echten Zahlen.
     const writer = render(render().pageCounts());
-    await saveFile(`${safeFileName(fileName)}_${today()}.pdf`, writer.toBlob());
+    const pdfName = `${safeFileName(fileName)}_${today()}.pdf`;
+    await (action === 'open' ? openFile(pdfName, writer.toBlob()) : saveFile(pdfName, writer.toBlob()));
   }
 }
 
