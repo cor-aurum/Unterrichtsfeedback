@@ -38,7 +38,8 @@ Die App wird mit [Capacitor](https://capacitorjs.com/) als Android-App verpackt 
 Der Workflow `.github/workflows/android.yml` baut daraus eine signierte APK:
 
 - **Bei einem Tag wie `v1.2.0`** entsteht ein GitHub-Release mit der APK zum Herunterladen. Die
-  Versionsnummer der App kommt aus dem Tag.
+  Versionsnummer der App kommt aus dem Tag. Die APK hängt zusätzlich als `Unterrichtsfeedback.apk` am
+  Release; darauf verlinkt die Web-App unten auf der Seite (`…/releases/latest/download/Unterrichtsfeedback.apk`).
 - **Manuell unter Actions → Android-App bauen** entsteht eine Test-APK als Artefakt des Laufs.
 
 Auf dem Android-Gerät die APK öffnen und die Installation aus dieser Quelle erlauben.

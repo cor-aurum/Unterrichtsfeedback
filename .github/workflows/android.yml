@@ -71,12 +71,17 @@ jobs:
           name: Unterrichtsfeedback-${{ steps.version.outputs.name }}
           path: ${{ runner.temp }}/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk
 
+      # Die APK hängt zweimal am Release: mit Versionsnummer und als Unterrichtsfeedback.apk. Über den
+      # zweiten Namen führt .../releases/latest/download/Unterrichtsfeedback.apk immer zur neuesten
+      # Version; darauf verlinkt die Web-App unten auf der Seite.
       - name: Release anlegen
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME"
-          "$RUNNER_TEMP/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk"
-          --title "Unterrichtsfeedback ${{ steps.version.outputs.name }}"
-          --generate-notes
+        run: |
+          cp "$RUNNER_TEMP/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk" "$RUNNER_TEMP/Unterrichtsfeedback.apk"
+          gh release create "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk" \
+            "$RUNNER_TEMP/Unterrichtsfeedback.apk" \
+            --title "Unterrichtsfeedback ${{ steps.version.outputs.name }}" \
+            --generate-notes

@@ -12,6 +12,9 @@ import { ConfigStore } from './config.store';
 export class App {
   private readonly theme = inject(ConfigStore).theme;
   protected readonly nativeApp = Capacitor.isNativePlatform();
+  /** Neueste APK aus den GitHub-Releases (siehe .github/workflows/android.yml) */
+  protected readonly apkUrl =
+    'https://github.com/cor-aurum/Unterrichtsfeedback/releases/latest/download/Unterrichtsfeedback.apk';
 
   constructor() {
     // Überschreibt die Standardwerte der CSS-Variablen aus styles.scss mit der konfigurierten Farbe.
