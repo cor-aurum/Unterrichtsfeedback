@@ -12,6 +12,7 @@ import {
   Lesson,
   Section,
   Student,
+  TeachingWindow,
   today,
 } from './model';
 import { openFile, safeFileName, saveFile } from './save-file';
@@ -87,6 +88,22 @@ export class PdfExport {
     writer.addFooters();
     await deliver(`Unterrichtsplan_${range.from}_${range.to}.pdf`, writer.toBlob(), action);
   }
+
+  /** Wochenplan als Tabelle im Querformat, je Lehrer und Woche eine Seite (siehe `schedule-grid-pdf.ts`). */
+  async exportScheduleGrid(
+    config: FeedbackConfig,
+    teachers: ScheduleTeacher[],
+    range: SchedulePeriod,
+    action: 'open' | 'share',
+  ): Promise<void> {
+    const [{ jsPDF }, { writeScheduleGrid }] = await Promise.all([
+      import('jspdf'),
+      import('./calendar/schedule-grid-pdf'),
+    ]);
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+    writeScheduleGrid(doc, themeFrom(config.themeColor), teachers, range);
+    await deliver(`Wochenplan_${range.from}_${range.to}.pdf`, doc.output('blob'), action);
+  }
 }
 
 function writeScheduleTeacher(writer: PdfWriter, teacher: ScheduleTeacher): void {
@@ -114,6 +131,8 @@ function writeScheduleTeacher(writer: PdfWriter, teacher: ScheduleTeacher): void
 export interface ScheduleTeacher {
   name: string;
   location: string;
+  /** Für den Wochenplan: Unterrichtszeiten werden hinterlegt. */
+  teachingWindows: TeachingWindow[];
   days: ScheduleDay[];
 }
 
@@ -126,7 +145,15 @@ export interface SchedulePeriod {
 
 export interface ScheduleDay {
   date: string;
-  entries: { time: string; name: string }[];
+  entries: ScheduleEntry[];
+}
+
+export interface ScheduleEntry {
+  /** z. B. „14:00–14:45“ */
+  time: string;
+  name: string;
+  startMinutes: number;
+  durationMinutes: number;
 }
 
 function deliver(fileName: string, pdf: Blob, action: 'open' | 'share'): Promise<void> {

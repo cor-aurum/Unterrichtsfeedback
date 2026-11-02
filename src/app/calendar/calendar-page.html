@@ -117,7 +117,17 @@
 </div>
 
 <section class="card">
-  <h2>Termine aller Lehrer als PDF-Liste</h2>
+  <h2>Termine aller Lehrer als PDF</h2>
+  <div class="row pdf-format" role="radiogroup" aria-label="Darstellung">
+    <label>
+      <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'list'" (change)="pdfFormat.set('list')" />
+      Liste
+    </label>
+    <label>
+      <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'grid'" (change)="pdfFormat.set('grid')" />
+      Wochenplan als Tabelle (je Lehrer und Woche eine Seite, Querformat)
+    </label>
+  </div>
   <div class="row period">
     <label>
       Von

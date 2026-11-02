@@ -5,8 +5,9 @@ import { ConfigStore } from '../config.store';
 import { formatDate, instrumentOf, Lesson, lessonAt, Student, Teacher, teacherOf, today } from '../model';
 import { PdfExport, ScheduleDay } from '../pdf-export';
 import { isNativeApp } from '../save-file';
+import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
-import { addDays, Appointment, daysBetween, endTime, mondayOf, Occurrence, weekday } from './appointments';
+import { addDays, Appointment, daysBetween, endTime, mondayOf, Occurrence, startMinutes, weekday } from './appointments';
 import { CalendarStore } from './calendar.store';
 
 type Draft = Omit<Appointment, 'id'> & { id: string | null };
@@ -59,6 +60,10 @@ export class CalendarPage {
   /** Zeitraum der PDF-Liste; folgt der angezeigten Woche, bis man ihn selbst ändert. */
   protected readonly pdfFrom = linkedSignal(() => this.weekStart());
   protected readonly pdfTo = linkedSignal(() => addDays(this.weekStart(), 6));
+  /** Liste oder Wochenplan als Tabelle; gilt nur auf diesem Gerät. */
+  protected readonly pdfFormat = storedSignal<'list' | 'grid'>('feedback.scheduleFormat', () => 'list', (data) =>
+    data === 'grid' ? 'grid' : 'list',
+  );
 
   private readonly studentsById = computed(() => new Map(this.students().map((s) => [s.id, s])));
 
@@ -174,7 +179,7 @@ export class CalendarPage {
       return;
     }
     if (daysBetween(from, to).length > MAX_PDF_DAYS) {
-      this.message.set('Der Zeitraum für die PDF-Liste darf höchstens ein Jahr lang sein.');
+      this.message.set('Der Zeitraum für das PDF darf höchstens ein Jahr lang sein.');
       return;
     }
     this.message.set(null);
@@ -182,9 +187,14 @@ export class CalendarPage {
     const teachers = this.config().teachers.map((teacher) => ({
       name: teacher.name,
       location: teacher.location,
+      teachingWindows: teacher.teachingWindows,
       days: this.scheduleDays(teacher, from, to),
     }));
-    this.pdf.exportSchedule(this.config(), teachers, period, action);
+    if (this.pdfFormat() === 'grid') {
+      this.pdf.exportScheduleGrid(this.config(), teachers, period, action);
+    } else {
+      this.pdf.exportSchedule(this.config(), teachers, period, action);
+    }
   }
 
   /** Termine der Personen eines Lehrers; die Liste enthält alle Lehrer, nicht nur den aktiven. */
@@ -205,6 +215,8 @@ export class CalendarPage {
           .map(({ appointment }) => ({
             time: `${appointment.start}–${endTime(appointment)}`,
             name: students.get(appointment.studentId)!.name,
+            startMinutes: startMinutes(appointment),
+            durationMinutes: appointment.durationMinutes,
           })),
       }))
       .filter((day) => day.entries.length > 0);
