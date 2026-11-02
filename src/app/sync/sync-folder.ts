@@ -1,4 +1,5 @@
 import { registerPlugin } from '@capacitor/core';
+import { isNativeApp } from '../save-file';
 
 /** Ein Ordner, in den die Ordner-Synchronisation ihre Dateien schreibt */
 export interface SyncFolder {
@@ -271,17 +272,17 @@ export class WebDavFolder implements SyncFolder {
   }
 
   private async fetch(method: string, url: string, headers: Record<string, string> = {}, body?: string): Promise<Response> {
+    const allHeaders = { ...headers, Authorization: `Basic ${base64(`${this.settings.user}:${this.settings.password}`)}` };
     try {
-      return await fetch(url, {
-        method,
-        body,
-        cache: 'no-store',
-        headers: { ...headers, Authorization: `Basic ${base64(`${this.settings.user}:${this.settings.password}`)}` },
-      });
+      return isNativeApp
+        ? await nativeFetch(method, url, allHeaders, body)
+        : await fetch(url, { method, body, cache: 'no-store', headers: allHeaders });
     } catch {
       throw new WebDavError(
-        'Der Server ist nicht erreichbar oder lässt Zugriffe von dieser Seite nicht zu. Ist die Adresse richtig ' +
-          'und in der Nextcloud die App „WebAppPassword“ für diese Seite eingerichtet?',
+        isNativeApp
+          ? 'Der Server ist nicht erreichbar. Ist die Adresse richtig und das Gerät online?'
+          : 'Der Server ist nicht erreichbar oder lässt Zugriffe von dieser Seite nicht zu. Ist die Adresse ' +
+            'richtig und in der Nextcloud die App „WebAppPassword“ für diese Seite eingerichtet?',
       );
     }
   }
@@ -293,6 +294,25 @@ export class WebDavFolder implements SyncFolder {
     if (response.status === 404) throw new WebDavError(`${what} wurde auf dem Server nicht gefunden.`);
     throw new WebDavError(`${what}: Der Server antwortet mit Fehler ${response.status}.`);
   }
+}
+
+/** Eigenes Plugin, siehe `android/app/src/main/java/.../WebDavHttpPlugin.java` */
+interface WebDavHttpPlugin {
+  request(options: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    body?: string;
+  }): Promise<{ status: number; body: string }>;
+}
+
+const WebDavHttp = registerPlugin<WebDavHttpPlugin>('WebDavHttp');
+
+/** In der App laufen die Anfragen über Android: keine CORS-Sperre, WebAppPassword ist dafür nicht nötig. */
+async function nativeFetch(method: string, url: string, headers: Record<string, string>, body?: string): Promise<Response> {
+  const { status, body: text } = await WebDavHttp.request({ method, url, headers, body });
+  // Antworten ohne Inhalt dürfen keinen Body haben.
+  return new Response([204, 205, 304].includes(status) ? null : text, { status });
 }
 
 const PROPFIND_BODY =

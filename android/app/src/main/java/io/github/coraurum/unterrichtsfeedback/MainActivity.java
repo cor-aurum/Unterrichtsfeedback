@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Eigene Plugins müssen vor super.onCreate registriert werden.
         registerPlugin(FolderAccessPlugin.class);
+        registerPlugin(WebDavHttpPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

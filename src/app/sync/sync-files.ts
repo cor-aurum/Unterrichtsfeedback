@@ -74,7 +74,12 @@ export function toSyncFiles(data: AppData): SyncFiles {
  */
 export function fromSyncFiles(files: SyncFiles): AppData {
   const generalJson = files.get(GENERAL_FILE);
-  if (!generalJson) throw new Error(`Die Datei „${GENERAL_FILE}“ fehlt.`);
+  if (!generalJson) {
+    throw new Error(
+      `Die Datei „${GENERAL_FILE}“ fehlt. Ist der Ordner vollständig? Bei einem Ordner der Nextcloud-App hilft es, ` +
+        'ihn dort einmal zu öffnen, damit die App ihn aktualisiert, oder die Synchronisation direkt per WebDAV.',
+    );
+  }
   const general = JSON.parse(generalJson) as Partial<GeneralFile>;
   if (general?.format !== 'unterricht-feedback/konfiguration') {
     throw new Error(`„${GENERAL_FILE}“ ist keine Konfiguration dieser App.`);

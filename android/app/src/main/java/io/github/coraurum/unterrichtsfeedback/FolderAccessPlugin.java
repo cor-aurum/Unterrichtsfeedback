@@ -1,8 +1,12 @@
 package io.github.coraurum.unterrichtsfeedback;
 
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.UriPermission;
+import android.database.Cursor;
 import android.net.Uri;
+import android.os.Bundle;
+import android.provider.DocumentsContract;
 
 import androidx.activity.result.ActivityResult;
 import androidx.documentfile.provider.DocumentFile;
@@ -30,6 +34,8 @@ public class FolderAccessPlugin extends Plugin {
 
     private static final int ACCESS_FLAGS =
         Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+    private static final int LIST_RETRIES = 20;
+    private static final long LIST_RETRY_DELAY_MS = 500;
 
     @PluginMethod
     public void pickFolder(PluginCall call) {
@@ -68,22 +74,59 @@ public class FolderAccessPlugin extends Plugin {
         call.resolve(response);
     }
 
+    /**
+     * Listet die Dateien des Ordners. Manche Anbieter, z. B. die Nextcloud-App, antworten zuerst aus ihrem
+     * Zwischenspeicher und laden den Ordner im Hintergrund neu („loading“). Dann wird kurz gewartet und erneut
+     * gefragt, sonst fehlen Dateien, die andere Geräte angelegt haben.
+     */
     @PluginMethod
     public void list(PluginCall call) {
         DocumentFile folder = folder(call);
         if (folder == null) return;
+        Uri tree = Uri.parse(call.getString("uri"));
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+        String[] columns = {
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+            DocumentsContract.Document.COLUMN_SIZE,
+        };
+        ContentResolver resolver = getContext().getContentResolver();
+        try {
+            for (int attempt = 0; ; attempt++) {
+                try (Cursor cursor = resolver.query(children, columns, null, null, null)) {
+                    if (cursor == null) throw new IOException("keine Antwort vom Anbieter");
+                    Bundle extras = cursor.getExtras();
+                    boolean loading = extras != null && extras.getBoolean(DocumentsContract.EXTRA_LOADING, false);
+                    if (loading && attempt < LIST_RETRIES) {
+                        Thread.sleep(LIST_RETRY_DELAY_MS);
+                        continue;
+                    }
+                    call.resolve(filesOf(cursor));
+                    return;
+                }
+            }
+        } catch (IOException | RuntimeException e) {
+            call.reject("Ordner konnte nicht gelesen werden: " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            call.reject("abgebrochen");
+        }
+    }
+
+    private static JSObject filesOf(Cursor cursor) {
         JSArray files = new JSArray();
-        for (DocumentFile file : folder.listFiles()) {
-            if (!file.isFile() || file.getName() == null) continue;
+        while (cursor.moveToNext()) {
+            if (DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(1)) || cursor.isNull(0)) continue;
             JSObject entry = new JSObject();
-            entry.put("name", file.getName());
-            entry.put("modified", file.lastModified());
-            entry.put("size", file.length());
+            entry.put("name", cursor.getString(0));
+            entry.put("modified", cursor.isNull(2) ? 0 : cursor.getLong(2));
+            entry.put("size", cursor.isNull(3) ? 0 : cursor.getLong(3));
             files.put(entry);
         }
         JSObject response = new JSObject();
         response.put("files", files);
-        call.resolve(response);
+        return response;
     }
 
     @PluginMethod

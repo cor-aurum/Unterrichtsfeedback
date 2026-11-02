@@ -268,24 +268,24 @@
       Ordner des internen Speichers und den Ordner „Download“ selbst lässt Android nicht zu, nur einen Unterordner.
     </li>
     <li>
-      <strong>In der Android-App, Nextcloud:</strong> funktioniert, wenn die Nextcloud-App im Auswahldialog
-      erscheint und sich dort ein Ordner wählen lässt. Falls nicht: Nutze WebDAV oder wähle einen Ordner auf dem
-      Gerät und lass ihn von der Nextcloud-App über „Automatischer Upload“ hochladen.
+      <strong>In der Android-App, Nextcloud:</strong> Nimm besser direkt WebDAV. Ein Ordner der Nextcloud-App
+      funktioniert nur eingeschränkt: Die Nextcloud-App kennt Änderungen anderer Geräte erst, wenn sie den Ordner
+      selbst aktualisiert hat.
     </li>
   </ul>
 
   <h3>Nextcloud per WebDAV</h3>
   <ol>
     <li>
-      <strong>Einmalig, durch die Administration der Nextcloud:</strong> Die App <em>WebAppPassword</em> aus dem
+      <strong>Einmalig, durch die Administration der Nextcloud (nur für die Webseite):</strong> Die App <em>WebAppPassword</em> aus dem
       Nextcloud-App-Store installieren und in den Verwaltungseinstellungen unter <em>WebAppPassword</em> bei den
       erlaubten Origins für WebDAV eintragen:
       @if (origin) {
-        <code>{{ origin }}</code> für diese Webseite und
+        <code>{{ origin }}</code> für diese Webseite
       } @else {
-        die Adresse der Webseite (nur Protokoll und Server, z. B. <code>https://name.github.io</code>) und
-      }
-      <code>https://localhost</code> für die Android-App. Ohne diesen Schritt blockiert der Browser die Zugriffe.
+        die Adresse der Webseite (nur Protokoll und Server, z. B. <code>https://name.github.io</code>)
+      }. Ohne diesen Schritt blockiert der Browser die Zugriffe. Für die Android-App ist dieser Schritt nicht
+      nötig.
     </li>
     <li>
       In der Nextcloud unter <em>Persönliche Einstellungen → Sicherheit</em> ein <strong>App-Passwort</strong>

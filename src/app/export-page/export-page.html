@@ -80,8 +80,12 @@
         in einen eigenen Ordner auf diesem Rechner, z. B. im Nextcloud-Sync-Ordner, oder
       }
     }
-    direkt per WebDAV in deine Nextcloud. Für WebDAV muss die Nextcloud Zugriffe von dieser Seite erlauben,
-    siehe <a routerLink="/hilfe">Hilfe</a>.
+    direkt per WebDAV in deine Nextcloud.
+    @if (nativeApp) {
+      Für eine Nextcloud empfiehlt sich WebDAV, siehe <a routerLink="/hilfe">Hilfe</a>.
+    } @else {
+      Für WebDAV muss die Nextcloud Zugriffe von dieser Seite erlauben, siehe <a routerLink="/hilfe">Hilfe</a>.
+    }
   </p>
 
   @if (webDavFormOpen()) {
