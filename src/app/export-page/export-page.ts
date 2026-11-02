@@ -3,10 +3,11 @@ import { RouterLink } from '@angular/router';
 import { BackupService } from '../backup';
 import { FolderSync } from '../sync/folder-sync';
 import { WebDavSettings } from '../sync/sync-folder';
+import { GENERAL_FILE } from '../sync/sync-files';
 import { ConfigStore } from '../config.store';
 import { PdfExport } from '../pdf-export';
 import { ReportPeriod } from '../report-period';
-import { isNativeApp } from '../save-file';
+import { isNativeApp, safeFileName } from '../save-file';
 import { StudentsStore } from '../students.store';
 import { Student } from '../model';
 
@@ -116,6 +117,21 @@ export class ExportPage {
     } finally {
       this.connecting.set(false);
     }
+  }
+
+  protected resolveConflicts(keep: 'folder' | 'local'): void {
+    const text =
+      keep === 'folder'
+        ? 'Die hier gemachten Änderungen an diesen Daten gehen verloren. Fortfahren?'
+        : 'Die Änderungen des anderen Geräts an diesen Daten gehen verloren. Fortfahren?';
+    if (confirm(text)) this.sync.resolveConflicts(keep);
+  }
+
+  /** Verständlicher Name einer Sync-Datei */
+  protected fileLabel(name: string): string {
+    if (name === GENERAL_FILE) return 'Allgemeine Konfiguration';
+    const teacher = this.config().teachers.find((t) => name === `lehrer-${safeFileName(t.name)}.json`);
+    return teacher ? `Lehrer ${teacher.name}` : name;
   }
 
   protected disconnectFolder(): void {

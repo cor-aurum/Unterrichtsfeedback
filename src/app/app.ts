@@ -17,9 +17,9 @@ export class App {
   protected readonly teachers = computed(() => this.configStore.config().teachers);
   protected readonly activeTeacher = inject(ActiveTeacher);
   /** Startet die Ordner-Synchronisation, falls ein Ordner gewählt ist */
-  private readonly folderSync = inject(FolderSync);
+  protected readonly folderSync = inject(FolderSync);
   protected readonly syncNeedsAttention = computed(() =>
-    ['reconnect', 'changed', 'error'].includes(this.folderSync.status()),
+    ['reconnect', 'initial', 'conflict', 'error'].includes(this.folderSync.status()),
   );
   protected readonly nativeApp = isNativeApp;
   /** Neueste APK aus den GitHub-Releases (siehe .github/workflows/android.yml) */

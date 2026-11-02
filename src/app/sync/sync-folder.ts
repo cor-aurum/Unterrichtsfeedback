@@ -7,10 +7,16 @@ export interface SyncFolder {
   hasAccess(): Promise<boolean>;
   /** Erlaubt den Zugriff erneut; im Browser nur direkt nach einem Klick möglich */
   requestAccess(): Promise<boolean>;
-  list(): Promise<string[]>;
+  list(): Promise<FolderEntry[]>;
   read(name: string): Promise<string>;
   write(name: string, text: string): Promise<void>;
   remove(name: string): Promise<void>;
+}
+
+/** Datei im Ordner; `version` ändert sich mit jeder Änderung (Änderungszeit und Größe bzw. ETag). */
+export interface FolderEntry {
+  name: string;
+  version: string;
 }
 
 /** Was von einem gewählten Ordner gespeichert wird, um ihn nach einem Neustart wiederzufinden */
@@ -59,12 +65,14 @@ class BrowserFolder implements SyncFolder {
     return (await this.handle.requestPermission({ mode: 'readwrite' })) === 'granted';
   }
 
-  async list(): Promise<string[]> {
-    const names: string[] = [];
+  async list(): Promise<FolderEntry[]> {
+    const entries: FolderEntry[] = [];
     for await (const [name, entry] of this.handle.entries()) {
-      if (entry.kind === 'file') names.push(name);
+      if (entry.kind !== 'file') continue;
+      const file = await (entry as FileSystemFileHandle).getFile();
+      entries.push({ name, version: `${file.lastModified}-${file.size}` });
     }
-    return names;
+    return entries;
   }
 
   async read(name: string): Promise<string> {
@@ -124,7 +132,7 @@ export function forgetBrowserFolder(): Promise<undefined> {
 interface FolderAccessPlugin {
   pickFolder(): Promise<{ uri: string; name: string }>;
   hasAccess(options: { uri: string }): Promise<{ granted: boolean }>;
-  list(options: { uri: string }): Promise<{ names: string[] }>;
+  list(options: { uri: string }): Promise<{ files: { name: string; modified: number; size: number }[] }>;
   read(options: { uri: string; name: string }): Promise<{ text: string }>;
   write(options: { uri: string; name: string; text: string }): Promise<void>;
   remove(options: { uri: string; name: string }): Promise<void>;
@@ -156,8 +164,9 @@ class AndroidFolder implements SyncFolder {
     return this.hasAccess();
   }
 
-  async list(): Promise<string[]> {
-    return (await FolderAccess.list({ uri: this.uri })).names;
+  async list(): Promise<FolderEntry[]> {
+    const { files } = await FolderAccess.list({ uri: this.uri });
+    return files.map((file) => ({ name: file.name, version: `${file.modified}-${file.size}` }));
   }
 
   async read(name: string): Promise<string> {
@@ -218,14 +227,17 @@ export class WebDavFolder implements SyncFolder {
     }
   }
 
-  async list(): Promise<string[]> {
+  async list(): Promise<FolderEntry[]> {
     const response = this.check(await this.request('PROPFIND', '', { Depth: '1' }, PROPFIND_BODY), 'Der Ordner');
     const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
+    const text = (entry: Element, tag: string) => entry.getElementsByTagNameNS('DAV:', tag)[0]?.textContent ?? '';
     return [...xml.getElementsByTagNameNS('DAV:', 'response')]
       .filter((entry) => entry.getElementsByTagNameNS('DAV:', 'collection').length === 0)
-      .map((entry) => entry.getElementsByTagNameNS('DAV:', 'href')[0]?.textContent ?? '')
-      .map((href) => decodeURIComponent(href.replace(/\/$/, '').split('/').at(-1) ?? ''))
-      .filter((name) => name);
+      .map((entry) => ({
+        name: decodeURIComponent(text(entry, 'href').replace(/\/$/, '').split('/').at(-1) ?? ''),
+        version: text(entry, 'getetag') || `${text(entry, 'getlastmodified')}-${text(entry, 'getcontentlength')}`,
+      }))
+      .filter((entry) => entry.name);
   }
 
   async read(name: string): Promise<string> {
@@ -284,7 +296,8 @@ export class WebDavFolder implements SyncFolder {
 }
 
 const PROPFIND_BODY =
-  '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>';
+  '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getetag/>' +
+  '<d:getlastmodified/><d:getcontentlength/></d:prop></d:propfind>';
 
 /**
  * WebDAV-Wurzel: Eine Nextcloud-Adresse ohne „/remote.php/“ bekommt den Pfad zu den Dateien des Nutzers;

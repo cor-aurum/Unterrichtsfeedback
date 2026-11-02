@@ -36,13 +36,22 @@
 </main>
 
 <footer class="hint">
-  @if (nativeApp) {
+  @if (folderSync.status() === 'ok') {
+    Die Daten liegen {{ nativeApp ? 'in dieser App' : 'in diesem Browser' }} und werden bei jeder Änderung
+    automatisch mit „{{ folderSync.folderName() }}“ synchronisiert.
+  } @else if (folderSync.status() !== 'off') {
+    Die Synchronisation mit „{{ folderSync.folderName() }}“ ist unterbrochen; Änderungen liegen bis dahin nur
+    {{ nativeApp ? 'in dieser App' : 'in diesem Browser' }}. Unter „Export &amp; Sicherung“ kannst du sie fortsetzen.
+  } @else if (nativeApp) {
     Alle Daten liegen nur in dieser App auf diesem Gerät. Beim Deinstallieren der App gehen sie
-    verloren, deshalb regelmäßig unter „Export &amp; Sicherung“ eine Datensicherung erstellen.
+    verloren, deshalb regelmäßig unter „Export &amp; Sicherung“ eine Datensicherung erstellen oder die
+    Synchronisation einrichten.
   } @else {
     Alle Daten liegen nur in diesem Browser (Local Storage) und bleiben auch nach einem Neustart
     erhalten. Beim Löschen der Browserdaten gehen sie verloren, deshalb regelmäßig unter „Export &amp;
-    Sicherung“ eine Datensicherung herunterladen.
+    Sicherung“ eine Datensicherung herunterladen oder die Synchronisation einrichten.
+  }
+  @if (!nativeApp) {
     <a class="apk" [href]="apkUrl">Android-App herunterladen (APK)</a>
   }
 </footer>

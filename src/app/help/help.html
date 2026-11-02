@@ -193,10 +193,16 @@
       Sicherung (ZIP oder ältere JSON-Datei) wieder her und ersetzt dabei alles, was gerade in der App ist.
     </li>
     <li>
-      <strong>Synchronisation:</strong> Bei jeder Änderung schreibt die App dieselben Dateien wie im ZIP in einen
-      Ordner – lokal auf dem Gerät oder direkt per WebDAV in deine Nextcloud (siehe unten). Ändert ein anderes
-      Gerät die Dateien, schreibt die App nichts mehr, bis du entscheidest: <kbd>Daten aus dem Ordner laden</kbd>
-      oder <kbd>Ordner überschreiben</kbd>.
+      <strong>Synchronisation:</strong> Die App gleicht dieselben Dateien wie im ZIP mit einem Ordner ab – lokal
+      auf dem Gerät oder direkt per WebDAV in deiner Nextcloud (siehe unten). Eigene Änderungen schreibt sie kurz
+      nach der Eingabe, Änderungen anderer Geräte übernimmt sie beim Start, beim Zurückkehren zur App und alle
+      20 Sekunden. Weil jeder Lehrer eine eigene Datei hat, stören sich Änderungen an verschiedenen Lehrern nicht.
+      Nur wenn dieselben Daten hier und auf einem anderen Gerät geändert wurden, fragt die App, welche Fassung gilt.
+    </li>
+    <li>
+      Verbindest du ein Gerät mit einem Ordner, in dem schon Daten liegen, wählst du einmal: <kbd>Daten aus dem
+      Ordner übernehmen</kbd> (für ein weiteres Gerät richtig) oder den Ordner mit den Daten dieses Geräts
+      überschreiben.
     </li>
     <li>
       In der <strong>Android-App</strong> gibt es statt <kbd>PDF erstellen</kbd> zwei Knöpfe:

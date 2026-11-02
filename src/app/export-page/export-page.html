@@ -138,15 +138,27 @@
           <button class="secondary" (click)="disconnectFolder()">Synchronisation beenden</button>
         </div>
       }
-      @case ('changed') {
+      @case ('initial') {
         <p class="message warning">
-          Die Dateien in „{{ sync.folderName() }}“ wurden außerhalb dieser App geändert, z. B. auf einem anderen
-          Gerät. Bis du entscheidest, wird nichts geschrieben.
+          In „{{ sync.folderName() }}“ liegen schon Daten, z. B. von einem anderen Gerät. Welche sollen gelten?
         </p>
         <div class="row actions-row">
-          <button (click)="loadFromFolder()">Daten aus dem Ordner laden</button>
-          <button class="secondary" (click)="overwriteFolder()">Ordner überschreiben</button>
+          <button (click)="loadFromFolder()">Daten aus dem Ordner übernehmen</button>
+          <button class="secondary" (click)="overwriteFolder()">Ordner mit den Daten dieses Geräts überschreiben</button>
           <button class="secondary" (click)="disconnectFolder()">Synchronisation beenden</button>
+        </div>
+      }
+      @case ('conflict') {
+        <p class="message warning">
+          Diese Daten wurden hier und auf einem anderen Gerät geändert:
+          @for (name of sync.conflicts(); track name; let last = $last) {
+            <strong>{{ fileLabel(name) }}</strong>{{ last ? '.' : ',' }}
+          }
+          Alle anderen Änderungen werden weiter abgeglichen, sobald du entschieden hast.
+        </p>
+        <div class="row actions-row">
+          <button (click)="resolveConflicts('folder')">Fassung aus dem Ordner übernehmen</button>
+          <button class="secondary" (click)="resolveConflicts('local')">Meine Fassung behalten</button>
         </div>
       }
       @default {
@@ -155,14 +167,17 @@
         } @else {
           <p class="sync-state">
             ✓ Synchronisiert mit „{{ sync.folderName() }}“
-            @if (sync.lastWrite(); as time) {
-              <span class="muted">(zuletzt {{ time.toLocaleTimeString('de-DE') }})</span>
+            @if (sync.lastSync(); as time) {
+              <span class="muted">(zuletzt abgeglichen {{ time.toLocaleTimeString('de-DE') }})</span>
             }
           </p>
+          @if (sync.lastPull(); as time) {
+            <p class="muted small">Änderungen von anderen Geräten zuletzt übernommen um {{ time.toLocaleTimeString('de-DE') }}.</p>
+          }
         }
         <div class="row actions-row">
           @if (sync.status() === 'error') {
-            <button (click)="sync.overwriteFolder()">Erneut versuchen</button>
+            <button (click)="sync.retry()">Erneut versuchen</button>
           }
           <button class="secondary" (click)="loadFromFolder()">Daten aus dem Ordner laden</button>
           @if (sync.webDavSettings()) {

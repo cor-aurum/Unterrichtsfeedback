@@ -72,12 +72,17 @@ public class FolderAccessPlugin extends Plugin {
     public void list(PluginCall call) {
         DocumentFile folder = folder(call);
         if (folder == null) return;
-        JSArray names = new JSArray();
+        JSArray files = new JSArray();
         for (DocumentFile file : folder.listFiles()) {
-            if (file.isFile() && file.getName() != null) names.put(file.getName());
+            if (!file.isFile() || file.getName() == null) continue;
+            JSObject entry = new JSObject();
+            entry.put("name", file.getName());
+            entry.put("modified", file.lastModified());
+            entry.put("size", file.length());
+            files.put(entry);
         }
         JSObject response = new JSObject();
-        response.put("names", names);
+        response.put("files", files);
         call.resolve(response);
     }
 

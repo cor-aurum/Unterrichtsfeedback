@@ -16,7 +16,9 @@ export type SyncFiles = Map<string, string>;
 
 /** Gemeinsame Konfiguration: Überschrift, Farbe, Abschnitte, Instrumente, feste Inhalte … */
 export const GENERAL_FILE = 'konfiguration.json';
-const TEACHER_FILE = /^lehrer-.+\.json$/;
+// Nur Zeichen, die `safeFileName` erzeugt; so zählen Konfliktkopien der Nextcloud wie
+// „lehrer-Anna (conflicted copy 2026-…).json“ nicht als Lehrerdatei.
+const TEACHER_FILE = /^lehrer-[\p{L}\p{N}_-]+\.json$/u;
 
 interface GeneralFile {
   format: 'unterricht-feedback/konfiguration';

@@ -68,10 +68,15 @@ export class BackupService {
     });
   }
 
-  private apply(data: AppData): void {
+  /** Übernimmt Änderungen aus der Synchronisation; die gerade gewählte Person und Stunde bleiben ausgewählt. */
+  applySynced(data: AppData): void {
     this.configStore.config.set(data.config);
     this.studentsStore.students.set(data.students);
     this.calendarStore.appointments.set(data.appointments);
+  }
+
+  private apply(data: AppData): void {
+    this.applySynced(data);
     this.studentsStore.selectStudent(null);
   }
 }
