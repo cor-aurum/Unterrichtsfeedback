@@ -2,7 +2,7 @@ import type { jsPDF } from 'jspdf';
 import { formatDate } from '../model';
 import type { ScheduleEntry, SchedulePeriod, ScheduleTeacher } from '../pdf-export';
 import { Theme } from '../theme';
-import { addDays, minutesOf, mondayOf, timeOf, WEEKDAY_NAMES } from './appointments';
+import { addDays, minutesOf, timeOf, WEEKDAY_NAMES, weekday } from './appointments';
 
 const PAGE_WIDTH = 297;
 const PAGE_HEIGHT = 210;
@@ -33,12 +33,13 @@ export function writeScheduleGrid(doc: jsPDF, theme: Theme, teachers: ScheduleTe
   const showWeekend = teachers.some((teacher) =>
     teacher.days.some((day) => isWeekend(day.date)) || teacher.teachingWindows.some((w) => w.weekday >= 5),
   );
-  const dayCount = showWeekend ? 7 : 5;
   let pages = 0;
   for (const teacher of teachers) {
     const range = hourRange(teacher);
-    for (const monday of weeks) {
-      const week = Array.from({ length: dayCount }, (_, i) => addDays(monday, i));
+    for (const weekStart of weeks) {
+      const week = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).filter(
+        (date) => showWeekend || !isWeekend(date),
+      );
       if (!week.some((date) => entriesOn(teacher, date).length > 0)) continue;
       if (pages++ > 0) doc.addPage('a4', 'landscape');
       writeWeek(doc, theme, teacher, week, period, range);
@@ -72,11 +73,11 @@ function writeWeek(
     const inPeriod = date >= period.from && date <= period.to;
     // Unterrichtszeiten hell hinterlegen
     doc.setFillColor(theme.primaryLight);
-    for (const window of teacher.teachingWindows.filter((w) => w.weekday === i)) {
+    for (const window of teacher.teachingWindows.filter((w) => w.weekday === weekday(date))) {
       doc.rect(x, y(minutesOf(window.from)), columnWidth, (minutesOf(window.to) - minutesOf(window.from)) * mmPerMinute, 'F');
     }
     doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(inPeriod ? TEXT : MUTED);
-    doc.text(`${WEEKDAY_NAMES[i]}, ${shortDate(date)}`, x + columnWidth / 2, top - 3, { align: 'center' });
+    doc.text(`${WEEKDAY_NAMES[weekday(date)]}, ${shortDate(date)}`, x + columnWidth / 2, top - 3, { align: 'center' });
   });
 
   writeHourLines(doc, firstHour, lastHour, left, y);
@@ -105,7 +106,10 @@ function writeHeader(doc: jsPDF, theme: Theme, teacher: ScheduleTeacher, week: s
     doc.text(`· ${teacher.location}`, MARGIN + nameWidth + 3, MARGIN + 4, { baseline: 'top' });
   }
   doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(theme.primaryText);
-  const label = `KW ${isoWeek(week[0])} · ${formatDate(week[0])} – ${formatDate(week.at(-1)!)}`;
+  const [first, last] = [week[0], week.at(-1)!];
+  // Beginnt die Woche nicht am Montag, reicht sie in die nächste Kalenderwoche.
+  const weeks = isoWeek(first) === isoWeek(last) ? `KW ${isoWeek(first)}` : `KW ${isoWeek(first)}/${isoWeek(last)}`;
+  const label = `${weeks} · ${formatDate(first)} – ${formatDate(last)}`;
   doc.text(label, PAGE_WIDTH - MARGIN, MARGIN + 4, { align: 'right', baseline: 'top' });
 }
 
@@ -206,9 +210,10 @@ function entriesOn(teacher: ScheduleTeacher, date: string): ScheduleEntry[] {
   return teacher.days.find((day) => day.date === date)?.entries ?? [];
 }
 
+/** Wochen ab dem Beginn des Zeitraums; jede beginnt am selben Wochentag wie er. */
 function weeksOf(period: SchedulePeriod): string[] {
   const weeks: string[] = [];
-  for (let monday = mondayOf(period.from); monday <= period.to; monday = addDays(monday, 7)) weeks.push(monday);
+  for (let start = period.from; start <= period.to; start = addDays(start, 7)) weeks.push(start);
   return weeks;
 }
 
