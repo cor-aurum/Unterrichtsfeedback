@@ -1,0 +1,143 @@
+.import {
+  margin-bottom: 1rem;
+  border-left: 4px solid var(--primary);
+
+  h2,
+  h3 {
+    margin: 0;
+  }
+
+  h3 {
+    margin-top: 1rem;
+  }
+
+  p {
+    margin: 0.5rem 0;
+  }
+}
+
+.steps {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  font-size: 0.85rem;
+
+  li {
+    counter-increment: step;
+    padding: 0.2rem 0.7rem;
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--muted);
+
+    &::before {
+      content: counter(step) '. ';
+    }
+
+    &.active {
+      background: var(--primary-light);
+      color: var(--primary-text);
+      font-weight: 600;
+    }
+  }
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+  }
+}
+
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.actions {
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.table-scroll {
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+
+  th,
+  td {
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: middle;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    background: var(--card);
+    font-weight: 600;
+  }
+
+  .center {
+    text-align: center;
+  }
+}
+
+.preview {
+  margin-top: 0.4rem;
+}
+
+.standard {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: normal;
+}
+
+.link {
+  display: block;
+  margin: 0.1rem auto 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary-text);
+  font-size: 0.75rem;
+  font-weight: normal;
+  text-decoration: underline;
+}
+
+.skipped td {
+  color: var(--muted);
+}
+
+.exists {
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: #fff4d6;
+  color: #7a5200;
+  font-size: 0.75rem;
+}

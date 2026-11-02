@@ -3,7 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
-import { formatDate, Group, groupLabel, groupMembers, groupTeacherOf, instrumentOf, lessonAt, Student, Teacher, today } from '../model';
+import { formatDate, Group, groupLabel, groupMembers, groupTeacherOf, instrumentOf, lessonAt, Student, Teacher, teacherOf, today } from '../model';
 import { PdfExport, ScheduleDay } from '../pdf-export';
 import { isNativeApp } from '../save-file';
 import { storedSignal } from '../stored-signal';
@@ -24,6 +24,7 @@ import {
 import { AutoSchedulePanel } from './auto-schedule-panel';
 import { Blocker, blockerOnDay, blockerTimeText } from './blockers';
 import { CalendarStore } from './calendar.store';
+import { LessonLoadPanel } from './lesson-load-panel';
 
 type Draft = Omit<Appointment, 'id'> & { id: string | null };
 
@@ -43,7 +44,7 @@ const MAX_PDF_DAYS = 366;
 
 @Component({
   selector: 'app-calendar-page',
-  imports: [RouterLink, AutoSchedulePanel],
+  imports: [RouterLink, AutoSchedulePanel, LessonLoadPanel],
   templateUrl: './calendar-page.html',
   styleUrl: './calendar-page.scss',
 })
@@ -60,11 +61,16 @@ export class CalendarPage {
   protected readonly students = computed(() =>
     this.studentsStore.sortedStudents().filter((student) => this.activeTeacher.teaches(student)),
   );
+  /** Personen anderer Lehrer; sie lassen sich ausnahmsweise in diesem Kalender einplanen. */
+  protected readonly otherStudents = computed(() =>
+    this.studentsStore.sortedStudents().filter((student) => !this.activeTeacher.teaches(student)),
+  );
+  protected readonly anyStudents = computed(() => this.studentsStore.students().length > 0);
   /** Gruppen, deren Termine im Kalender des aktiven Lehrers stehen */
   protected readonly groups = computed(() =>
     this.groupsStore.groups().filter((group) => groupTeacherOf(group, this.config()).id === this.teacher().id),
   );
-  private readonly ownerIds = computed(() => this.groupsStore.calendarOwnerIds(this.teacher()));
+  private readonly inCalendar = computed(() => this.groupsStore.calendarFilter(this.teacher()));
 
   protected readonly formatDate = formatDate;
   protected readonly nativeApp = isNativeApp;
@@ -75,7 +81,7 @@ export class CalendarPage {
   protected readonly week = computed(() => {
     const start = this.weekStart();
     const end = addDays(start, 6);
-    const occurrences = this.calendar.occurrences(start, end, this.ownerIds());
+    const occurrences = this.calendar.occurrences(start, end, this.inCalendar());
     const blockers = this.calendar.blockersOf(this.teacher().id, start, end);
     return daysBetween(start, end).map((date) => ({
       date,
@@ -106,7 +112,7 @@ export class CalendarPage {
     data === 'grid' ? 'grid' : 'list',
   );
 
-  private readonly studentsById = computed(() => new Map(this.students().map((s) => [s.id, s])));
+  private readonly studentsById = computed(() => new Map(this.studentsStore.students().map((s) => [s.id, s])));
   private readonly groupsById = computed(() => new Map(this.groups().map((g) => [g.id, g])));
 
   protected studentOf(appointment: Appointment): Student | undefined {
@@ -123,6 +129,10 @@ export class CalendarPage {
 
   protected memberCount(group: Group): number {
     return groupMembers(group, this.studentsStore.students()).length;
+  }
+
+  protected teacherName(student: Student): string {
+    return teacherOf(student, this.config()).name;
   }
 
   protected instrumentName(student: Student): string {
@@ -237,7 +247,11 @@ export class CalendarPage {
     this.closeForms();
     this.draft.set({
       id: null,
-      ...(this.students()[0] ? { studentId: this.students()[0].id } : { groupId: this.groups()[0]?.id }),
+      ...(this.students()[0]
+        ? { studentId: this.students()[0].id }
+        : this.groups()[0]
+          ? { groupId: this.groups()[0].id }
+          : { studentId: this.otherStudents()[0]?.id }),
       date,
       start: firstWindow?.from ?? '15:00',
       durationMinutes: settings.defaultDurationMinutes,
@@ -285,6 +299,22 @@ export class CalendarPage {
     return Number(this.valueOf(event));
   }
 
+  /**
+   * Eine Person kann nicht gleichzeitig bei zwei Lehrern Einzelunterricht haben. Überschneidet sich der Termin
+   * mit einem anderen Einzeltermin der Person, wird nachgefragt; gespeichert wird nur auf Bestätigung.
+   */
+  private confirmClashes(student: Student, appointment: Omit<Appointment, 'id'>, id: string | null): boolean {
+    const clashes = this.calendar.studentClashes(student.id, appointment, id);
+    if (clashes.length === 0) return true;
+    const teachers = this.config().teachers;
+    const lines = clashes.slice(0, 3).map(({ date, appointment: other }) => {
+      const teacher = teachers.find((t) => t.id === other.teacherId) ?? teacherOf(student, this.config());
+      return `• ${formatDate(date)}, ${other.start}–${endTime(other)} bei ${teacher.name}`;
+    });
+    if (clashes.length > 3) lines.push(`• und ${clashes.length - 3} weitere`);
+    return confirm(`${student.name} hat zu dieser Zeit schon Einzelunterricht:\n${lines.join('\n')}\n\nTrotzdem speichern?`);
+  }
+
   protected save(): void {
     const draft = this.draft();
     if (!draft) return;
@@ -292,7 +322,12 @@ export class CalendarPage {
       this.message.set('Bitte Person oder Gruppe, Datum, Beginn und Dauer angeben.');
       return;
     }
-    const { id, lessonId, ...appointment } = draft;
+    const { id, lessonId, teacherId: _, ...rest } = draft;
+    // Personen anderer Lehrer stehen ausnahmsweise im Kalender des aktiven Lehrers.
+    const student = rest.studentId ? this.studentsById().get(rest.studentId) : undefined;
+    const exception = !!student && !this.activeTeacher.teaches(student);
+    const appointment = exception ? { ...rest, teacherId: this.teacher().id } : rest;
+    if (student && !this.confirmClashes(student, appointment, id)) return;
     if (lessonId && appointment.studentId && !appointment.weekly) {
       // Der Termin gehört zu einer erfassten Stunde: Die Stunde bekommt Datum, Uhrzeit und Dauer, der Termin folgt.
       this.studentsStore.setLessonTime(appointment.studentId, lessonId, appointment);
@@ -350,7 +385,7 @@ export class CalendarPage {
       ...students.map((student) => [student.id, student.name] as const),
       ...this.groupsStore.groups().map((group) => [group.id, `Gruppe ${groupLabel(group, students)}`] as const),
     ]);
-    const occurrences = this.calendar.occurrences(from, to, this.groupsStore.calendarOwnerIds(teacher));
+    const occurrences = this.calendar.occurrences(from, to, this.groupsStore.calendarFilter(teacher));
     const blockers = this.calendar.blockersOf(teacher.id, from, to);
     return daysBetween(from, to)
       .map((date) => ({

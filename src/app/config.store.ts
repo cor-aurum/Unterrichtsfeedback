@@ -228,6 +228,22 @@ export class ConfigStore {
     this.mutate((config) => config.instruments.push({ id: newId(), name }));
   }
 
+  /**
+   * IDs der Instrumente mit diesen Namen (Groß-/Kleinschreibung egal); fehlende werden angelegt. Schlüssel der
+   * Ergebnis-Map ist der Name in Kleinbuchstaben.
+   */
+  ensureInstruments(names: string[]): Map<string, string> {
+    const ids = new Map(this.config().instruments.map((i) => [i.name.trim().toLowerCase(), i.id]));
+    const missing = [...new Set(names.map((n) => n.trim()).filter((n) => n && !ids.has(n.toLowerCase())))];
+    const unique = missing.filter((name, i) => missing.findIndex((m) => m.toLowerCase() === name.toLowerCase()) === i);
+    if (unique.length > 0) {
+      const created = unique.map((name) => ({ id: newId(), name }));
+      created.forEach((i) => ids.set(i.name.toLowerCase(), i.id));
+      this.mutate((config) => config.instruments.push(...created));
+    }
+    return ids;
+  }
+
   renameInstrument(instrumentId: string, name: string): void {
     this.mutate((config) => {
       const instrument = config.instruments.find((i) => i.id === instrumentId);

@@ -49,7 +49,18 @@
       <strong>Andere Stunden im Blick:</strong> Unter jedem Textbaustein steht, an welchen Tagen du ihn schon
       angehakt hast. Unter den Freitextfeldern klappst du die Einträge aus den anderen Stunden auf.
     </li>
+    <li>
+      <strong>Viele Personen auf einmal:</strong> <kbd>Aus Excel-Datei importieren …</kbd> liest eine Excel- (.xlsx)
+      oder CSV-Datei. Du wählst, in welcher Spalte Vorname, Nachname und Instrument stehen; Instrumente, die es
+      noch nicht gibt, werden angelegt. Danach ordnest du in einer Tabelle jede Person einem Lehrer zu: Der erste
+      Lehrer ist vorausgewählt, ein Häkchen bei einem anderen Lehrer ändert das. Personen, die es schon gibt,
+      sind markiert und zunächst abgewählt.
+    </li>
     <li>Name und Instrument einer Person änderst du unter ihrer Stundenliste.</li>
+    <li>
+      Gibt es mehrere Lehrer, filterst du die Personen- und Gruppenliste oben mit <em>Alle Lehrer</em> bzw.
+      <em>Nur …</em> nach Lehrer.
+    </li>
     <li>
       Hat eine Person an einem Tag mehr als eine Stunde, warnt ein <span class="tag">⚠</span> in der Personen- und
       Stundenliste sowie ein Hinweis über der Stunde. Die Warnung erscheint in keinem Export.
@@ -98,6 +109,17 @@
       Gruppe, Datum, Beginn und Dauer wählen. Gruppentermine haben einen gestrichelten Rand.
     </li>
     <li>
+      <strong>Ausnahme:</strong> Unter „Personen anderer Lehrer“ kannst du auch eine Person eines anderen Lehrers
+      einplanen. Der Termin steht dann in deinem Kalender (mit „Schüler von …“), nicht in dem des anderen Lehrers,
+      und belegt deine Zeit.
+    </li>
+    <li>
+      Eine Person kann nicht gleichzeitig bei zwei Lehrern Einzelunterricht haben: Überschneidet sich ein neuer
+      Termin mit einem anderen Einzeltermin der Person, fragt die App nach. „Nächster freier Termin“ und das
+      automatische Einplanen lassen solche Zeiten aus; beim Füllen eines Zeitraums bleibt ein Slot dann frei.
+      Überschneidungen mit Gruppenunterricht werden dagegen nur nach Möglichkeit vermieden.
+    </li>
+    <li>
       <strong>Blocker:</strong> Mit <kbd>+ Blocker</kbd> blockierst du Zeit, ohne jemanden einzutragen, z. B. für
       eine Fortbildung – ganze Tage oder von einer Uhrzeit bis zu einer Uhrzeit, auch über mehrere Tage. Blocker
       erscheinen schraffiert an jedem betroffenen Tag und im Wochenplan-PDF. „Nächster freier Termin“ und das
@@ -116,7 +138,9 @@
       Mit <em>Einmalige Termine in einem Zeitraum</em> (höchstens 31 Tage) füllt die App alle freien Slots im
       Zeitraum mit einmaligen Terminen; alle Personen des Lehrers sind vorausgewählt und können mehrere Termine
       bekommen. Nach Möglichkeit hat niemand zwei Termine am selben Tag (vorhandene Termine zählen mit), danach
-      werden Überschneidungen mit Gruppenunterricht vermieden und die Termine gleichmäßig verteilt.
+      werden Überschneidungen mit Gruppenunterricht vermieden und die Termine gleichmäßig verteilt. Mit
+      <em>Nur einen Termin je Person</em> bekommt jede ausgewählte Person genau einen Termin; die übrigen Zeiten
+      bleiben frei.
     </li>
     <li>
       Hakst du <strong>„Jede Woche wiederholen“</strong> an, steht der Termin ab diesem Datum in jeder Woche am
@@ -133,6 +157,11 @@
       standardmäßig ist und ob neue Termine wöchentlich wiederholt werden. Bei einer Person steht dann der nächste freie Termin; <kbd>Termin eintragen</kbd> trägt sie in
       diesen Slot ein. Die Unterrichtszeiten werden dafür in Slots der Standardlänge geteilt; ein
       wöchentlicher Termin muss auch in den folgenden Wochen frei sein.
+    </li>
+    <li>
+      <strong>Unterricht je Person:</strong> Unter der Woche zeigt ein Balken je Person, wie viel Unterricht im
+      gewählten Zeitraum geplant ist (Einzel- und Gruppenunterricht, bei allen Lehrern), sortiert nach Dauer. Die
+      Linie markiert den Durchschnitt; Personen ohne Termine stehen am Ende.
     </li>
     <li>
       <strong>Termine als PDF:</strong> Unten wählst du einen Zeitraum (anfangs die angezeigte Woche) und die

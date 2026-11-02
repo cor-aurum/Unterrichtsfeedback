@@ -63,6 +63,8 @@ export class AutoSchedulePanel {
   protected readonly mode = storedSignal<Mode>('feedback.autoScheduleMode', () => 'weekly', (data) =>
     data === 'period' ? 'period' : 'weekly',
   );
+  /** Im Zeitraum höchstens einen Termin je Person; übrige Slots bleiben frei. Gilt nur auf diesem Gerät. */
+  protected readonly onePerPerson = storedSignal<boolean>('feedback.autoScheduleOnce', () => false, (data) => data === true);
   protected readonly placement = storedSignal<GroupPlacement>('feedback.autoSchedulePlacement', () => 'close', (data) =>
     data === 'mixed' ? 'mixed' : 'close',
   );
@@ -91,13 +93,16 @@ export class AutoSchedulePanel {
 
   protected readonly freeSlots = computed(() => {
     const settings = this.config().calendar;
-    if (this.mode() === 'weekly') return this.calendar.freeWeeklySlots(settings, this.teacher(), this.ownerIds(), this.from());
+    const inCalendar = this.groupsStore.calendarFilter(this.teacher());
+    if (this.mode() === 'weekly') return this.calendar.freeWeeklySlots(settings, this.teacher(), inCalendar, this.from());
     if (this.periodError()) return [];
-    return this.calendar.freeSlotsInPeriod(settings, this.teacher(), this.ownerIds(), this.from(), this.to());
+    return this.calendar.freeSlotsInPeriod(settings, this.teacher(), inCalendar, this.from(), this.to());
   });
 
   protected readonly proposals = signal<Proposal[] | null>(null);
   protected readonly unassigned = signal<Student[]>([]);
+  /** Slots im Zeitraum, die niemand bekommen konnte (alle hatten dort schon Einzelunterricht) */
+  protected readonly emptySlots = signal<FreeSlot[]>([]);
   /** Termine je Person im Vorschlag (nur im Zeitraum, dort kann jemand mehrere bekommen) */
   protected readonly perStudent = computed(() => {
     const counts = new Map<string, { student: Student; count: number }>();
@@ -131,6 +136,11 @@ export class AutoSchedulePanel {
     this.proposals.set(null);
   }
 
+  protected setOnePerPerson(event: Event): void {
+    this.onePerPerson.set((event.target as HTMLInputElement).checked);
+    this.proposals.set(null);
+  }
+
   protected setPlacement(placement: GroupPlacement): void {
     this.placement.set(placement);
     this.proposals.set(null);
@@ -140,6 +150,9 @@ export class AutoSchedulePanel {
     const students = this.selected();
     const slots = this.freeSlots();
     const busy = new Map(students.map((s) => [s.id, this.otherGroupLessons(s)]));
+    // Einzelunterricht bei einem anderen Lehrer schließt den Slot aus.
+    const individual = new Map(students.map((s) => [s.id, this.otherIndividualLessons(s)]));
+    const allowed = (id: string, slot: FreeSlot) => clashing(individual.get(id)!, slot).length === 0;
     const studentIds = students.map((s) => s.id);
     const groups = this.groupsStore.groups().map((g) => g.memberIds.filter((id) => busy.has(id)));
     const conflicts = (id: string, slot: FreeSlot) => clashing(busy.get(id)!, slot).length;
@@ -152,9 +165,25 @@ export class AutoSchedulePanel {
       secondOnDay,
     });
 
+    this.emptySlots.set([]);
     if (this.mode() === 'weekly') {
-      const result = planSchedule({ slots, studentIds, groups, conflicts, placement: this.placement() });
+      const result = planSchedule({ slots, studentIds, groups, conflicts, allowed, placement: this.placement() });
       this.proposals.set(result.assignments.map(({ studentId, slot }) => proposal(studentId, slot, false)));
+      this.unassigned.set(result.unassigned.map((id) => byId.get(id)!));
+    } else if (this.onePerPerson()) {
+      // Wie beim wöchentlichen Verteilen höchstens ein Slot je Person. Überschneidungen mit Gruppenunterricht
+      // wiegen schwerer als ein Tag, an dem die Person schon einen Termin hat.
+      const existing = this.appointmentsPerDay(studentIds);
+      const onDay = (id: string, slot: FreeSlot) => existing.get(`${id} ${slot.date}`) ?? 0;
+      const result = planSchedule({
+        slots,
+        studentIds,
+        groups,
+        conflicts: (id, slot) => conflicts(id, slot) * 10 + (onDay(id, slot) > 0 ? 1 : 0),
+        allowed,
+        placement: this.placement(),
+      });
+      this.proposals.set(result.assignments.map(({ studentId, slot }) => proposal(studentId, slot, onDay(studentId, slot) > 0)));
       this.unassigned.set(result.unassigned.map((id) => byId.get(id)!));
     } else {
       const existing = this.appointmentsPerDay(studentIds);
@@ -164,10 +193,12 @@ export class AutoSchedulePanel {
         groups,
         conflicts,
         existingOnDay: (id, date) => existing.get(`${id} ${date}`) ?? 0,
+        allowed,
         placement: this.placement(),
       });
       this.proposals.set(result.assignments.map(({ studentId, slot, secondOnDay }) => proposal(studentId, slot, secondOnDay)));
       this.unassigned.set([]);
+      this.emptySlots.set(result.empty);
     }
   }
 
@@ -202,6 +233,16 @@ export class AutoSchedulePanel {
       .map((occurrence) => ({ occurrence, group: byId.get(occurrence.appointment.groupId!)! }));
   }
 
+  /** Einzeltermine der Person, die nicht in diesem Kalender stehen (z. B. als Ausnahme bei einem anderen Lehrer) */
+  private otherIndividualLessons(student: Student): { occurrence: Occurrence }[] {
+    const inCalendar = this.groupsStore.calendarFilter(this.teacher());
+    const from = this.from();
+    const to = this.mode() === 'weekly' ? addDays(from, CHECK_WEEKS * 7 - 1) : this.to();
+    return this.calendar
+      .occurrences(from, to, (a) => a.studentId === student.id && !inCalendar(a))
+      .map((occurrence) => ({ occurrence }));
+  }
+
   /** Vorhandene Termine je Person und Tag im Zeitraum, eigene und die ihrer Gruppen; Schlüssel „ID Datum“ */
   private appointmentsPerDay(studentIds: string[]): Map<string, number> {
     const counts = new Map<string, number>();
@@ -230,7 +271,7 @@ export function appointmentCount(count: number, weekly = true): string {
  * Gruppentermine, die den Slot überschneiden: bei wöchentlichen Slots jede Wiederholung ab `slot.date`,
  * sonst nur an diesem Tag.
  */
-function clashing(busy: { occurrence: Occurrence; group: Group }[], slot: FreeSlot): { occurrence: Occurrence; group: Group }[] {
+function clashing<T extends { occurrence: Occurrence }>(busy: T[], slot: FreeSlot): T[] {
   const start = minutesOf(slot.start);
   const end = start + slot.durationMinutes;
   return busy.filter(({ occurrence: { date, appointment } }) => {

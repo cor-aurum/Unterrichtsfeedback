@@ -1,9 +1,24 @@
 <app-quick-start />
 
+@if (importOpen()) {
+  <app-student-import-panel (closed)="closeImport($event)" />
+}
+@if (importMessage(); as text) {
+  <p class="message import-message">{{ text }}</p>
+}
+
 <div class="layout">
   <div class="column">
   <section class="card">
     <h2>Personen</h2>
+    @if (teachers().length > 1) {
+      <select class="teacher-filter" aria-label="Nach Lehrer filtern" (change)="teacherFilter.set(valueOf($event))">
+        <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer</option>
+        @for (teacher of teachers(); track teacher.id) {
+          <option [value]="teacher.id" [selected]="teacher.id === teacherFilter.teacherId()">Nur {{ teacher.name }}</option>
+        }
+      </select>
+    }
     <div class="new-student">
       <div class="row">
         <input
@@ -22,9 +37,10 @@
           </option>
         }
       </select>
+      <button class="secondary import-button" (click)="openImport()">Aus Excel-Datei importieren …</button>
     </div>
     <ul class="list">
-      @for (student of store.sortedStudents(); track student.id) {
+      @for (student of visibleStudents(); track student.id) {
         <li
           [class.selected]="student.id === store.selectedStudentId()"
           (click)="store.selectStudent(student.id)"
@@ -44,7 +60,9 @@
           <span class="badge" title="Unterrichtsstunden">{{ student.lessons.length }}</span>
         </li>
       } @empty {
-        <li class="empty muted">Noch keine Personen angelegt.</li>
+        <li class="empty muted">
+          {{ store.students().length === 0 ? 'Noch keine Personen angelegt.' : 'Keine Personen bei diesem Lehrer.' }}
+        </li>
       }
     </ul>
   </section>

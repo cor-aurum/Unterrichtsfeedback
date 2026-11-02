@@ -10,6 +10,8 @@ export interface ScheduleInput {
   groups: string[][];
   /** Wie oft der Slot im geprüften Zeitraum mit anderem Unterricht der Person kollidiert (0 = nie) */
   conflicts: (studentId: string, slot: FreeSlot) => number;
+  /** Darf die Person den Slot überhaupt bekommen? Nein z. B. bei eigenem Einzelunterricht bei einem anderen Lehrer. */
+  allowed?: (studentId: string, slot: FreeSlot) => boolean;
   placement: GroupPlacement;
 }
 
@@ -36,6 +38,7 @@ const MAX_ROUNDS = 50;
 export function planSchedule(input: ScheduleInput): ScheduleResult {
   const { slots, studentIds } = input;
   const conflictTable = new Map(studentIds.map((id) => [id, slots.map((slot) => input.conflicts(id, slot))]));
+  const allowedTable = allowedTableOf(studentIds, slots, input.allowed);
   const groups = input.groups.filter((members) => members.length > 1);
   const slotOf = new Map<string, number | null>(studentIds.map((id) => [id, null]));
   const takenBy = new Map<number, string>();
@@ -52,8 +55,9 @@ export function planSchedule(input: ScheduleInput): ScheduleResult {
     return [assigned, conflicts, groupCost(groups, slotOf, slots, input.placement)];
   };
 
-  greedy(studentIds, slots, conflictTable, slotOf, takenBy, () => score());
-  improve(studentIds, slots.length, slotOf, takenBy, score);
+  const allowed = (id: string, slot: number | null) => slot === null || allowedTable.get(id)![slot];
+  greedy(studentIds, slots, conflictTable, allowed, slotOf, takenBy, () => score());
+  improve(studentIds, slots.length, allowed, slotOf, takenBy, score);
 
   const assignments = studentIds
     .filter((id) => slotOf.get(id) !== null)
@@ -66,16 +70,17 @@ function greedy(
   studentIds: string[],
   slots: FreeSlot[],
   conflictTable: Map<string, number[]>,
+  allowed: (id: string, slot: number | null) => boolean,
   slotOf: Map<string, number | null>,
   takenBy: Map<number, string>,
   score: () => Score,
 ): void {
-  const freeChoices = (id: string) => conflictTable.get(id)!.filter((c) => c === 0).length;
+  const freeChoices = (id: string) => conflictTable.get(id)!.filter((c, slot) => c === 0 && allowed(id, slot)).length;
   const order = [...studentIds].sort((a, b) => freeChoices(a) - freeChoices(b));
   for (const id of order) {
     let best: { slot: number; score: Score } | null = null;
     for (let slot = 0; slot < slots.length; slot++) {
-      if (takenBy.has(slot)) continue;
+      if (takenBy.has(slot) || !allowed(id, slot)) continue;
       slotOf.set(id, slot);
       const candidate = score();
       if (!best || better(candidate, best.score)) best = { slot, score: candidate };
@@ -89,6 +94,7 @@ function greedy(
 function improve(
   studentIds: string[],
   slotCount: number,
+  allowed: (id: string, slot: number | null) => boolean,
   slotOf: Map<string, number | null>,
   takenBy: Map<number, string>,
   score: () => Score,
@@ -101,6 +107,7 @@ function improve(
         const from = slotOf.get(id) ?? null;
         if (from === target) continue;
         const other = takenBy.get(target);
+        if (!allowed(id, target) || (other !== undefined && !allowed(other, from))) continue;
         apply(id, other, from, target, slotOf, takenBy);
         const candidate = score();
         if (better(candidate, current)) {
@@ -185,15 +192,19 @@ export interface FillInput {
   conflicts: (studentId: string, slot: FreeSlot) => number;
   /** Wie viele Termine die Person an diesem Tag schon hat */
   existingOnDay: (studentId: string, date: string) => number;
+  /** Wie bei `ScheduleInput.allowed`; ein Slot, den niemand bekommen darf, bleibt frei. */
+  allowed?: (studentId: string, slot: FreeSlot) => boolean;
   placement: GroupPlacement;
 }
 
 export interface FillResult {
   assignments: { studentId: string; slot: FreeSlot; conflicts: number; secondOnDay: boolean }[];
+  /** Slots, die niemand bekommen durfte */
+  empty: FreeSlot[];
 }
 
 /** Wertung beim Füllen; verglichen wird der Reihe nach (wichtigstes zuerst). */
-type FillScore = [secondOnDay: number, conflicts: number, balance: number, groupCost: number];
+type FillScore = [empty: number, secondOnDay: number, conflicts: number, balance: number, groupCost: number];
 
 /**
  * Füllt alle freien Slots eines Zeitraums mit einmaligen Terminen; jede Person kann mehrere bekommen. Danach
@@ -203,8 +214,10 @@ type FillScore = [secondOnDay: number, conflicts: number, balance: number, group
  */
 export function fillSlots(input: FillInput): FillResult {
   const { slots, studentIds } = input;
-  if (studentIds.length === 0) return { assignments: [] };
+  if (studentIds.length === 0) return { assignments: [], empty: slots };
   const conflictTable = new Map(studentIds.map((id) => [id, slots.map((slot) => input.conflicts(id, slot))]));
+  const allowedTable = allowedTableOf(studentIds, slots, input.allowed);
+  const allowed = (id: string | null, slot: number) => id === null || allowedTable.get(id)![slot];
   const groupsOf = new Map<string, number[]>();
   input.groups
     .filter((members) => members.length > 1)
@@ -215,6 +228,7 @@ export function fillSlots(input: FillInput): FillResult {
   const owner: (string | null)[] = slots.map(() => null);
 
   const score = (): FillScore => {
+    const empty = owner.filter((id) => id === null).length;
     let secondOnDay = 0;
     let conflicts = 0;
     let group = 0;
@@ -232,18 +246,18 @@ export function fillSlots(input: FillInput): FillResult {
       group += dayGroupCost(indices, owner, slots, groupsOf, input.placement);
     }
     const balance = [...counts.values()].reduce((sum, n) => sum + n * n, 0);
-    return [secondOnDay, conflicts, balance, group];
+    return [empty, secondOnDay, conflicts, balance, group];
   };
 
   // Gierig: Slot für Slot die Person, mit der die Wertung am besten bleibt
   for (let i = 0; i < slots.length; i++) {
     let best: { id: string; score: FillScore } | null = null;
-    for (const id of studentIds) {
+    for (const id of studentIds.filter((s) => allowed(s, i))) {
       owner[i] = id;
       const candidate = score();
       if (!best || betterFill(candidate, best.score)) best = { id, score: candidate };
     }
-    owner[i] = best!.id;
+    owner[i] = best?.id ?? null;
   }
 
   // Verbessern: einem Slot eine andere Person geben oder zwei Slots tauschen
@@ -253,7 +267,7 @@ export function fillSlots(input: FillInput): FillResult {
     for (let i = 0; i < slots.length; i++) {
       for (const id of studentIds) {
         const before = owner[i];
-        if (before === id) continue;
+        if (before === id || !allowed(id, i)) continue;
         owner[i] = id;
         const candidate = score();
         if (betterFill(candidate, current)) {
@@ -264,7 +278,7 @@ export function fillSlots(input: FillInput): FillResult {
         }
       }
       for (let j = i + 1; j < slots.length; j++) {
-        if (owner[i] === owner[j]) continue;
+        if (owner[i] === owner[j] || !allowed(owner[i], j) || !allowed(owner[j], i)) continue;
         [owner[i], owner[j]] = [owner[j], owner[i]];
         const candidate = score();
         if (betterFill(candidate, current)) {
@@ -278,12 +292,22 @@ export function fillSlots(input: FillInput): FillResult {
   }
 
   return {
-    assignments: slots.map((slot, i) => {
-      const id = owner[i]!;
+    assignments: slots.flatMap((slot, i) => {
+      const id = owner[i];
+      if (!id) return [];
       const onDay = byDay.get(slot.date)!.filter((j) => owner[j] === id).length + input.existingOnDay(id, slot.date);
-      return { studentId: id, slot, conflicts: conflictTable.get(id)![i], secondOnDay: onDay > 1 };
+      return [{ studentId: id, slot, conflicts: conflictTable.get(id)![i], secondOnDay: onDay > 1 }];
     }),
+    empty: slots.filter((_, i) => owner[i] === null),
   };
+}
+
+function allowedTableOf(
+  studentIds: string[],
+  slots: FreeSlot[],
+  allowed?: (studentId: string, slot: FreeSlot) => boolean,
+): Map<string, boolean[]> {
+  return new Map(studentIds.map((id) => [id, slots.map((slot) => !allowed || allowed(id, slot))]));
 }
 
 function betterFill(a: FillScore, b: FillScore): boolean {

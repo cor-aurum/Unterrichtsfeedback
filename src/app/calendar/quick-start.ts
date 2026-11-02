@@ -31,8 +31,8 @@ export class QuickStart {
     const now = this.clock.now();
     const date = today();
     const minutes = now.getHours() * 60 + now.getMinutes();
-    const ownerIds = this.groups.calendarOwnerIds(this.activeTeacher.teacher());
-    return this.calendar.occurrences(date, date, ownerIds).flatMap(({ appointment }) => {
+    const inCalendar = this.groups.calendarFilter(this.activeTeacher.teacher());
+    return this.calendar.occurrences(date, date, inCalendar).flatMap(({ appointment }) => {
       const start = startMinutes(appointment);
       const owner = this.ownerOf(appointment, date);
       if (!owner || start + appointment.durationMinutes <= minutes) return [];

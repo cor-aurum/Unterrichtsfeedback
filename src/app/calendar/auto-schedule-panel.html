@@ -20,9 +20,15 @@
       Standardlänge). Vorrang hat, möglichst viele Slots zu füllen; Überschneidungen mit Gruppenunterricht bei anderen
       Lehrern werden nach Möglichkeit vermieden.
     } @else {
-      Füllt alle freien Unterrichtszeiten von {{ teacher().name }} im Zeitraum mit einmaligen Terminen; eine Person kann
-      mehrere bekommen. Nach Möglichkeit hat niemand zwei Termine am selben Tag, Überschneidungen mit Gruppenunterricht
-      bei anderen Lehrern werden vermieden und die Termine gleichmäßig verteilt.
+      @if (onePerPerson()) {
+        Gibt jeder ausgewählten Person einen einmaligen Termin in den freien Unterrichtszeiten von {{ teacher().name }}
+        im Zeitraum; übrige Zeiten bleiben frei. Überschneidungen mit Gruppenunterricht und Tage, an denen die Person
+        schon einen Termin hat, werden nach Möglichkeit vermieden.
+      } @else {
+        Füllt alle freien Unterrichtszeiten von {{ teacher().name }} im Zeitraum mit einmaligen Terminen; eine Person
+        kann mehrere bekommen. Nach Möglichkeit hat niemand zwei Termine am selben Tag, Überschneidungen mit
+        Gruppenunterricht bei anderen Lehrern werden vermieden und die Termine gleichmäßig verteilt.
+      }
     }
   </p>
 
@@ -40,6 +46,10 @@
       <label>
         Bis
         <input type="date" [value]="to()" (change)="setDate('to', $event)" />
+      </label>
+      <label class="check-line">
+        <input type="checkbox" [checked]="onePerPerson()" (change)="setOnePerPerson($event)" />
+        Nur einen Termin je Person (übrige Zeiten bleiben frei)
       </label>
     }
     <div class="placement" role="radiogroup" aria-label="Gruppenmitglieder">
@@ -118,6 +128,15 @@
         </li>
       }
     </ul>
+    @if (emptySlots().length > 0) {
+      <p class="message warning">
+        {{ emptySlots().length }} Slot(s) bleiben frei, weil alle ausgewählten Personen dort schon Einzelunterricht
+        bei einem anderen Lehrer haben:
+        @for (slot of emptySlots(); track $index; let last = $last) {
+          {{ slotLabel(slot) }}{{ last ? '' : '; ' }}
+        }
+      </p>
+    }
     @if (unassigned().length > 0) {
       <p class="message warning">
         Kein freier Slot mehr für:

@@ -1,0 +1,63 @@
+<section class="card load">
+  <h2>Unterricht je Person</h2>
+  <p class="muted">
+    Geplante Termine im Zeitraum, nach Dauer sortiert – Einzel- und Gruppenunterricht, bei allen Lehrern.
+  </p>
+
+  <div class="controls">
+    <div class="presets">
+      <button class="secondary small" (click)="setPreset('week')">Diese Woche</button>
+      <button class="secondary small" (click)="setPreset('month')">Dieser Monat</button>
+      <button class="secondary small" (click)="setPreset('report')">Berichtszeitraum</button>
+    </div>
+    <label>
+      Von
+      <input type="date" [value]="from()" (change)="setDate('from', $event)" />
+    </label>
+    <label>
+      Bis
+      <input type="date" [value]="to()" (change)="setDate('to', $event)" />
+    </label>
+    @if (multipleTeachers()) {
+      <label class="check-line">
+        <input type="checkbox" [checked]="allTeachers()" (change)="allTeachers.set($any($event.target).checked)" />
+        Personen aller Lehrer
+      </label>
+    }
+  </div>
+
+  @if (from() > to()) {
+    <p class="message error">Der Zeitraum endet, bevor er beginnt.</p>
+  } @else if (loads().length === 0) {
+    <p class="muted">
+      {{ allTeachers() ? 'Es gibt noch keine Personen.' : activeTeacher.teacher().name + ' hat noch keine Personen.' }}
+    </p>
+  } @else {
+    <div class="legend">
+      <span><i class="swatch individual"></i> Einzelunterricht</span>
+      <span><i class="swatch group"></i> Gruppenunterricht</span>
+      <span><i class="swatch average"></i> Durchschnitt: {{ formatMinutes(averageMinutes()) }}</span>
+    </div>
+    <ul class="loads">
+      @for (load of loads(); track load.student.id) {
+        <li [class.none]="totalMinutes(load) === 0">
+          <span class="who">
+            {{ load.student.name }}
+            @if (allTeachers() && multipleTeachers()) {
+              <span class="muted teacher">{{ teacherName(load) }}</span>
+            }
+          </span>
+          <span class="bar" [title]="countText(load)">
+            <span class="part individual" [style.width.%]="percent(load.individualMinutes)"></span>
+            <span class="part group" [style.width.%]="percent(load.groupMinutes)"></span>
+            <span class="average-line" [style.left.%]="averagePercent()"></span>
+          </span>
+          <span class="amount">
+            <strong>{{ formatMinutes(totalMinutes(load)) }}</strong>
+            <span class="muted">{{ countText(load) }}</span>
+          </span>
+        </li>
+      }
+    </ul>
+  }
+</section>

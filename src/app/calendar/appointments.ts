@@ -19,6 +19,19 @@ export interface Appointment {
    * Gruppenstunde. Er folgt dann der Stunde (siehe `withLessonAppointments`) und verschwindet mit ihr.
    */
   lessonId?: string;
+  /**
+   * Ausnahme: Der Termin steht im Kalender dieses Lehrers statt in dem des Lehrers der Person, z. B. wenn ein
+   * Lehrer ausnahmsweise eine Person eines anderen Lehrers unterrichtet.
+   */
+  teacherId?: string;
+}
+
+/** Welche Termine gemeint sind: die Termine dieser Personen und Gruppen (IDs) oder alle, für die die Funktion passt */
+export type AppointmentFilter = ReadonlySet<string> | ((appointment: Appointment) => boolean);
+
+export function matchesFilter(appointment: Appointment, filter?: AppointmentFilter): boolean {
+  if (!filter) return true;
+  return typeof filter === 'function' ? filter(appointment) : filter.has(ownerOf(appointment));
 }
 
 /** ID der Person oder Gruppe, der der Termin gehört; IDs sind eindeutig, beide passen in eine Menge. */
@@ -117,6 +130,7 @@ export function parseAppointments(data: unknown): Appointment[] {
       durationMinutes: Number(a.durationMinutes) > 0 ? Number(a.durationMinutes) : 45,
       weekly: a.weekly === true,
       ...(typeof a.lessonId === 'string' ? { lessonId: a.lessonId } : {}),
+      ...(typeof a.teacherId === 'string' ? { teacherId: a.teacherId } : {}),
     }));
 }
 

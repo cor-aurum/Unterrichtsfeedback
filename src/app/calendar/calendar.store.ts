@@ -6,10 +6,12 @@ import { StudentsStore } from '../students.store';
 import {
   addDays,
   Appointment,
+  AppointmentFilter,
   daysBetween,
   FreeSlot,
   minutesOf,
   Occurrence,
+  matchesFilter,
   occursOn,
   ownerOf,
   parseAppointments,
@@ -80,11 +82,11 @@ export class CalendarStore {
 
   /**
    * Alle Termine zwischen `from` und `to` (jeweils einschließlich), nach Tag und Uhrzeit sortiert.
-   * Mit `ownerIds` nur die Termine dieser Personen und Gruppen, z. B. der Kalender eines Lehrers.
+   * Mit `filter` nur bestimmte Termine, z. B. die im Kalender eines Lehrers (`GroupsStore.calendarFilter`).
    */
-  occurrences(from: string, to: string, ownerIds?: ReadonlySet<string>): Occurrence[] {
+  occurrences(from: string, to: string, filter?: AppointmentFilter): Occurrence[] {
     const appointments = this.appointments()
-      .filter((appointment) => !ownerIds || ownerIds.has(ownerOf(appointment)))
+      .filter((appointment) => matchesFilter(appointment, filter))
       .sort((a, b) => startMinutes(a) - startMinutes(b));
     return daysBetween(from, to).flatMap((date) =>
       appointments.filter((appointment) => occursOn(appointment, date)).map((appointment) => ({ date, appointment })),
@@ -92,15 +94,31 @@ export class CalendarStore {
   }
 
   /**
+   * Einzeltermine der Person, die sich mit dem geplanten Termin überschneiden – egal bei welchem Lehrer. Bei
+   * wöchentlichen Terminen werden `WEEKLY_CHECK_WEEKS` Wochen geprüft. `excludeId`: der Termin, der gerade
+   * bearbeitet wird. Gruppentermine zählen hier nicht.
+   */
+  studentClashes(studentId: string, planned: Omit<Appointment, 'id'>, excludeId?: string | null): Occurrence[] {
+    const to = addDays(planned.date, planned.weekly ? WEEKLY_CHECK_WEEKS * 7 - 1 : 0);
+    const start = minutesOf(planned.start);
+    return this.occurrences(planned.date, to, (a) => a.studentId === studentId && a.id !== excludeId).filter(
+      ({ date, appointment }) =>
+        occursOn({ ...planned, id: '' }, date) &&
+        start < startMinutes(appointment) + appointment.durationMinutes &&
+        startMinutes(appointment) < start + planned.durationMinutes,
+    );
+  }
+
+  /**
    * Erster freier Slot ab jetzt. Die Unterrichtszeiten werden ab ihrem Beginn in Slots der Standardlänge
    * geteilt. Ein Slot ist frei, wenn sich kein Termin mit ihm überschneidet – bei wöchentlicher
    * Wiederholung auch in den folgenden Wochen. Es zählen nur die Unterrichtszeiten des Lehrers, seine Blocker
-   * und die Termine seiner Personen und Gruppen (`ownerIds`).
+   * und die Termine in seinem Kalender (`filter`).
    */
   nextFreeSlot(
     settings: CalendarSettings,
     teacher: Teacher,
-    ownerIds: ReadonlySet<string>,
+    filter: AppointmentFilter,
     now = new Date(),
   ): FreeSlot | null {
     const duration = settings.defaultDurationMinutes;
@@ -115,7 +133,7 @@ export class CalendarStore {
       for (const window of windows) {
         for (let start = minutesOf(window.from); start + duration <= minutesOf(window.to); start += duration) {
           if (offset === 0 && start <= nowMinutes) continue;
-          if (this.isFree(teacher, date, start, duration, weeks, ownerIds, true)) {
+          if (this.isFree(teacher, date, start, duration, weeks, filter, true)) {
             return { date, start: timeOf(start), durationMinutes: duration, weekly: settings.weeklyByDefault };
           }
         }
@@ -129,22 +147,22 @@ export class CalendarStore {
    * Unterrichtszeiten in Slots der Standardlänge geteilt, frei über `WEEKLY_CHECK_WEEKS` Wochen. Blocker zählen
    * hier nicht (siehe `isFree`).
    */
-  freeWeeklySlots(settings: CalendarSettings, teacher: Teacher, ownerIds: ReadonlySet<string>, from: string): FreeSlot[] {
+  freeWeeklySlots(settings: CalendarSettings, teacher: Teacher, filter: AppointmentFilter, from: string): FreeSlot[] {
     const days = Array.from({ length: 7 }, (_, offset) => addDays(from, offset));
-    return this.freeSlots(settings, teacher, ownerIds, days, true);
+    return this.freeSlots(settings, teacher, filter, days, true);
   }
 
   /** Alle freien einmaligen Slots zwischen `from` und `to` (einschließlich); bereits vergangene zählen nicht. */
   freeSlotsInPeriod(
     settings: CalendarSettings,
     teacher: Teacher,
-    ownerIds: ReadonlySet<string>,
+    filter: AppointmentFilter,
     from: string,
     to: string,
     now = new Date(),
   ): FreeSlot[] {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    return this.freeSlots(settings, teacher, ownerIds, daysBetween(from, to), false).filter(
+    return this.freeSlots(settings, teacher, filter, daysBetween(from, to), false).filter(
       (slot) => slot.date > today() || (slot.date === today() && minutesOf(slot.start) > nowMinutes),
     );
   }
@@ -152,7 +170,7 @@ export class CalendarStore {
   private freeSlots(
     settings: CalendarSettings,
     teacher: Teacher,
-    ownerIds: ReadonlySet<string>,
+    filter: AppointmentFilter,
     days: string[],
     weekly: boolean,
   ): FreeSlot[] {
@@ -165,7 +183,7 @@ export class CalendarStore {
         .sort((a, b) => a.from.localeCompare(b.from));
       for (const window of windows) {
         for (let start = minutesOf(window.from); start + duration <= minutesOf(window.to); start += duration) {
-          if (this.isFree(teacher, date, start, duration, weeks, ownerIds, !weekly)) {
+          if (this.isFree(teacher, date, start, duration, weeks, filter, !weekly)) {
             slots.push({ date, start: timeOf(start), durationMinutes: duration, weekly });
           }
         }
@@ -184,7 +202,7 @@ export class CalendarStore {
     start: number,
     duration: number,
     weeks: number,
-    ownerIds: ReadonlySet<string>,
+    filter: AppointmentFilter,
     respectBlockers: boolean,
   ): boolean {
     if (respectBlockers && this.blockersOf(teacher.id, date, date).some((b) => blocks(b, date, start, duration))) {
@@ -192,7 +210,7 @@ export class CalendarStore {
     }
     for (let week = 0; week < weeks; week++) {
       const day = addDays(date, week * 7);
-      const overlaps = this.occurrences(day, day, ownerIds).some(({ appointment }) => {
+      const overlaps = this.occurrences(day, day, filter).some(({ appointment }) => {
         const otherStart = startMinutes(appointment);
         return start < otherStart + appointment.durationMinutes && otherStart < start + duration;
       });

@@ -24,6 +24,12 @@ export class StudentsStore {
     this.selectStudent(student.id);
   }
 
+  /** Legt mehrere Personen auf einmal an, z. B. beim Import; die Auswahl bleibt unverändert. */
+  addStudents(entries: { name: string; instrumentId: string | null; teacherId: string | null }[]): void {
+    const students: Student[] = entries.map((e) => ({ id: newId(), ...e, generalTexts: {}, lessons: [] }));
+    this.students.update((list) => [...list, ...students]);
+  }
+
   renameStudent(studentId: string, name: string): void {
     this.mutateStudent(studentId, (student) => (student.name = name));
   }

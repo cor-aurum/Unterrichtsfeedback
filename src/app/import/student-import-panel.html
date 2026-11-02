@@ -1,0 +1,184 @@
+<section class="card import">
+  <div class="row">
+    <h2 class="grow">Personen importieren</h2>
+    <button class="secondary" (click)="closed.emit('')">Abbrechen</button>
+  </div>
+
+  <ol class="steps">
+    <li [class.active]="step() === 'file'">Datei</li>
+    <li [class.active]="step() === 'columns'">Spalten</li>
+    <li [class.active]="step() === 'teachers'">Lehrer</li>
+  </ol>
+
+  @if (error(); as text) {
+    <p class="message error">{{ text }}</p>
+  }
+
+  @switch (step()) {
+    @case ('file') {
+      <p class="muted">
+        Wähle eine Excel-Datei (.xlsx) oder eine CSV-Datei mit einer Zeile je Person. Welche Spalte Vorname,
+        Nachname und Instrument enthält, legst du im nächsten Schritt fest.
+      </p>
+      <button (click)="fileInput.click()">Datei wählen</button>
+      <input #fileInput type="file" accept=".xlsx,.csv,.txt" hidden (change)="loadFile(fileInput)" />
+    }
+
+    @case ('columns') {
+      <p class="muted">„{{ fileName() }}“</p>
+      <div class="fields">
+        @if (tables().length > 1) {
+          <label>
+            Tabellenblatt
+            <select (change)="selectTable(+$any($event.target).value)">
+              @for (t of tables(); track $index) {
+                <option [value]="$index" [selected]="$index === tableIndex()">{{ t.name }}</option>
+              }
+            </select>
+          </label>
+        }
+        <label>
+          Vorname
+          <select (change)="setColumn('firstName', $event)">
+            @for (column of columns(); track $index) {
+              <option [value]="$index" [selected]="$index === mapping().firstName">{{ column }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Nachname
+          <select (change)="setColumn('lastName', $event)">
+            <option value="" [selected]="mapping().lastName === null">– keine Spalte –</option>
+            @for (column of columns(); track $index) {
+              <option [value]="$index" [selected]="$index === mapping().lastName">{{ column }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Instrument
+          <select (change)="setColumn('instrument', $event)">
+            <option value="" [selected]="mapping().instrument === null">– keine Spalte (Standardinstrument) –</option>
+            @for (column of columns(); track $index) {
+              <option [value]="$index" [selected]="$index === mapping().instrument">{{ column }}</option>
+            }
+          </select>
+        </label>
+      </div>
+      <label class="check-line">
+        <input type="checkbox" [checked]="mapping().hasHeader" (change)="setHasHeader($event)" />
+        Erste Zeile enthält Überschriften (wird nicht importiert)
+      </label>
+
+      <h3>Vorschau</h3>
+      <table class="preview">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Instrument</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of preview(); track row.line) {
+            <tr>
+              <td>{{ row.name }}</td>
+              <td>{{ row.instrument || '(Standard)' }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="2" class="muted">Keine Namen in den gewählten Spalten.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <p class="muted small">
+        {{ rows().length }} Person(en) gefunden.
+        @if (newInstruments().length > 0) {
+          Neu angelegt werden: {{ newInstruments().join(', ') }}.
+        }
+      </p>
+      <div class="row actions">
+        <button class="secondary" (click)="step.set('file')">Andere Datei</button>
+        <span class="grow"></span>
+        <button [disabled]="rows().length === 0" (click)="toTeachers()">Weiter zu den Lehrern</button>
+      </div>
+    }
+
+    @case ('teachers') {
+      <p class="muted">
+        Alle gehören zunächst zu {{ teachers()[0].name }}. Ein Häkchen bei einem anderen Lehrer ordnet die Person dort zu.
+        @if (teachers().length > 1) {
+          Mit „alle“ ordnest du alle Personen einem Lehrer zu.
+        }
+      </p>
+      <div class="table-scroll">
+        <table class="assign">
+          <thead>
+            <tr>
+              <th class="center">
+                <input
+                  type="checkbox"
+                  title="Alle übernehmen oder keine"
+                  aria-label="Alle übernehmen"
+                  [checked]="selectedCount() === rows().length"
+                  (change)="setAllIncluded($any($event.target).checked)"
+                />
+              </th>
+              <th>Name</th>
+              <th>Instrument</th>
+              @for (teacher of teachers(); track teacher.id; let first = $first) {
+                <th class="center">
+                  {{ teacher.name }}
+                  @if (first) {
+                    <span class="muted standard">(Standard)</span>
+                  }
+                  @if (teachers().length > 1) {
+                    <button class="link" (click)="assignAll(teacher)">alle</button>
+                  }
+                </th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.line) {
+              <tr [class.skipped]="!isIncluded(row)">
+                <td class="center">
+                  <input
+                    type="checkbox"
+                    [checked]="isIncluded(row)"
+                    (change)="setIncluded(row, $any($event.target).checked)"
+                    aria-label="Übernehmen"
+                  />
+                </td>
+                <td>
+                  {{ row.name }}
+                  @if (row.existing) {
+                    <span class="exists">gibt es schon</span>
+                  }
+                </td>
+                <td>{{ row.instrument || '(Standard)' }}</td>
+                @for (teacher of teachers(); track teacher.id; let first = $first) {
+                  <td class="center">
+                    <input
+                      type="checkbox"
+                      [checked]="teacherOf(row) === teacher.id"
+                      [disabled]="first && teacherOf(row) === teacher.id"
+                      (change)="toggleTeacher(row, teacher, $any($event.target).checked)"
+                      [attr.aria-label]="row.name + ' zu ' + teacher.name"
+                    />
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="row actions">
+        <button class="secondary" (click)="step.set('columns')">Zurück</button>
+        <span class="grow muted">{{ selectedCount() }} von {{ rows().length }} werden importiert</span>
+        <button [disabled]="selectedCount() === 0" (click)="import()">
+          {{ selectedCount() === 1 ? '1 Person' : selectedCount() + ' Personen' }} importieren
+        </button>
+      </div>
+    }
+  }
+</section>

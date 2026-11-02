@@ -1,5 +1,5 @@
 import { computed, effect, inject, Injectable } from '@angular/core';
-import { withLessonAppointments } from './calendar/appointments';
+import { Appointment, ownerOf, withLessonAppointments } from './calendar/appointments';
 import { CalendarStore } from './calendar/calendar.store';
 import { ConfigStore } from './config.store';
 import { Group, groupTeacherOf, Lesson, lessonAt, newId, Teacher, teacherOf, today } from './model';
@@ -37,7 +37,16 @@ export class GroupsStore {
     });
   }
 
-  /** IDs der Personen und Gruppen im Kalender des Lehrers, z. B. für `CalendarStore.occurrences` */
+  /**
+   * Termine im Kalender des Lehrers: die seiner Personen und Gruppen, außer sie sind ausnahmsweise einem anderen
+   * Lehrer zugeordnet, und Termine anderer Personen, die ausnahmsweise ihm zugeordnet sind.
+   */
+  calendarFilter(teacher: Teacher): (appointment: Appointment) => boolean {
+    const owners = this.calendarOwnerIds(teacher);
+    return (appointment) => (appointment.teacherId ? appointment.teacherId === teacher.id : owners.has(ownerOf(appointment)));
+  }
+
+  /** IDs der Personen und Gruppen des Lehrers */
   calendarOwnerIds(teacher: Teacher): Set<string> {
     const config = this.config();
     return new Set([

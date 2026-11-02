@@ -1,6 +1,6 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { FreeSlot, slotText } from '../calendar/appointments';
+import { Appointment, FreeSlot, slotText } from '../calendar/appointments';
 import { CalendarStore } from '../calendar/calendar.store';
 import { Clock } from '../calendar/clock';
 import { QuickStart } from '../calendar/quick-start';
@@ -8,6 +8,8 @@ import { ActiveTeacher } from '../active-teacher';
 import { GroupList } from '../groups/group-list';
 import { GroupPanel } from '../groups/group-panel';
 import { GroupsStore } from '../groups.store';
+import { TeacherFilter } from '../teacher-filter';
+import { StudentImportPanel } from '../import/student-import-panel';
 import { ConfigStore } from '../config.store';
 import { ReportPeriod } from '../report-period';
 import {
@@ -28,13 +30,17 @@ import { sortedLessons, StudentsStore } from '../students.store';
 
 @Component({
   selector: 'app-lessons',
-  imports: [RouterLink, QuickStart, GroupList, GroupPanel],
+  imports: [RouterLink, QuickStart, GroupList, GroupPanel, StudentImportPanel],
   templateUrl: './lessons.html',
   styleUrl: './lessons.scss',
 })
 export class Lessons {
   protected readonly store = inject(StudentsStore);
   protected readonly groups = inject(GroupsStore);
+  protected readonly teacherFilter = inject(TeacherFilter);
+  protected readonly visibleStudents = computed(() =>
+    this.store.sortedStudents().filter((student) => this.teacherFilter.shows(teacherOf(student, this.config()).id)),
+  );
   private readonly configStore = inject(ConfigStore);
   protected readonly config = this.configStore.config;
   private readonly calendar = inject(CalendarStore);
@@ -42,6 +48,8 @@ export class Lessons {
   private readonly activeTeacher = inject(ActiveTeacher);
   protected readonly reportPeriod = inject(ReportPeriod);
   protected readonly slotMessage = signal<string | null>(null);
+  protected readonly importOpen = signal(false);
+  protected readonly importMessage = signal<string | null>(null);
   protected readonly formatDate = formatDate;
   protected readonly lessonTime = lessonTime;
   protected readonly placeholderHint = 'Platzhalter: ' + PLACEHOLDERS.map((p) => p.key).join(', ');
@@ -61,7 +69,10 @@ export class Lessons {
     if (!student) return null;
     const config = this.config();
     const teacher = teacherOf(student, config);
-    return this.calendar.nextFreeSlot(config.calendar, teacher, this.groups.calendarOwnerIds(teacher), this.clock.now());
+    // Belegt sind die Zeiten im Kalender des Lehrers und die Einzeltermine der Person bei anderen Lehrern.
+    const inCalendar = this.groups.calendarFilter(teacher);
+    const busy = (a: Appointment) => inCalendar(a) || a.studentId === student.id;
+    return this.calendar.nextFreeSlot(config.calendar, teacher, busy, this.clock.now());
   });
   protected readonly slotText = slotText;
   protected readonly teachers = computed(() => this.config().teachers);
@@ -74,6 +85,16 @@ export class Lessons {
     });
   }
 
+  protected openImport(): void {
+    this.importMessage.set(null);
+    this.importOpen.set(true);
+  }
+
+  protected closeImport(result: string): void {
+    this.importOpen.set(false);
+    this.importMessage.set(result || null);
+  }
+
   /** Neue Personen gehören zum aktiven Lehrer; danach steht die Auswahl wieder auf dem Standardinstrument. */
   protected addStudent(nameInput: HTMLInputElement, instrumentSelect: HTMLSelectElement): void {
     const name = nameInput.value.trim();
@@ -81,6 +102,10 @@ export class Lessons {
     this.store.addStudent(name, instrumentSelect.value, this.activeTeacher.teacher().id);
     nameInput.value = '';
     instrumentSelect.value = this.defaultInstrumentId();
+  }
+
+  protected valueOf(event: Event): string {
+    return (event.target as HTMLSelectElement).value;
   }
 
   protected setInstrument(student: Student, event: Event): void {
