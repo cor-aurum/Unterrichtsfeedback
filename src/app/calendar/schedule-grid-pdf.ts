@@ -37,8 +37,9 @@ export function writeScheduleGrid(doc: jsPDF, theme: Theme, teachers: ScheduleTe
   for (const teacher of teachers) {
     const range = hourRange(teacher);
     for (const weekStart of weeks) {
+      // Die letzte Woche endet mit dem Zeitraum; ein Zeitraum unter einer Woche zeigt nur seine Tage.
       const week = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).filter(
-        (date) => showWeekend || !isWeekend(date),
+        (date) => date <= period.to && (showWeekend || !isWeekend(date)),
       );
       if (!week.some((date) => entriesOn(teacher, date).length > 0)) continue;
       if (pages++ > 0) doc.addPage('a4', 'landscape');
