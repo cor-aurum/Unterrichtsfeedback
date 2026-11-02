@@ -210,3 +210,13 @@ fieldset {
 .editor .message.warning {
   margin-bottom: 0.75rem;
 }
+
+/* Textbaustein direkt aus der Stunde zur Konfiguration hinzufügen */
+.add-item {
+  margin-top: 0.5rem;
+
+  input {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+}

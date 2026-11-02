@@ -220,6 +220,25 @@
                 }
               }
             }
+            @if (section.type === 'checklist') {
+              <div class="row add-item">
+                <input
+                  #newItem
+                  type="text"
+                  class="grow"
+                  placeholder="Neuer Textbaustein für diesen Abschnitt"
+                  aria-label="Neuer Textbaustein"
+                  (keydown.enter)="addItem(student, lesson, section, newItem)"
+                />
+                <button
+                  class="secondary"
+                  title="Textbaustein zur Konfiguration hinzufügen und hier anhaken"
+                  (click)="addItem(student, lesson, section, newItem)"
+                >
+                  +
+                </button>
+              </div>
+            }
           </fieldset>
         } @empty {
           <p class="muted">

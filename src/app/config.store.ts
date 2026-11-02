@@ -181,8 +181,11 @@ export class ConfigStore {
     this.mutate((config) => move(config.sections, sectionId, offset));
   }
 
-  addItem(sectionId: string, text: string): void {
-    this.mutateSection(sectionId, (section) => section.items.push({ id: newId(), text }));
+  /** Gibt die ID des neuen Textbausteins zurück. */
+  addItem(sectionId: string, text: string): string {
+    const id = newId();
+    this.mutateSection(sectionId, (section) => section.items.push({ id, text }));
+    return id;
   }
 
   updateItem(sectionId: string, itemId: string, text: string): void {

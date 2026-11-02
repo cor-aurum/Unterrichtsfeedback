@@ -16,6 +16,7 @@ import {
   Lesson,
   lessonTime,
   PLACEHOLDERS,
+  Section,
   Student,
   Teacher,
   teacherOf,
@@ -30,7 +31,8 @@ import { sortedLessons, StudentsStore } from '../students.store';
 })
 export class Lessons {
   protected readonly store = inject(StudentsStore);
-  protected readonly config = inject(ConfigStore).config;
+  private readonly configStore = inject(ConfigStore);
+  protected readonly config = this.configStore.config;
   private readonly calendar = inject(CalendarStore);
   private readonly clock = inject(Clock);
   private readonly activeTeacher = inject(ActiveTeacher);
@@ -202,7 +204,16 @@ export class Lessons {
     return doubleLessonDates(student).has(lesson.date);
   }
 
-  protected entryCount(lesson: Lesson): number {
+  /** Erweitert die Konfiguration um einen Textbaustein und hakt ihn in dieser Stunde gleich an. */
+  protected addItem(student: Student, lesson: Lesson, section: Section, input: HTMLInputElement): void {
+    const text = input.value.trim();
+    if (!text) return;
+    const itemId = this.configStore.addItem(section.id, text);
+    this.store.toggleItem(student.id, lesson.id, section.id, itemId);
+    input.value = '';
+  }
+
+    protected entryCount(lesson: Lesson): number {
     const checked = Object.values(lesson.checked).reduce((sum, ids) => sum + ids.length, 0);
     const texts = Object.values(lesson.texts).filter((text) => text.trim()).length;
     return checked + texts;
