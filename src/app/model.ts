@@ -181,7 +181,13 @@ export interface FeedbackConfig {
   defaultInstrumentId: string;
   blocks: FixedBlock[];
   sections: Section[];
+  /** Eigene Abschnitte und feste Inhalte für Gruppenstunden und das Gruppen-PDF */
+  groupBlocks: FixedBlock[];
+  groupSections: Section[];
 }
+
+/** Einzelunterricht (`single`) oder Gruppen (`group`): welche Abschnitte und festen Inhalte gemeint sind */
+export type ContentKind = 'single' | 'group';
 
 export function defaultInstrument(config: FeedbackConfig): Instrument {
   return config.instruments.find((i) => i.id === config.defaultInstrumentId) ?? config.instruments[0];
@@ -208,6 +214,15 @@ export const PLACEHOLDERS = [
   { key: '{uhrzeit}', description: 'Beginn der Stunde; außerhalb einer Stunde der letzten Stunde mit Uhrzeit' },
   { key: '{seite}', description: 'Seitennummer bei der Person' },
   { key: '{seiten}', description: 'Seitenanzahl der Person' },
+];
+
+/** Platzhalter im Gruppen-PDF; {name} und {vorname} stehen dort ebenfalls für den Gruppennamen. */
+export const GROUP_PLACEHOLDERS = [
+  { key: '{gruppe}', description: 'Name der Gruppe (ohne Namen: die Vornamen der Mitglieder)' },
+  { key: '{mitglieder}', description: 'Vornamen aller Mitglieder, z. B. „Anna, Ben und Clara“' },
+  ...PLACEHOLDERS.filter((p) => !['{vorname}', '{nachname}', '{name}', '{instrument}'].includes(p.key)).map((p) =>
+    p.key === '{seite}' || p.key === '{seiten}' ? { ...p, description: p.description.replace('der Person', 'der Gruppe') } : p,
+  ),
 ];
 
 /**
@@ -238,6 +253,41 @@ export function fillPlaceholders(text: string, student: Student, config: Feedbac
 }
 
 /** Erstes Wort eines Namens, z. B. „Anna“ aus „Anna Maria Berg“ */
+/**
+ * Personen, die zusammen Unterricht haben, auch bei verschiedenen Lehrern. Gruppentermine stehen im Kalender
+ * von `teacherId`. Gruppenstunden gehören der Gruppe, nutzen die Gruppen-Abschnitte und stehen im Gruppen-PDF.
+ */
+export interface Group {
+  id: string;
+  /** Darf leer sein; dann zeigt die App die Vornamen der Mitglieder. */
+  name: string;
+  memberIds: string[];
+  /** Immer über `groupTeacherOf` auswerten. */
+  teacherId: string | null;
+  lessons: Lesson[];
+  /** Freitexte der allgemeinen Gruppen-Abschnitte (Abschnitts-ID → Text) */
+  generalTexts: Record<string, string>;
+}
+
+export function groupTeacherOf(group: Group, config: FeedbackConfig): Teacher {
+  return config.teachers.find((t) => t.id === group.teacherId) ?? config.teachers[0];
+}
+
+export function groupMembers(group: Group, students: Student[]): Student[] {
+  return students.filter((student) => group.memberIds.includes(student.id));
+}
+
+/** Name der Gruppe oder, ohne Namen, z. B. „Anna, Ben und Clara“ */
+export function groupLabel(group: Group, students: Student[]): string {
+  return group.name.trim() || memberNames(group, students) || 'Gruppe ohne Mitglieder';
+}
+
+/** Vornamen der Mitglieder, z. B. „Anna, Ben und Clara“; leer ohne Mitglieder */
+export function memberNames(group: Group, students: Student[]): string {
+  const names = groupMembers(group, students).map((student) => firstNameOf(student.name));
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} und ${names.at(-1)}`;
+}
+
 export function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0] ?? '';
 }
@@ -277,8 +327,8 @@ export function lessonTime(lesson: Lesson): string {
 }
 
 /** Stunde einer Person an einem Termin: gleiches Datum und, falls beide eine Uhrzeit haben, gleicher Beginn. */
-export function lessonAt(student: Student, date: string, start?: string): Lesson | undefined {
-  return student.lessons.find(
+export function lessonAt(owner: { lessons: Lesson[] }, date: string, start?: string): Lesson | undefined {
+  return owner.lessons.find(
     (lesson) => lesson.date === date && (!lesson.start || !start || lesson.start === start),
   );
 }

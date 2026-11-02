@@ -171,7 +171,7 @@ export function parseStudents(data: unknown): Student[] {
   });
 }
 
-function parseLesson(lesson: Partial<Lesson>): Lesson {
+export function parseLesson(lesson: Partial<Lesson>): Lesson {
   if (typeof lesson?.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(lesson.date)) {
     throw new Error('Eine Unterrichtsstunde hat kein gültiges Datum.');
   }
@@ -187,12 +187,12 @@ function parseLesson(lesson: Partial<Lesson>): Lesson {
   };
 }
 
-function isRecord<T>(value: Record<string, T> | undefined): value is Record<string, T> {
+export function isRecord<T>(value: Record<string, T> | undefined): value is Record<string, T> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function sortedLessons(student: Student): Lesson[] {
-  return [...student.lessons].sort(
+export function sortedLessons(owner: { lessons: Lesson[] }): Lesson[] {
+  return [...owner.lessons].sort(
     (a, b) => a.date.localeCompare(b.date) || (a.start ?? '').localeCompare(b.start ?? ''),
   );
 }

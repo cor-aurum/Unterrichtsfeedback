@@ -1,0 +1,143 @@
+<section class="card auto">
+  <div class="row">
+    <h2 class="grow">Automatisch einplanen</h2>
+    <button class="secondary" (click)="closed.emit('')">Schließen</button>
+  </div>
+
+  <div class="mode" role="radiogroup" aria-label="Art der Termine">
+    <label>
+      <input type="radio" name="mode" [checked]="mode() === 'weekly'" (change)="setMode('weekly')" />
+      Wöchentliche Termine
+    </label>
+    <label>
+      <input type="radio" name="mode" [checked]="mode() === 'period'" (change)="setMode('period')" />
+      Einmalige Termine in einem Zeitraum
+    </label>
+  </div>
+  <p class="muted">
+    @if (mode() === 'weekly') {
+      Verteilt Personen von {{ teacher().name }} ohne wöchentlichen Termin auf die freien Unterrichtszeiten (Slots der
+      Standardlänge). Vorrang hat, möglichst viele Slots zu füllen; Überschneidungen mit Gruppenunterricht bei anderen
+      Lehrern werden nach Möglichkeit vermieden.
+    } @else {
+      Füllt alle freien Unterrichtszeiten von {{ teacher().name }} im Zeitraum mit einmaligen Terminen; eine Person kann
+      mehrere bekommen. Nach Möglichkeit hat niemand zwei Termine am selben Tag, Überschneidungen mit Gruppenunterricht
+      bei anderen Lehrern werden vermieden und die Termine gleichmäßig verteilt.
+    }
+  </p>
+
+  <div class="options">
+    @if (mode() === 'weekly') {
+      <label>
+        Wöchentlich ab
+        <input type="date" [value]="from()" (change)="setDate('from', $event)" />
+      </label>
+    } @else {
+      <label>
+        Von
+        <input type="date" [value]="from()" (change)="setDate('from', $event)" />
+      </label>
+      <label>
+        Bis
+        <input type="date" [value]="to()" (change)="setDate('to', $event)" />
+      </label>
+    }
+    <div class="placement" role="radiogroup" aria-label="Gruppenmitglieder">
+      <span class="muted">Mitglieder derselben Gruppe</span>
+      <label>
+        <input type="radio" name="placement" [checked]="placement() === 'close'" (change)="setPlacement('close')" />
+        zeitnah hintereinander
+      </label>
+      <label>
+        <input type="radio" name="placement" [checked]="placement() === 'mixed'" (change)="setPlacement('mixed')" />
+        gemischt mit anderen
+      </label>
+    </div>
+  </div>
+
+  @if (periodError(); as error) {
+    <p class="message error">{{ error }}</p>
+  }
+
+  @if (candidates().length === 0) {
+    <p class="muted">
+      @if (mode() === 'weekly') {
+        Alle Personen von {{ teacher().name }} haben schon einen wöchentlichen Termin.
+      } @else {
+        {{ teacher().name }} hat noch keine Personen.
+      }
+    </p>
+  } @else {
+    <div class="students">
+      @for (student of candidates(); track student.id) {
+        <label>
+          <input type="checkbox" [checked]="isSelected(student)" (change)="toggle(student)" />
+          {{ student.name }}
+        </label>
+      }
+    </div>
+    <div class="row actions">
+      <span class="grow muted">
+        {{ selected().length }} Person(en), {{ freeSlots().length }} freie Slot(s)
+        @if (mode() === 'weekly') {
+          in der Woche ab {{ formatDate(from()) }}
+        } @else {
+          im Zeitraum
+        }
+      </span>
+      <button [disabled]="selected().length === 0 || freeSlots().length === 0" (click)="calculate()">
+        Vorschlag berechnen
+      </button>
+    </div>
+  }
+
+  @if (proposals(); as list) {
+    <h3>Vorschlag</h3>
+    @if (list.length === 0) {
+      <p class="muted">Keine freien Slots.</p>
+    }
+    @if (mode() === 'period' && perStudent().length > 0) {
+      <p class="counts">
+        Termine je Person:
+        @for (entry of perStudent(); track entry.student.id; let last = $last) {
+          {{ entry.student.name }} {{ entry.count }}{{ last ? '' : ' · ' }}
+        }
+      </p>
+    }
+    <ul class="proposals">
+      @for (proposal of list; track $index) {
+        <li>
+          <span class="when">{{ slotLabel(proposal.slot) }}</span>
+          <span class="who">{{ proposal.student.name }}</span>
+          @if (proposal.secondOnDay) {
+            <span class="clash">⚠ hat an diesem Tag noch einen Termin</span>
+          }
+          @if (proposal.clashes.length > 0) {
+            <span class="clash">⚠ überschneidet sich mit Gruppenunterricht: {{ proposal.clashes.join(', ') }}</span>
+          }
+        </li>
+      }
+    </ul>
+    @if (unassigned().length > 0) {
+      <p class="message warning">
+        Kein freier Slot mehr für:
+        @for (student of unassigned(); track student.id; let last = $last) {
+          {{ student.name }}{{ last ? '' : ', ' }}
+        }
+      </p>
+    }
+    @if (list.length > 0) {
+      <div class="row actions">
+        <span class="grow muted">
+          @if (mode() === 'weekly') {
+            Jeder Termin wiederholt sich wöchentlich ab dem ersten Tag im Vorschlag.
+          } @else {
+            Die Termine gelten nur an diesem Tag.
+          }
+        </span>
+        <button class="secondary" (click)="proposals.set(null)">Verwerfen</button>
+        <button (click)="apply()">{{ appointmentCount(list.length, mode() === 'weekly') }} eintragen</button>
+      </div>
+    }
+  }
+</section>

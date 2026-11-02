@@ -1,0 +1,182 @@
+/* Gemeinsame Stile für Gruppenliste und Gruppenbereich; passend zu „Stunden erfassen“. */
+:host {
+  display: contents;
+}
+
+h2 {
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--bg);
+    }
+
+    &.selected {
+      background: var(--primary-light);
+      color: var(--primary-text);
+      font-weight: 600;
+    }
+
+    &.empty {
+      cursor: default;
+      background: none;
+      font-size: 0.85rem;
+    }
+  }
+}
+
+.sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: normal;
+}
+
+.badge {
+  min-width: 1.6rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.8rem;
+  text-align: center;
+  font-weight: normal;
+}
+
+.small-button {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.full {
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+
+  label {
+    font-size: 0.85rem;
+  }
+}
+
+.members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 16rem;
+  overflow-y: auto;
+
+  label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    padding: 0.2rem 0;
+    cursor: pointer;
+  }
+}
+
+.member-teacher {
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.editor-head {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.participants {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+
+  button {
+    padding: 0 0.15rem;
+    border: none;
+    background: none;
+    color: var(--primary-text);
+    text-decoration: underline;
+    font: inherit;
+  }
+}
+
+fieldset {
+  margin: 0 0 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.9rem 0.8rem;
+
+  legend {
+    padding: 0 0.3rem;
+    font-weight: 600;
+  }
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  cursor: pointer;
+
+  input {
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+  }
+}
+
+textarea {
+  width: 100%;
+  min-height: 4.5rem;
+}
+
+.hint {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+}
+
+.placeholder {
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.scope-badge {
+  margin-left: 0.3rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-text);
+  font-size: 0.75rem;
+  font-weight: normal;
+}
+
+.add-item {
+  margin-top: 0.5rem;
+
+  input {
+    min-width: 0;
+    font-size: 0.9rem;
+  }
+}

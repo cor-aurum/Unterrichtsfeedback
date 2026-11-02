@@ -1,9 +1,21 @@
 <div class="row head">
   <h1 class="grow">Kalender <span class="teacher-name">{{ teacher().name }}</span></h1>
-  <button [disabled]="students().length === 0" (click)="newAppointment()">+ Termin</button>
+  <button class="secondary" (click)="newBlocker()" title="Zeit blockieren, ohne jemanden einzutragen">+ Blocker</button>
+  <button class="secondary" [disabled]="students().length === 0" (click)="openAutoSchedule()">
+    Automatisch einplanen
+  </button>
+  <button [disabled]="students().length === 0 && groups().length === 0" (click)="newAppointment()">+ Termin</button>
 </div>
 
-@if (students().length === 0) {
+@if (autoScheduleOpen()) {
+  <app-auto-schedule-panel (closed)="closeAutoSchedule($event)" />
+}
+
+@if (notice(); as text) {
+  <p class="message">{{ text }}</p>
+}
+
+@if (students().length === 0 && groups().length === 0) {
   <p class="card muted">
     {{ teacher().name }} hat noch keine Personen. Lege sie unter <a routerLink="/stunden">Stunden erfassen</a> an
     (oder ordne sie dort diesem Lehrer zu), dann kannst du ihnen Termine geben.
@@ -14,15 +26,74 @@
   <p class="message error">{{ text }}</p>
 }
 
+@if (blockerDraft(); as b) {
+  <section class="card form blocker-form">
+    <h2>{{ b.id ? 'Blocker bearbeiten' : 'Neuer Blocker' }}</h2>
+    <p class="muted small">
+      Blockiert Zeit im Kalender von {{ teacher().name }}, ohne jemanden einzutragen; dort schlägt die App keine
+      Termine vor.
+    </p>
+    <div class="fields">
+      <label class="wide-field">
+        Bezeichnung (optional)
+        <input type="text" [value]="b.title" placeholder="z. B. Fortbildung" (change)="setBlockerDraft({ title: valueOf($event) })" />
+      </label>
+      <label>
+        Von
+        <input type="date" [value]="b.fromDate" (change)="setBlockerDraft({ fromDate: valueOf($event) })" />
+      </label>
+      @if (!b.allDay) {
+        <label>
+          Uhrzeit
+          <input type="time" [value]="b.fromTime" (change)="setBlockerDraft({ fromTime: valueOf($event) })" />
+        </label>
+      }
+      <label>
+        Bis
+        <input type="date" [value]="b.toDate" (change)="setBlockerDraft({ toDate: valueOf($event) })" />
+      </label>
+      @if (!b.allDay) {
+        <label>
+          Uhrzeit
+          <input type="time" [value]="b.toTime" (change)="setBlockerDraft({ toTime: valueOf($event) })" />
+        </label>
+      }
+    </div>
+    <label class="weekly">
+      <input type="checkbox" [checked]="b.allDay" (change)="setBlockerDraft({ allDay: $any($event.target).checked })" />
+      Ganze Tage
+    </label>
+    <div class="row actions">
+      <button (click)="saveBlocker()">Speichern</button>
+      <button class="secondary" (click)="blockerDraft.set(null)">Abbrechen</button>
+      <span class="grow"></span>
+      @if (b.id) {
+        <button class="danger" (click)="removeBlocker()">Löschen</button>
+      }
+    </div>
+  </section>
+}
+
 @if (draft(); as d) {
   <section class="card form">
     <h2>{{ d.id ? 'Termin bearbeiten' : 'Neuer Termin' }}</h2>
     <div class="fields">
       <label>
-        Person
-        <select [disabled]="!!d.lessonId" (change)="setDraft({ studentId: valueOf($event) })">
-          @for (student of students(); track student.id) {
-            <option [value]="student.id" [selected]="student.id === d.studentId">{{ student.name }}</option>
+        {{ groups().length > 0 ? 'Person oder Gruppe' : 'Person' }}
+        <select [disabled]="draftFollowsLesson(d)" (change)="setOwner(valueOf($event))">
+          <optgroup label="Personen">
+            @for (student of students(); track student.id) {
+              <option [value]="'s:' + student.id" [selected]="ownerValue(d) === 's:' + student.id">{{ student.name }}</option>
+            }
+          </optgroup>
+          @if (groups().length > 0) {
+            <optgroup label="Gruppen">
+              @for (group of groups(); track group.id) {
+                <option [value]="'g:' + group.id" [selected]="ownerValue(d) === 'g:' + group.id">
+                  {{ groupLabel(group) }}
+                </option>
+              }
+            </optgroup>
           }
         </select>
       </label>
@@ -52,7 +123,7 @@
     @if (d.id && d.weekly) {
       <p class="muted small">Änderungen und Löschen gelten für alle Wiederholungen dieses Termins.</p>
     }
-    @if (d.lessonId && !d.weekly) {
+    @if (draftFollowsLesson(d) && !d.weekly) {
       <p class="muted small">
         Dieser Termin gehört zu einer erfassten Stunde. Änderungen an Datum, Beginn und Dauer gelten auch für die
         Stunde; er verschwindet, wenn du die Stunde löschst oder ihre Uhrzeit entfernst.
@@ -62,7 +133,7 @@
       <button (click)="save()">Speichern</button>
       <button class="secondary" (click)="draft.set(null)">Abbrechen</button>
       <span class="grow"></span>
-      @if (d.id && !d.lessonId) {
+      @if (d.id && !draftFollowsLesson(d)) {
         <button class="danger" (click)="remove()">Löschen</button>
       }
     </div>
@@ -70,7 +141,7 @@
       <div class="row lesson-link">
         <span class="grow muted">Unterricht am {{ formatDate(occurrence.date) }}</span>
         <button class="secondary" (click)="openLesson(occurrence)">
-          {{ lessonOf(occurrence) ? 'Stunde bearbeiten' : 'Stunde anlegen' }}
+          {{ hasLesson(occurrence) ? 'Stunde bearbeiten' : 'Stunde anlegen' }}
         </button>
       </div>
     }
@@ -89,10 +160,16 @@
     <section class="card day" [class.today]="day.date === today">
       <div class="row day-head">
         <h3 class="grow">{{ day.label }}</h3>
-        @if (students().length > 0) {
+        @if (students().length > 0 || groups().length > 0) {
           <button class="icon" (click)="newAppointment(day.date)" title="Termin an diesem Tag" aria-label="Termin an diesem Tag">+</button>
         }
       </div>
+      @for (entry of day.blockers; track entry.blocker.id) {
+        <button class="blocker" (click)="editBlocker(entry.blocker)">
+          <span class="time">{{ entry.time }}</span>
+          <span class="name">{{ entry.blocker.title || 'Blockiert' }}</span>
+        </button>
+      }
       @for (occurrence of day.occurrences; track occurrence.appointment.id) {
         @if (studentOf(occurrence.appointment); as student) {
           <button class="appointment" (click)="edit(occurrence)">
@@ -103,14 +180,30 @@
               @if (occurrence.appointment.weekly) {
                 · wöchentlich
               }
-              @if (hasLesson(student, occurrence)) {
+              @if (hasLesson(occurrence)) {
+                · Stunde erfasst
+              }
+            </span>
+          </button>
+        } @else if (groupOf(occurrence.appointment); as group) {
+          <button class="appointment group" (click)="edit(occurrence)">
+            <span class="time">{{ occurrence.appointment.start }}–{{ endTime(occurrence.appointment) }}</span>
+            <span class="name">{{ groupLabel(group) }}</span>
+            <span class="detail">
+              Gruppe · {{ memberCount(group) }} {{ memberCount(group) === 1 ? 'Person' : 'Personen' }}
+              @if (occurrence.appointment.weekly) {
+                · wöchentlich
+              }
+              @if (hasLesson(occurrence)) {
                 · Stunde erfasst
               }
             </span>
           </button>
         }
       } @empty {
-        <p class="muted empty">Keine Termine</p>
+        @if (day.blockers.length === 0) {
+          <p class="muted empty">Keine Termine</p>
+        }
       }
     </section>
   }

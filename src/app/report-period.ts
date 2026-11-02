@@ -1,5 +1,5 @@
 import { computed, Injectable } from '@angular/core';
-import { formatDate, Lesson, Student, today } from './model';
+import { formatDate, Lesson, today } from './model';
 import { storedSignal } from './stored-signal';
 
 /** Zeitraum als ISO-Daten, jeweils einschließlich */
@@ -26,8 +26,9 @@ export class ReportPeriod {
     return date >= from && date <= to;
   }
 
-  lessonsOf(student: Student): Lesson[] {
-    return student.lessons.filter((lesson) => this.contains(lesson.date));
+  /** Stunden einer Person oder Gruppe im Zeitraum */
+  lessonsOf(owner: { lessons: Lesson[] }): Lesson[] {
+    return owner.lessons.filter((lesson) => this.contains(lesson.date));
   }
 }
 

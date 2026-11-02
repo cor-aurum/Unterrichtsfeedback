@@ -9,7 +9,8 @@ import { PdfExport } from '../pdf-export';
 import { ReportPeriod } from '../report-period';
 import { isNativeApp, safeFileName } from '../save-file';
 import { StudentsStore } from '../students.store';
-import { Student } from '../model';
+import { GroupsStore } from '../groups.store';
+import { Group, groupLabel, Student } from '../model';
 
 type Scope = 'all' | 'single';
 
@@ -34,6 +35,7 @@ export class ExportPage {
   protected readonly webDav = signal<WebDavSettings>(EMPTY_WEBDAV);
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
   protected readonly reportPeriod = inject(ReportPeriod);
+  private readonly groupsStore = inject(GroupsStore);
 
   protected readonly scope = signal<Scope>('all');
   protected readonly studentId = signal<string | null>(this.store.selectedStudentId());
@@ -53,6 +55,49 @@ export class ExportPage {
   protected readonly lessonCount = computed(() =>
     this.studentsToExport().reduce((sum, student) => sum + student.lessons.length, 0),
   );
+
+  // ---------- Gruppen-PDF ----------
+
+  protected readonly groupScope = signal<Scope>('all');
+  protected readonly groupId = signal<string | null>(null);
+  protected readonly groups = computed(() =>
+    [...this.groupsStore.groups()].sort((a, b) => this.groupLabel(a).localeCompare(this.groupLabel(b), 'de')),
+  );
+  /** Gruppen mit mindestens einer Gruppenstunde im Berichtszeitraum, jeweils nur mit diesen Stunden */
+  protected readonly groupsInPeriod = computed(() =>
+    this.groups()
+      .map((group) => ({ ...group, lessons: this.reportPeriod.lessonsOf(group) }))
+      .filter((group) => group.lessons.length > 0),
+  );
+  protected readonly groupsToExport = computed(() =>
+    this.groupScope() === 'all' ? this.groupsInPeriod() : this.groupsInPeriod().filter((g) => g.id === this.groupId()),
+  );
+  protected readonly groupLessonCount = computed(() =>
+    this.groupsToExport().reduce((sum, group) => sum + group.lessons.length, 0),
+  );
+
+  protected groupLabel(group: Group): string {
+    return groupLabel(group, this.store.students());
+  }
+
+  protected groupLessonsInPeriod(group: Group): number {
+    return this.reportPeriod.lessonsOf(group).length;
+  }
+
+  protected setGroupScope(event: Event): void {
+    this.groupScope.set((event.target as HTMLInputElement).value as Scope);
+  }
+
+  protected selectGroup(event: Event): void {
+    this.groupId.set((event.target as HTMLSelectElement).value);
+    this.groupScope.set('single');
+  }
+
+  protected exportGroupPdf(action: 'open' | 'share'): void {
+    const groups = this.groupsToExport();
+    const fileName = this.groupScope() === 'all' ? 'Feedback_Gruppen' : `Feedback_Gruppe_${this.groupLabel(groups[0])}`;
+    this.pdf.exportGroups(this.config(), groups, this.store.students(), fileName, action);
+  }
 
   protected setScope(event: Event): void {
     this.scope.set((event.target as HTMLInputElement).value as Scope);

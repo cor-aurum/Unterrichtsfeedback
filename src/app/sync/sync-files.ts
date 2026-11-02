@@ -1,6 +1,8 @@
-import { Appointment, parseAppointments } from '../calendar/appointments';
+import { Appointment, ownerOf as appointmentOwner, parseAppointments } from '../calendar/appointments';
+import { Blocker, parseBlockers } from '../calendar/blockers';
 import { parseConfig } from '../config.store';
-import { BlockVariant, FeedbackConfig, Student, Teacher, teacherOf } from '../model';
+import { parseGroups } from '../groups.store';
+import { BlockVariant, FeedbackConfig, Group, groupTeacherOf, Student, Teacher, teacherOf } from '../model';
 import { safeFileName } from '../save-file';
 import { parseStudents } from '../students.store';
 
@@ -8,7 +10,9 @@ import { parseStudents } from '../students.store';
 export interface AppData {
   config: FeedbackConfig;
   students: Student[];
+  groups: Group[];
   appointments: Appointment[];
+  blockers: Blocker[];
 }
 
 /** Dateiname → JSON-Inhalt */
@@ -16,6 +20,8 @@ export type SyncFiles = Map<string, string>;
 
 /** Gemeinsame Konfiguration: Überschrift, Farbe, Abschnitte, Instrumente, feste Inhalte … */
 export const GENERAL_FILE = 'konfiguration.json';
+/** Gruppen, auch über mehrere Lehrer hinweg; ihre Termine stehen in der Datei ihres Lehrers. */
+export const GROUPS_FILE = 'gruppen.json';
 // Nur Zeichen, die `safeFileName` erzeugt; so zählen Konfliktkopien der Nextcloud wie
 // „lehrer-Anna (conflicted copy 2026-…).json“ nicht als Lehrerdatei.
 const TEACHER_FILE = /^lehrer-[\p{L}\p{N}_-]+\.json$/u;
@@ -40,6 +46,14 @@ interface TeacherFile {
   variants: TeacherVariant[];
   students: Student[];
   appointments: Appointment[];
+  /** Fehlt in älteren Dateien */
+  blockers: Blocker[];
+}
+
+interface GroupsFile {
+  format: 'unterricht-feedback/gruppen';
+  version: 1;
+  groups: Group[];
 }
 
 /** Variante eines festen Blocks; `index` ist ihre Stelle unter den Varianten, weil die erste passende gilt. */
@@ -50,7 +64,7 @@ interface TeacherVariant {
 }
 
 export function isSyncFile(name: string): boolean {
-  return name === GENERAL_FILE || TEACHER_FILE.test(name);
+  return name === GENERAL_FILE || name === GROUPS_FILE || TEACHER_FILE.test(name);
 }
 
 export function isTeacherFile(name: string): boolean {
@@ -61,6 +75,8 @@ export function toSyncFiles(data: AppData): SyncFiles {
   const { config } = data;
   const files: SyncFiles = new Map();
   files.set(GENERAL_FILE, json(generalFile(config)));
+  const groupsFile: GroupsFile = { format: 'unterricht-feedback/gruppen', version: 1, groups: data.groups };
+  files.set(GROUPS_FILE, json(groupsFile));
   const fileNames = teacherFileNames(config.teachers);
   config.teachers.forEach((teacher, position) =>
     files.set(fileNames.get(teacher.id)!, json(teacherFile(data, teacher, position))),
@@ -97,8 +113,18 @@ export function fromSyncFiles(files: SyncFiles): AppData {
   return {
     config,
     students: parseStudents(teacherFiles.flatMap((file) => file.students)),
+    groups: parseGroupsFile(files.get(GROUPS_FILE)),
     appointments: parseAppointments(teacherFiles.flatMap((file) => file.appointments)),
+    blockers: parseBlockers(teacherFiles.flatMap((file) => file.blockers)),
   };
+}
+
+/** Ältere Sicherungen haben noch keine Gruppen. */
+function parseGroupsFile(content: string | undefined): Group[] {
+  if (!content) return [];
+  const file = JSON.parse(content) as Partial<GroupsFile>;
+  if (file?.format !== 'unterricht-feedback/gruppen') throw new Error(`„${GROUPS_FILE}“ ist keine Gruppendatei dieser App.`);
+  return parseGroups(file.groups);
 }
 
 function generalFile(config: FeedbackConfig): GeneralFile {
@@ -115,18 +141,27 @@ function teacherFile(data: AppData, teacher: Teacher, position: number): Teacher
     .filter((student) => teacherOf(student, config).id === teacher.id)
     // Personen ohne gültigen Lehrer gehören zum ersten; in der Datei steht er ausdrücklich.
     .map((student) => ({ ...student, teacherId: teacher.id }));
-  const studentIds = new Set(students.map((student) => student.id));
-  const knownStudentIds = new Set(data.students.map((student) => student.id));
-  const appointments = data.appointments.filter(
-    (appointment) =>
-      studentIds.has(appointment.studentId) || (position === 0 && !knownStudentIds.has(appointment.studentId)),
-  );
+  // Termine der eigenen Personen und Gruppen; Termine ohne bekannte Person oder Gruppe landen beim ersten Lehrer.
+  const ownerIds = new Set([
+    ...students.map((student) => student.id),
+    ...data.groups.filter((group) => groupTeacherOf(group, config).id === teacher.id).map((group) => group.id),
+  ]);
+  const knownOwnerIds = new Set([...data.students.map((s) => s.id), ...data.groups.map((g) => g.id)]);
+  const appointments = data.appointments.filter((appointment) => {
+    const owner = appointmentOwner(appointment);
+    return ownerIds.has(owner) || (position === 0 && !knownOwnerIds.has(owner));
+  });
   const variants = config.blocks.flatMap((block) =>
     block.variants
       .map((variant, index) => ({ blockId: block.id, index, variant }))
       .filter(({ variant }) => ownerOf(variant, config.teachers)?.id === teacher.id),
   );
-  return { format: 'unterricht-feedback/lehrer', version: 1, position, teacher, variants, students, appointments };
+  // Blocker ohne bekannten Lehrer landen beim ersten, wie Termine ohne bekannte Person.
+  const teacherIds = new Set(config.teachers.map((t) => t.id));
+  const blockers = data.blockers.filter(
+    (blocker) => blocker.teacherId === teacher.id || (position === 0 && !teacherIds.has(blocker.teacherId)),
+  );
+  return { format: 'unterricht-feedback/lehrer', version: 1, position, teacher, variants, students, appointments, blockers };
 }
 
 /** Eine Variante gehört einem Lehrer, wenn sie nur für ihn gilt. */
@@ -160,6 +195,7 @@ function parseTeacherFile(name: string, content: string): TeacherFile {
     variants: Array.isArray(file.variants) ? file.variants : [],
     students: Array.isArray(file.students) ? file.students : [],
     appointments: Array.isArray(file.appointments) ? file.appointments : [],
+    blockers: Array.isArray(file.blockers) ? file.blockers : [],
   };
 }
 

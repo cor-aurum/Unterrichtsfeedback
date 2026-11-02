@@ -1,0 +1,186 @@
+import { computed, effect, inject, Injectable } from '@angular/core';
+import { withLessonAppointments } from './calendar/appointments';
+import { CalendarStore } from './calendar/calendar.store';
+import { ConfigStore } from './config.store';
+import { Group, groupTeacherOf, Lesson, lessonAt, newId, Teacher, teacherOf, today } from './model';
+import { storedSignal } from './stored-signal';
+import { isRecord, parseLesson, sortedLessons, StudentsStore } from './students.store';
+
+/**
+ * Gruppen und ihre Gruppenstunden. Gruppenstunden gehören der Gruppe, nutzen die Gruppen-Abschnitte der
+ * Konfiguration und erscheinen im Gruppen-PDF, nicht in den PDFs der Mitglieder.
+ */
+@Injectable({ providedIn: 'root' })
+export class GroupsStore {
+  private readonly studentsStore = inject(StudentsStore);
+  private readonly calendar = inject(CalendarStore);
+  private readonly config = inject(ConfigStore).config;
+
+  readonly groups = storedSignal<Group[]>('feedback.groups', () => [], parseGroups);
+  readonly selectedGroupId = storedSignal<string | null>('feedback.selectedGroup', () => null);
+  readonly selectedLessonId = storedSignal<string | null>('feedback.selectedGroupLesson', () => null, (data) =>
+    typeof data === 'string' ? data : null,
+  );
+  readonly selectedGroup = computed(() => this.groups().find((g) => g.id === this.selectedGroupId()));
+  readonly selectedLesson = computed(() => this.selectedGroup()?.lessons.find((l) => l.id === this.selectedLessonId()));
+
+  constructor() {
+    // Wer eine Person auswählt (auch aus dem Kalender), verlässt die Gruppe.
+    effect(() => {
+      if (this.studentsStore.selectedStudentId()) this.selectedGroupId.set(null);
+    });
+    // Gruppenstunden mit Uhrzeit stehen im Kalender des Lehrers der Gruppe.
+    effect(() => {
+      const appointments = this.calendar.appointments();
+      const next = withLessonAppointments(appointments, this.groups(), 'group', this.config().calendar.defaultDurationMinutes);
+      if (next !== appointments) this.calendar.appointments.set(next);
+    });
+  }
+
+  /** IDs der Personen und Gruppen im Kalender des Lehrers, z. B. für `CalendarStore.occurrences` */
+  calendarOwnerIds(teacher: Teacher): Set<string> {
+    const config = this.config();
+    return new Set([
+      ...this.studentsStore.students().filter((s) => teacherOf(s, config).id === teacher.id).map((s) => s.id),
+      ...this.groups().filter((g) => groupTeacherOf(g, config).id === teacher.id).map((g) => g.id),
+    ]);
+  }
+
+  add(teacherId: string | null): void {
+    const group: Group = { id: newId(), name: '', memberIds: [], teacherId, lessons: [], generalTexts: {} };
+    this.groups.update((groups) => [...groups, group]);
+    this.select(group.id);
+  }
+
+  update(groupId: string, change: Partial<Pick<Group, 'name' | 'teacherId'>>): void {
+    this.mutate(groupId, (group) => Object.assign(group, change));
+  }
+
+  toggleMember(groupId: string, studentId: string): void {
+    this.mutate(groupId, (group) => {
+      group.memberIds = group.memberIds.includes(studentId)
+        ? group.memberIds.filter((id) => id !== studentId)
+        : [...group.memberIds, studentId];
+    });
+  }
+
+  /** Mit der Gruppe entfallen ihre Gruppenstunden und Termine. */
+  remove(groupId: string): void {
+    this.groups.update((groups) => groups.filter((g) => g.id !== groupId));
+    this.calendar.removeForOwner(groupId);
+    if (this.selectedGroupId() === groupId) this.select(null);
+  }
+
+  /** Nach dem Löschen einer Person: Sie ist in keiner Gruppe mehr. */
+  removeMember(studentId: string): void {
+    this.groups.update((groups) =>
+      groups.map((g) => (g.memberIds.includes(studentId) ? { ...g, memberIds: g.memberIds.filter((id) => id !== studentId) } : g)),
+    );
+  }
+
+  select(groupId: string | null): void {
+    this.selectedGroupId.set(groupId);
+    const group = this.groups().find((g) => g.id === groupId);
+    this.selectedLessonId.set(group ? (sortedLessons(group).at(-1)?.id ?? null) : null);
+    if (groupId) this.studentsStore.selectStudent(null);
+  }
+
+  /** Wählt die Gruppenstunde zum Termin aus; gibt es noch keine, wird sie mit Datum und Uhrzeit angelegt. */
+  openLesson(groupId: string, date: string, time?: { start: string; durationMinutes: number }): void {
+    const group = this.groups().find((g) => g.id === groupId);
+    if (!group) return;
+    let lesson = lessonAt(group, date, time?.start);
+    if (lesson) {
+      if (time && !lesson.start) this.mutateLesson(groupId, lesson.id, (l) => Object.assign(l, time));
+    } else {
+      lesson = { id: newId(), date, ...time, checked: {}, texts: {} };
+      const created = lesson;
+      this.mutate(groupId, (g) => g.lessons.push(created));
+    }
+    this.selectedGroupId.set(groupId);
+    this.selectedLessonId.set(lesson.id);
+    this.studentsStore.selectStudent(null);
+  }
+
+  addLesson(groupId: string): void {
+    const lesson: Lesson = { id: newId(), date: today(), checked: {}, texts: {} };
+    this.mutate(groupId, (group) => group.lessons.push(lesson));
+    this.selectedLessonId.set(lesson.id);
+  }
+
+  removeLesson(groupId: string, lessonId: string): void {
+    this.mutate(groupId, (group) => (group.lessons = group.lessons.filter((l) => l.id !== lessonId)));
+    if (this.selectedLessonId() === lessonId) this.selectedLessonId.set(null);
+  }
+
+  setLessonDate(groupId: string, lessonId: string, date: string): void {
+    this.mutateLesson(groupId, lessonId, (lesson) => (lesson.date = date));
+  }
+
+  /** Ohne `start` hat die Stunde keine Uhrzeit mehr; die Länge gilt nur zusammen mit dem Beginn. */
+  setLessonStart(groupId: string, lessonId: string, start: string): void {
+    this.mutateLesson(groupId, lessonId, (lesson) => {
+      if (start) {
+        lesson.start = start;
+      } else {
+        delete lesson.start;
+        delete lesson.durationMinutes;
+      }
+    });
+  }
+
+  /** Aus dem Kalender: Datum, Beginn und Dauer der Gruppenstunde ändern sich mit ihrem Termin. */
+  setLessonTime(groupId: string, lessonId: string, time: { date: string; start: string; durationMinutes: number }): void {
+    this.mutateLesson(groupId, lessonId, (lesson) =>
+      Object.assign(lesson, { date: time.date, start: time.start, durationMinutes: time.durationMinutes }),
+    );
+  }
+
+  toggleItem(groupId: string, lessonId: string, sectionId: string, itemId: string): void {
+    this.mutateLesson(groupId, lessonId, (lesson) => {
+      const checked = lesson.checked[sectionId] ?? [];
+      lesson.checked[sectionId] = checked.includes(itemId) ? checked.filter((id) => id !== itemId) : [...checked, itemId];
+    });
+  }
+
+  setText(groupId: string, lessonId: string, sectionId: string, text: string): void {
+    this.mutateLesson(groupId, lessonId, (lesson) => (lesson.texts[sectionId] = text));
+  }
+
+  setGeneralText(groupId: string, sectionId: string, text: string): void {
+    this.mutate(groupId, (group) => (group.generalTexts[sectionId] = text));
+  }
+
+  private mutateLesson(groupId: string, lessonId: string, change: (lesson: Lesson) => void): void {
+    this.mutate(groupId, (group) => {
+      const lesson = group.lessons.find((l) => l.id === lessonId);
+      if (lesson) change(lesson);
+    });
+  }
+
+  private mutate(groupId: string, change: (group: Group) => void): void {
+    this.groups.update((groups) =>
+      groups.map((group) => {
+        if (group.id !== groupId) return group;
+        const copy = structuredClone(group);
+        change(copy);
+        return copy;
+      }),
+    );
+  }
+}
+
+export function parseGroups(data: unknown): Group[] {
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((g: Partial<Group>) => typeof g?.id === 'string')
+    .map((g: Partial<Group>) => ({
+      id: g.id!,
+      name: typeof g.name === 'string' ? g.name : '',
+      memberIds: Array.isArray(g.memberIds) ? g.memberIds.filter((id) => typeof id === 'string') : [],
+      teacherId: typeof g.teacherId === 'string' ? g.teacherId : null,
+      // Ältere Gruppen haben noch keine eigenen Stunden.
+      lessons: Array.isArray(g.lessons) ? g.lessons.map(parseLesson) : [],
+      generalTexts: isRecord(g.generalTexts) ? g.generalTexts : {},
+    }));
+}

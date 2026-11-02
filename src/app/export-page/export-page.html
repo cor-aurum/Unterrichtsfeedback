@@ -49,6 +49,48 @@
   }
 </section>
 
+@if (groups().length > 0) {
+  <section class="card">
+    <h2>Gruppen-PDF</h2>
+    <p class="muted hint">
+      Ein Abschnitt je Gruppe mit ihren Gruppenstunden im Berichtszeitraum, den Gruppen-Abschnitten und den festen
+      Gruppen-Inhalten.
+    </p>
+    <label class="option">
+      <input type="radio" name="group-scope" value="all" [checked]="groupScope() === 'all'" (change)="setGroupScope($event)" />
+      <span class="grow">
+        Alle Gruppen mit Gruppenstunden im Zeitraum ({{ groupsInPeriod().length }}), jede Gruppe beginnt auf einer
+        neuen Seite
+      </span>
+    </label>
+    <label class="option">
+      <input type="radio" name="group-scope" value="single" [checked]="groupScope() === 'single'" (change)="setGroupScope($event)" />
+      <span>Nur eine Gruppe:</span>
+      <select (change)="selectGroup($event)" aria-label="Gruppe">
+        <option value="" disabled [selected]="!groupId()">Bitte wählen</option>
+        @for (group of groups(); track group.id) {
+          <option [value]="group.id" [selected]="group.id === groupId()">
+            {{ groupLabel(group) }} ({{ groupLessonsInPeriod(group) }})
+          </option>
+        }
+      </select>
+    </label>
+    <div class="row actions">
+      <span class="grow muted">
+        {{ groupsToExport().length }} Gruppe(n), {{ groupLessonCount() }} Gruppenstunde(n)
+      </span>
+      @if (nativeApp) {
+        <button class="secondary" [disabled]="groupsToExport().length === 0" (click)="exportGroupPdf('share')">
+          PDF teilen
+        </button>
+        <button [disabled]="groupsToExport().length === 0" (click)="exportGroupPdf('open')">PDF öffnen</button>
+      } @else {
+        <button [disabled]="groupsToExport().length === 0" (click)="exportGroupPdf('share')">PDF erstellen</button>
+      }
+    </div>
+  </section>
+}
+
 <section class="card">
   <h2>Datensicherung</h2>
   <p class="muted">

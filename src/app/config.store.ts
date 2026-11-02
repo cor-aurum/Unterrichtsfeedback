@@ -5,6 +5,7 @@ import {
   BlockPosition,
   BlockVariant,
   CalendarSettings,
+  ContentKind,
   DEFAULT_PDF_LAYOUT,
   defaultCalendarSettings,
   defaultTeachingWindows,
@@ -82,7 +83,7 @@ export class ConfigStore {
     this.mutate((config) => {
       if (config.teachers.length <= 1) return;
       config.teachers = config.teachers.filter((t) => t.id !== teacherId);
-      config.blocks
+      [...config.blocks, ...config.groupBlocks]
         .flatMap((block) => block.variants)
         .forEach((variant) => (variant.teacherIds = variant.teacherIds.filter((id) => id !== teacherId)));
     });
@@ -148,9 +149,9 @@ export class ConfigStore {
     });
   }
 
-  addSection(type: SectionType): void {
+  addSection(type: SectionType, kind: ContentKind = 'single'): void {
     this.mutate((config) =>
-      config.sections.push({
+      sectionsOf(config, kind).push({
         id: newId(),
         title: type === 'checklist' ? 'Neue Textbausteine' : 'Neues Freitextfeld',
         type,
@@ -174,11 +175,17 @@ export class ConfigStore {
   }
 
   removeSection(sectionId: string): void {
-    this.mutate((config) => (config.sections = config.sections.filter((s) => s.id !== sectionId)));
+    this.mutate((config) => {
+      config.sections = config.sections.filter((s) => s.id !== sectionId);
+      config.groupSections = config.groupSections.filter((s) => s.id !== sectionId);
+    });
   }
 
   moveSection(sectionId: string, offset: -1 | 1): void {
-    this.mutate((config) => move(config.sections, sectionId, offset));
+    this.mutate((config) => {
+      move(config.sections, sectionId, offset);
+      move(config.groupSections, sectionId, offset);
+    });
   }
 
   /** Gibt die ID des neuen Textbausteins zurück. */
@@ -241,7 +248,7 @@ export class ConfigStore {
       if (config.instruments.length <= 1) return;
       config.instruments = config.instruments.filter((i) => i.id !== instrumentId);
       config.defaultInstrumentId = defaultInstrument(config).id;
-      config.blocks
+      [...config.blocks, ...config.groupBlocks]
         .flatMap((block) => block.variants)
         .forEach((variant) => (variant.instrumentIds = variant.instrumentIds.filter((id) => id !== instrumentId)));
     });
@@ -251,15 +258,15 @@ export class ConfigStore {
     this.mutate((config) => move(config.instruments, instrumentId, offset));
   }
 
-  addTextBlock(): void {
+  addTextBlock(kind: ContentKind = 'single'): void {
     this.mutate((config) =>
-      config.blocks.push({ id: newId(), type: 'text', position: 'start', text: '', variants: [] }),
+      blocksOf(config, kind).push({ id: newId(), type: 'text', position: 'start', text: '', variants: [] }),
     );
   }
 
-  addImageBlock(image: BlockImage): void {
+  addImageBlock(image: BlockImage, kind: ContentKind = 'single'): void {
     this.mutate((config) =>
-      config.blocks.push({ id: newId(), type: 'image', position: 'start', text: '', image, variants: [] }),
+      blocksOf(config, kind).push({ id: newId(), type: 'image', position: 'start', text: '', image, variants: [] }),
     );
   }
 
@@ -268,11 +275,17 @@ export class ConfigStore {
   }
 
   removeBlock(blockId: string): void {
-    this.mutate((config) => (config.blocks = config.blocks.filter((b) => b.id !== blockId)));
+    this.mutate((config) => {
+      config.blocks = config.blocks.filter((b) => b.id !== blockId);
+      config.groupBlocks = config.groupBlocks.filter((b) => b.id !== blockId);
+    });
   }
 
   moveBlock(blockId: string, offset: -1 | 1): void {
-    this.mutate((config) => move(config.blocks, blockId, offset));
+    this.mutate((config) => {
+      move(config.blocks, blockId, offset);
+      move(config.groupBlocks, blockId, offset);
+    });
   }
 
   addVariant(blockId: string): void {
@@ -312,14 +325,15 @@ export class ConfigStore {
 
   private mutateBlock(blockId: string, change: (block: FixedBlock) => void): void {
     this.mutate((config) => {
-      const block = config.blocks.find((b) => b.id === blockId);
+      // IDs sind eindeutig; der Block kann bei Einzelunterricht oder Gruppen stehen.
+      const block = [...config.blocks, ...config.groupBlocks].find((b) => b.id === blockId);
       if (block) change(block);
     });
   }
 
   private mutateSection(sectionId: string, change: (section: Section) => void): void {
     this.mutate((config) => {
-      const section = config.sections.find((s) => s.id === sectionId);
+      const section = [...config.sections, ...config.groupSections].find((s) => s.id === sectionId);
       if (section) change(section);
     });
   }
@@ -329,6 +343,14 @@ export class ConfigStore {
     change(copy);
     this.config.set(copy);
   }
+}
+
+export function sectionsOf(config: FeedbackConfig, kind: ContentKind): Section[] {
+  return kind === 'group' ? config.groupSections : config.sections;
+}
+
+export function blocksOf(config: FeedbackConfig, kind: ContentKind): FixedBlock[] {
+  return kind === 'group' ? config.groupBlocks : config.blocks;
 }
 
 function move<T extends { id: string }>(list: T[], id: string, offset: -1 | 1): void {
@@ -361,6 +383,9 @@ export function parseConfig(data: unknown): FeedbackConfig {
     // Ältere Konfigurationen haben noch keine festen Blöcke.
     blocks: Array.isArray(config.blocks) ? config.blocks.map(parseBlock) : [],
     sections: config.sections.map(parseSection),
+    // … und noch keine Inhalte für Gruppen; dann gilt die Vorlage.
+    groupBlocks: Array.isArray(config.groupBlocks) ? config.groupBlocks.map(parseBlock) : defaultGroupBlocks(),
+    groupSections: Array.isArray(config.groupSections) ? config.groupSections.map(parseSection) : defaultGroupSections(),
   };
 }
 
@@ -484,17 +509,51 @@ function parseSection(data: Partial<Section>): Section {
   };
 }
 
-function defaultConfig(): FeedbackConfig {
-  const checklist = (title: string, texts: string[], scope: SectionScope = 'lesson'): Section => ({
-    id: newId(),
-    title,
-    type: 'checklist',
-    scope,
-    showTitle: true,
-    items: texts.map((text) => ({ id: newId(), text })),
-  });
-  const text = (title: string): Section => ({ id: newId(), title, type: 'text', scope: 'lesson', showTitle: true, items: [] });
+const checklist = (title: string, texts: string[], scope: SectionScope = 'lesson'): Section => ({
+  id: newId(),
+  title,
+  type: 'checklist',
+  scope,
+  showTitle: true,
+  items: texts.map((text) => ({ id: newId(), text })),
+});
+const text = (title: string): Section => ({ id: newId(), title, type: 'text', scope: 'lesson', showTitle: true, items: [] });
 
+/** Vorlage für Gruppenstunden: in der Ihr-Form, an die ganze Gruppe gerichtet */
+function defaultGroupSections(): Section[] {
+  return [
+    checklist(
+      'Das zeichnet euch aus',
+      [
+        'Ihr kommt mit viel Freude in den gemeinsamen Unterricht.',
+        'Ihr hört gut aufeinander und unterstützt euch gegenseitig.',
+      ],
+      'general',
+    ),
+    text('Unser Thema heute'),
+    checklist('Zusammenspiel', [
+        'Ihr habt sehr gut zusammengespielt und aufeinander gehört.',
+        'Das gemeinsame Tempo war schon sehr sicher.',
+        'Beim Zusammenspiel dürfen wir noch genauer aufeinander achten.',
+    ]),
+    text('Eure Aufgaben bis zur nächsten Stunde'),
+  ];
+}
+
+function defaultGroupBlocks(): FixedBlock[] {
+  return [
+    {
+      id: newId(),
+      type: 'text',
+      position: 'start',
+      text: 'Hallo {mitglieder},\n\nhier ist meine Rückmeldung zu unserem gemeinsamen Unterricht.',
+      variants: [],
+    },
+    { id: newId(), type: 'text', position: 'end', text: 'Viel Spaß beim gemeinsamen Üben!', variants: [] },
+  ];
+}
+
+function defaultConfig(): FeedbackConfig {
   const piano = { id: newId(), name: 'Klavier' };
   const guitar = { id: newId(), name: 'Gitarre' };
   const violin = { id: newId(), name: 'Violine' };
@@ -563,5 +622,7 @@ function defaultConfig(): FeedbackConfig {
       text('Das ist mir aufgefallen'),
       text('Deine Aufgaben bis zur nächsten Stunde'),
     ],
+    groupBlocks: defaultGroupBlocks(),
+    groupSections: defaultGroupSections(),
   };
 }

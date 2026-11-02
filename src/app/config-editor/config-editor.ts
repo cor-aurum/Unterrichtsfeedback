@@ -1,9 +1,12 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
-import { ConfigStore } from '../config.store';
+import { blocksOf, ConfigStore, sectionsOf } from '../config.store';
 import {
+  ContentKind,
   DEFAULT_PDF_LAYOUT,
   defaultInstrument,
   FixedBlock,
+  GROUP_PLACEHOLDERS,
   Instrument,
   PLACEHOLDERS,
   Section,
@@ -23,6 +26,8 @@ const CONFIG_TABS = [
   { id: 'general', label: 'Allgemein' },
   { id: 'sections', label: 'Abschnitte' },
   { id: 'blocks', label: 'Feste Inhalte' },
+  { id: 'groupSections', label: 'Gruppen-Abschnitte' },
+  { id: 'groupBlocks', label: 'Gruppen-Inhalte' },
   { id: 'layout', label: 'Kopf- & Fußzeile' },
   { id: 'instruments', label: 'Instrumente' },
   { id: 'teachers', label: 'Lehrer' },
@@ -33,7 +38,7 @@ type ConfigTab = (typeof CONFIG_TABS)[number]['id'];
 
 @Component({
   selector: 'app-config-editor',
-  imports: [BlockContentEditor],
+  imports: [BlockContentEditor, NgTemplateOutlet],
   templateUrl: './config-editor.html',
   styleUrl: './config-editor.scss',
 })
@@ -46,6 +51,8 @@ export class ConfigEditor {
     CONFIG_TABS.some((t) => t.id === data) ? (data as ConfigTab) : 'general',
   );
   protected readonly placeholders = PLACEHOLDERS;
+  protected readonly groupPlaceholderHint =
+    'Platzhalter: ' + GROUP_PLACEHOLDERS.map((p) => p.key).join(', ') + '; {name} und {vorname} stehen für den Gruppennamen.';
   protected readonly defaultThemeColor = DEFAULT_THEME_COLOR;
   protected readonly weekdays = WEEKDAY_NAMES.map((name, index) => ({ name, index }));
   protected readonly isDefaultPdfLayout = computed(
@@ -176,12 +183,20 @@ export class ConfigEditor {
     }
   }
 
-  protected async addImage(input: HTMLInputElement): Promise<void> {
+  protected sectionsOf(kind: ContentKind): Section[] {
+    return sectionsOf(this.store.config(), kind);
+  }
+
+  protected blocksOf(kind: ContentKind): FixedBlock[] {
+    return blocksOf(this.store.config(), kind);
+  }
+
+  protected async addImage(input: HTMLInputElement, kind: ContentKind = 'single'): Promise<void> {
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
     try {
-      this.store.addImageBlock(await readImageFile(file));
+      this.store.addImageBlock(await readImageFile(file), kind);
     } catch (e) {
       this.showError(`Bild konnte nicht geladen werden: ${e instanceof Error ? e.message : String(e)}`);
     }

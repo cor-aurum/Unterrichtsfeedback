@@ -1,9 +1,13 @@
-import { formatLongDate, Lesson, newId, Student } from '../model';
+import { formatLongDate, Group, Lesson, newId, Student } from '../model';
 
-/** Geplanter Unterricht einer Person. Mit `weekly` wiederholt er sich ab `date` jede Woche ohne Ende. */
+/**
+ * Geplanter Unterricht einer Person (`studentId`) oder einer Gruppe (`groupId`); genau eins von beiden ist
+ * gesetzt, siehe `ownerOf`. Mit `weekly` wiederholt er sich ab `date` jede Woche ohne Ende.
+ */
 export interface Appointment {
   id: string;
-  studentId: string;
+  studentId?: string;
+  groupId?: string;
   /** ISO-Datum (YYYY-MM-DD) des (ersten) Termins */
   date: string;
   /** Beginn als HH:MM */
@@ -11,14 +15,24 @@ export interface Appointment {
   durationMinutes: number;
   weekly: boolean;
   /**
-   * Gesetzt, wenn der Termin aus einer erfassten Stunde mit Uhrzeit entstanden ist. Er folgt dann der Stunde
-   * (siehe `withLessonAppointments`) und verschwindet mit ihr.
+   * Gesetzt, wenn der Termin aus einer erfassten Stunde mit Uhrzeit entstanden ist, bei Gruppen aus einer
+   * Gruppenstunde. Er folgt dann der Stunde (siehe `withLessonAppointments`) und verschwindet mit ihr.
    */
   lessonId?: string;
 }
 
+/** ID der Person oder Gruppe, der der Termin gehört; IDs sind eindeutig, beide passen in eine Menge. */
+export function ownerOf(appointment: Appointment): string {
+  return appointment.studentId ?? appointment.groupId ?? '';
+}
+
+/** Termin, der einer erfassten Stunde folgt und deshalb nicht von Hand gelöscht wird */
+export function followsLesson(appointment: Appointment): boolean {
+  return !!appointment.lessonId;
+}
+
 /** Freier Slot, in den sich eine Person eintragen lässt. */
-export type FreeSlot = Omit<Appointment, 'id' | 'studentId'>;
+export type FreeSlot = Omit<Appointment, 'id' | 'studentId' | 'groupId'>;
 
 /** z. B. „Montag, 16. November 2026, 14:45–15:30, jede Woche“ */
 export function slotText(slot: FreeSlot): string {
@@ -86,8 +100,10 @@ export function parseAppointments(data: unknown): Appointment[] {
   if (!Array.isArray(data)) return [];
   return data
     .filter(
-      (a: Partial<Appointment>) =>
-        typeof a?.studentId === 'string' &&
+      (a: Partial<Appointment> & { fromGroupLesson?: boolean }) =>
+        // Termine früherer Gruppenstunden (je Mitglied eine Stunde) entfallen; sie entstehen bei Bedarf neu.
+        !a?.fromGroupLesson &&
+        (typeof a?.studentId === 'string' || typeof a?.groupId === 'string') &&
         typeof a.date === 'string' &&
         /^\d{4}-\d{2}-\d{2}$/.test(a.date) &&
         typeof a.start === 'string' &&
@@ -95,7 +111,7 @@ export function parseAppointments(data: unknown): Appointment[] {
     )
     .map((a: Appointment) => ({
       id: typeof a.id === 'string' ? a.id : newId(),
-      studentId: a.studentId,
+      ...(typeof a.studentId === 'string' ? { studentId: a.studentId } : { groupId: a.groupId }),
       date: a.date,
       start: a.start,
       durationMinutes: Number(a.durationMinutes) > 0 ? Number(a.durationMinutes) : 45,
@@ -106,37 +122,39 @@ export function parseAppointments(data: unknown): Appointment[] {
 
 /**
  * Ergänzt die Termine so, dass jede erfasste Stunde mit Uhrzeit im Kalender steht: Deckt kein anderer Termin der
- * Person Tag und Beginn ab, bekommt die Stunde einen eigenen einmaligen Termin. Dieser folgt Datum und Uhrzeit der
- * Stunde und entfällt, wenn die Stunde gelöscht wird, keine Uhrzeit mehr hat oder ein anderer Termin sie abdeckt.
- * Gibt dieselbe Liste zurück, wenn nichts zu ändern ist.
+ * Person (oder Gruppe) Tag und Beginn ab, bekommt die Stunde einen eigenen einmaligen Termin. Dieser folgt Datum
+ * und Uhrzeit der Stunde und entfällt, wenn die Stunde gelöscht wird, keine Uhrzeit mehr hat oder ein anderer
+ * Termin sie abdeckt. Personen und Gruppen werden getrennt abgeglichen (`kind`); die Termine der anderen Art
+ * bleiben unverändert. Gibt dieselbe Liste zurück, wenn nichts zu ändern ist.
  */
 export function withLessonAppointments(
   appointments: Appointment[],
-  students: Student[],
+  owners: Student[] | Group[],
+  kind: 'student' | 'group',
   defaultDurationMinutes: number,
 ): Appointment[] {
-  const timedLessons = new Map(
-    students.flatMap((student) =>
-      student.lessons.filter((lesson) => lesson.start).map((lesson) => [lesson.id, { student, lesson }] as const),
-    ),
-  );
-  const planned = appointments.filter((appointment) => !appointment.lessonId);
-  const covered = (studentId: string, lesson: Lesson) =>
-    planned.some((a) => a.studentId === studentId && a.start === lesson.start && occursOn(a, lesson.date));
+  const ownerKey = kind === 'student' ? 'studentId' : 'groupId';
+  const isOwnFollower = (a: Appointment) => !!a.lessonId && !!a[ownerKey];
+  const kept = appointments.filter((a) => !isOwnFollower(a));
+  const planned = kept.filter((a) => !a.lessonId);
+  const covered = (owner: string, lesson: Lesson) =>
+    planned.some((a) => ownerOf(a) === owner && a.start === lesson.start && occursOn(a, lesson.date));
 
-  const result = [...planned];
-  for (const [lessonId, { student, lesson }] of timedLessons) {
-    if (covered(student.id, lesson)) continue;
-    const existing = appointments.find((a) => a.lessonId === lessonId);
-    result.push({
-      id: existing?.id ?? `lesson-${lessonId}`,
-      studentId: student.id,
-      date: lesson.date,
-      start: lesson.start!,
-      durationMinutes: lesson.durationMinutes ?? existing?.durationMinutes ?? defaultDurationMinutes,
-      weekly: false,
-      lessonId,
-    });
+  const result = [...kept];
+  for (const owner of owners) {
+    for (const lesson of owner.lessons.filter((l) => l.start)) {
+      if (covered(owner.id, lesson)) continue;
+      const existing = appointments.find((a) => a.lessonId === lesson.id);
+      result.push({
+        id: existing?.id ?? `lesson-${lesson.id}`,
+        [ownerKey]: owner.id,
+        date: lesson.date,
+        start: lesson.start!,
+        durationMinutes: lesson.durationMinutes ?? existing?.durationMinutes ?? defaultDurationMinutes,
+        weekly: false,
+        lessonId: lesson.id,
+      });
+    }
   }
   const unchanged =
     result.length === appointments.length &&

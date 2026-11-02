@@ -7,7 +7,10 @@ import {
   contentFor,
   fillPlaceholders,
   formatLongDate,
+  Group,
+  groupLabel,
   instrumentOf,
+  memberNames,
   teacherOf,
   Lesson,
   Section,
@@ -52,13 +55,36 @@ function pdfColors(theme: Theme): PdfColors {
 @Injectable({ providedIn: 'root' })
 export class PdfExport {
   /** `open` öffnet das PDF in der Android-App direkt; im Browser wird es in beiden Fällen heruntergeladen. */
-  async export(config: FeedbackConfig, students: Student[], fileName: string, action: 'open' | 'share' = 'share'): Promise<void> {
+  export(config: FeedbackConfig, students: Student[], fileName: string, action: 'open' | 'share' = 'share'): Promise<void> {
+    return this.exportRecipients(config, students.map((student) => ({ config, student })), fileName, action);
+  }
+
+  /**
+   * Gruppen-PDF: je Gruppe ein Abschnitt mit den Gruppen-Abschnitten und festen Gruppen-Inhalten. Die Gruppe
+   * wird dafür wie eine Person geschrieben (siehe `groupRecipient`).
+   */
+  exportGroups(
+    config: FeedbackConfig,
+    groups: Group[],
+    students: Student[],
+    fileName: string,
+    action: 'open' | 'share' = 'share',
+  ): Promise<void> {
+    return this.exportRecipients(config, groups.map((group) => groupRecipient(group, students, config)), fileName, action);
+  }
+
+  private async exportRecipients(
+    config: FeedbackConfig,
+    recipients: Recipient[],
+    fileName: string,
+    action: 'open' | 'share',
+  ): Promise<void> {
     // jsPDF ist groß und wird deshalb erst beim ersten Export geladen.
     const { jsPDF } = await import('jspdf');
     const colors = pdfColors(themeFrom(config.themeColor));
     const render = (pageCounts?: number[]) => {
       const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), colors, pageCounts);
-      students.forEach((student) => writeStudent(writer, config, student));
+      recipients.forEach(({ config, student }) => writeStudent(writer, config, student));
       writer.addFooters();
       return writer;
     };
@@ -154,6 +180,57 @@ export interface ScheduleEntry {
   name: string;
   startMinutes: number;
   durationMinutes: number;
+  /** Blocker des Lehrers statt eines Termins */
+  blocked?: boolean;
+}
+
+/** Empfänger eines Abschnitts im PDF: eine Person mit ihrer Konfiguration oder eine Gruppe (siehe `groupRecipient`) */
+interface Recipient {
+  config: FeedbackConfig;
+  student: Student;
+}
+
+/**
+ * Schreibt eine Gruppe wie eine Person: Name ist der Gruppenname, Stunden sind die Gruppenstunden, Abschnitte und
+ * feste Inhalte die der Gruppen. {gruppe} und {mitglieder} werden vorab in allen Texten ersetzt; die übrigen
+ * Platzhalter übernimmt `fillPlaceholders` ({name}/{vorname} ergeben dabei den Gruppennamen).
+ */
+function groupRecipient(group: Group, students: Student[], config: FeedbackConfig): Recipient {
+  const label = groupLabel(group, students);
+  const members = memberNames(group, students);
+  const fill = (text: string) => text.replace(/\{gruppe\}/gi, label).replace(/\{mitglieder\}/gi, members || label);
+  const fillContent = <T extends { text: string }>(content: T): T => ({ ...content, text: fill(content.text) });
+  const fillTexts = (texts: Record<string, string>) =>
+    Object.fromEntries(Object.entries(texts).map(([key, text]) => [key, fill(text)]));
+  const layout = config.pdfLayout;
+  return {
+    config: {
+      ...config,
+      title: fill(config.title),
+      pdfLayout: {
+        ...layout,
+        runningHeader: fill(layout.runningHeader),
+        subtitle: fill(layout.subtitle),
+        footerLeft: fill(layout.footerLeft),
+        footerCenter: fill(layout.footerCenter),
+        footerRight: fill(layout.footerRight),
+      },
+      blocks: config.groupBlocks.map((block) => ({ ...fillContent(block), variants: block.variants.map(fillContent) })),
+      sections: config.groupSections.map((section) => ({
+        ...section,
+        title: fill(section.title),
+        items: section.items.map(fillContent),
+      })),
+    },
+    student: {
+      id: group.id,
+      name: label,
+      instrumentId: null,
+      teacherId: group.teacherId,
+      generalTexts: fillTexts(group.generalTexts),
+      lessons: group.lessons.map((lesson) => ({ ...lesson, texts: fillTexts(lesson.texts) })),
+    },
+  };
 }
 
 function deliver(fileName: string, pdf: Blob, action: 'open' | 'share'): Promise<void> {

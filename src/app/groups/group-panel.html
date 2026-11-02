@@ -1,0 +1,136 @@
+<section class="card">
+  <h2>Gruppe</h2>
+  <button class="full" (click)="store.addLesson(group().id)">+ Neue Gruppenstunde</button>
+  <ul class="list">
+    @for (lesson of lessons(); track lesson.id) {
+      <li [class.selected]="lesson.id === store.selectedLessonId()" (click)="store.selectedLessonId.set(lesson.id)">
+        <span class="grow">
+          {{ formatDate(lesson.date) }}
+          @if (lessonTime(lesson); as time) {
+            <span class="sub">{{ time }}</span>
+          }
+        </span>
+        <span class="badge" title="Einträge">{{ entryCount(lesson) }}</span>
+      </li>
+    } @empty {
+      <li class="empty muted">Noch keine Gruppenstunden.</li>
+    }
+  </ul>
+
+  <div class="settings">
+    <label class="muted" for="group-name">Name (optional)</label>
+    <input
+      id="group-name"
+      type="text"
+      [value]="group().name"
+      [placeholder]="label()"
+      (change)="store.update(group().id, { name: valueOf($event).trim() })"
+    />
+    @if (teachers().length > 1) {
+      <label class="muted" for="group-teacher">Termine im Kalender von</label>
+      <select id="group-teacher" (change)="store.update(group().id, { teacherId: valueOf($event) })">
+        @for (teacher of teachers(); track teacher.id) {
+          <option [value]="teacher.id" [selected]="teacher.id === groupTeacherId()">{{ teacher.name }}</option>
+        }
+      </select>
+    }
+    <span class="muted">Mitglieder</span>
+    <div class="members">
+      @for (entry of candidates(); track entry.teacher.id) {
+        @if (candidates().length > 1) {
+          <span class="member-teacher">{{ entry.teacher.name }}</span>
+        }
+        @for (student of entry.students; track student.id) {
+          <label>
+            <input type="checkbox" [checked]="isMember(student)" (change)="store.toggleMember(group().id, student.id)" />
+            {{ student.name }}
+          </label>
+        }
+      } @empty {
+        <p class="muted">Lege zuerst Personen an.</p>
+      }
+    </div>
+    <button class="danger" (click)="removeGroup()">Gruppe löschen</button>
+  </div>
+</section>
+
+@if (store.selectedLesson(); as lesson) {
+  <section class="card editor">
+    <div class="row editor-head">
+      <h2 class="grow">{{ label() }}</h2>
+      <input type="date" [value]="lesson.date" (change)="setDate(lesson, $event)" aria-label="Datum der Gruppenstunde" />
+      <input
+        type="time"
+        [value]="lesson.start ?? ''"
+        (change)="setStart(lesson, $event)"
+        aria-label="Uhrzeit der Gruppenstunde"
+        title="Uhrzeit (leer lassen, wenn keine)"
+      />
+      <button class="danger" (click)="removeLesson(lesson)">Gruppenstunde löschen</button>
+    </div>
+    <p class="participants muted">
+      Gruppenstunde{{ members() ? ' von ' + members() : '' }}. Sie erscheint im Gruppen-PDF unter
+      <a routerLink="/export">Export &amp; Sicherung</a>, nicht in den PDFs der einzelnen Personen.
+    </p>
+
+    @for (section of config().groupSections; track section.id) {
+      <fieldset>
+        <legend>
+          {{ section.title }}
+          @if (section.scope === 'general') {
+            <span class="scope-badge" title="Erscheint einmal im allgemeinen Teil des Gruppen-PDFs">allgemein</span>
+          }
+        </legend>
+        @if (section.type === 'checklist') {
+          @for (item of section.items; track item.id) {
+            <label class="check">
+              <input
+                type="checkbox"
+                [checked]="isChecked(lesson, section, item.id)"
+                (change)="store.toggleItem(group().id, lesson.id, section.id, item.id)"
+              />
+              <span>{{ item.text }}</span>
+            </label>
+          } @empty {
+            <p class="muted">Für diesen Abschnitt sind keine Textbausteine konfiguriert.</p>
+          }
+          <div class="row add-item">
+            <input
+              #newItem
+              type="text"
+              class="grow"
+              placeholder="Neuer Textbaustein für diesen Abschnitt"
+              aria-label="Neuer Textbaustein"
+              (keydown.enter)="addItem(lesson, section, newItem)"
+            />
+            <button class="secondary" title="Textbaustein zur Konfiguration hinzufügen und hier anhaken" (click)="addItem(lesson, section, newItem)">
+              +
+            </button>
+          </div>
+        } @else if (section.scope === 'general') {
+          <textarea
+            [value]="generalTextOf(section)"
+            (input)="store.setGeneralText(group().id, section.id, valueOf($event))"
+            [placeholder]="placeholderHint"
+          ></textarea>
+          <p class="muted hint">Gilt für alle Gruppenstunden.</p>
+        } @else {
+          <textarea
+            [value]="textOf(lesson, section)"
+            (input)="store.setText(group().id, lesson.id, section.id, valueOf($event))"
+            [placeholder]="placeholderHint"
+          ></textarea>
+        }
+      </fieldset>
+    } @empty {
+      <p class="muted">
+        Es sind noch keine Gruppen-Abschnitte konfiguriert.
+        <a routerLink="/konfiguration">Zur Konfiguration</a>
+      </p>
+    }
+  </section>
+} @else {
+  <section class="card editor placeholder muted">
+    Gruppenstunde auswählen oder mit „+ Neue Gruppenstunde“ anlegen.
+  </section>
+}

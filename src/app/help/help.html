@@ -60,6 +60,27 @@
       Stunde von heute an – oder öffnet sie, wenn es sie schon gibt.
     </li>
   </ul>
+
+  <h3>Gruppen</h3>
+  <ul>
+    <li>
+      Unter den Personen legst du mit <kbd>+ Gruppe</kbd> eine Gruppe an. Der Name ist freiwillig; ohne ihn
+      zeigt die App die Vornamen der Mitglieder. Mitglieder kreuzt du an – auch Personen anderer Lehrer.
+    </li>
+    <li>
+      Gruppentermine stehen im Kalender des Lehrers, den du bei der Gruppe einstellst.
+    </li>
+    <li>
+      <strong>Gruppenstunde:</strong> <kbd>+ Neue Gruppenstunde</kbd> oder ein Klick auf den Gruppentermin legt eine
+      Gruppenstunde an. Sie gehört der Gruppe und nutzt die <em>Gruppen-Abschnitte</em> aus der Konfiguration;
+      mit Uhrzeit steht sie automatisch im Kalender.
+    </li>
+    <li>
+      Gruppenstunden erscheinen im <strong>Gruppen-PDF</strong> unter <a routerLink="/export">Export &amp;
+      Sicherung</a>, nicht in den PDFs der einzelnen Personen. Soll eine Person zusätzlich eigenes Feedback
+      bekommen, legst du bei ihr eine normale Stunde an.
+    </li>
+  </ul>
 </section>
 
 <section class="card">
@@ -73,8 +94,29 @@
       Der Kalender gehört zum Lehrer, der oben rechts ausgewählt ist, und zeigt nur die Termine seiner Personen.
     </li>
     <li>
-      <strong>Termin anlegen:</strong> <kbd>+ Termin</kbd> oben oder <kbd>+</kbd> an einem Tag, dann Person, Datum,
-      Beginn und Dauer wählen.
+      <strong>Termin anlegen:</strong> <kbd>+ Termin</kbd> oben oder <kbd>+</kbd> an einem Tag, dann Person oder
+      Gruppe, Datum, Beginn und Dauer wählen. Gruppentermine haben einen gestrichelten Rand.
+    </li>
+    <li>
+      <strong>Blocker:</strong> Mit <kbd>+ Blocker</kbd> blockierst du Zeit, ohne jemanden einzutragen, z. B. für
+      eine Fortbildung – ganze Tage oder von einer Uhrzeit bis zu einer Uhrzeit, auch über mehrere Tage. Blocker
+      erscheinen schraffiert an jedem betroffenen Tag und im Wochenplan-PDF. „Nächster freier Termin“ und das
+      automatische Einplanen einmaliger Termine lassen blockierte Zeit aus; beim wöchentlichen Einplanen zählen
+      Blocker nicht, damit eine einmalige Abwesenheit keinen Wochentermin verhindert.
+    </li>
+    <li>
+      <strong>Automatisch einplanen:</strong> verteilt die Personen des oben gewählten Lehrers, die noch keinen
+      wöchentlichen Termin haben, auf seine freien Unterrichtszeiten – ab der gewählten Woche, jede Woche. Vorrang
+      hat, möglichst viele Slots zu füllen. Überschneidungen mit Gruppenunterricht bei anderen Lehrern werden nach
+      Möglichkeit vermieden; lässt sich eine nicht vermeiden, zeigt der Vorschlag sie mit ⚠ an. Mitglieder derselben
+      Gruppe plant die App wahlweise <em>zeitnah hintereinander</em> oder <em>gemischt mit anderen</em> ein.
+      Eingetragen wird erst, wenn du den Vorschlag bestätigst.
+    </li>
+    <li>
+      Mit <em>Einmalige Termine in einem Zeitraum</em> (höchstens 31 Tage) füllt die App alle freien Slots im
+      Zeitraum mit einmaligen Terminen; alle Personen des Lehrers sind vorausgewählt und können mehrere Termine
+      bekommen. Nach Möglichkeit hat niemand zwei Termine am selben Tag (vorhandene Termine zählen mit), danach
+      werden Überschneidungen mit Gruppenunterricht vermieden und die Termine gleichmäßig verteilt.
     </li>
     <li>
       Hakst du <strong>„Jede Woche wiederholen“</strong> an, steht der Termin ab diesem Datum in jeder Woche am
@@ -142,6 +184,12 @@
       ein Logo am Ende. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument oder Lehrer austauschen.
     </li>
     <li>
+      <strong>Gruppen-Abschnitte</strong> und <strong>Gruppen-Inhalte</strong> funktionieren genauso, gelten aber für
+      Gruppenstunden und das Gruppen-PDF. Dort gibt es zusätzlich die Platzhalter <code>{{ '{gruppe}' }}</code>
+      (Name der Gruppe) und <code>{{ '{mitglieder}' }}</code> (Vornamen der Mitglieder, z. B. „Anna und Ben“);
+      <code>{{ '{name}' }}</code> und <code>{{ '{vorname}' }}</code> stehen dort für den Gruppennamen.
+    </li>
+    <li>
       <strong>Abschnitte</strong> sind entweder <em>Textbausteine</em> zum Anhaken oder ein <em>Freitextfeld</em>.
       Du legst fest, ob sie bei jeder Stunde oder im allgemeinen Teil erscheinen. Schreibe Bausteine am besten
       als ganze Sätze, zum Beispiel „Du hast gut geübt.“
@@ -186,6 +234,10 @@
       beginnt auf einer neuen Seite.
     </li>
     <li>
+      Gibt es Gruppen, erstellst du darunter das <strong>Gruppen-PDF</strong> für alle Gruppen mit Gruppenstunden im
+      Berichtszeitraum oder für eine Gruppe – mit den Gruppen-Abschnitten und Gruppen-Inhalten.
+    </li>
+    <li>
       Das PDF enthält nur Personen mit mindestens einer Stunde im Berichtszeitraum und nur diese Stunden. Den
       Zeitraum (voreingestellt das aktuelle Schulhalbjahr) legst du unter <a routerLink="/konfiguration">Konfiguration</a>
       → Allgemein fest; er gilt nur auf diesem Gerät.
@@ -197,7 +249,8 @@
     <li>
       <strong>Daten exportieren</strong> lädt ein ZIP mit allen Personen, Stunden, Terminen und der
       Konfiguration herunter: <code>konfiguration.json</code> für alles Gemeinsame und je Lehrer eine Datei
-      <code>lehrer-….json</code> mit seinen Textvarianten, Personen, Stunden und Terminen. Löschst du eine
+      <code>lehrer-….json</code> mit seinen Textvarianten, Personen, Stunden und Terminen (auch denen seiner Gruppen);
+      die Gruppen selbst stehen in <code>gruppen.json</code>. Löschst du eine
       Lehrerdatei, fehlt nach dem Import nur dieser Lehrer. <strong>Daten importieren</strong> stellt eine
       Sicherung (ZIP oder ältere JSON-Datei) wieder her und ersetzt dabei alles, was gerade in der App ist.
     </li>

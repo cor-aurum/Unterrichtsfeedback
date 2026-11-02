@@ -31,7 +31,7 @@ interface Block extends ScheduleEntry {
 export function writeScheduleGrid(doc: jsPDF, theme: Theme, teachers: ScheduleTeacher[], period: SchedulePeriod): void {
   const weeks = weeksOf(period);
   const showWeekend = teachers.some((teacher) =>
-    teacher.days.some((day) => isWeekend(day.date)) || teacher.teachingWindows.some((w) => w.weekday >= 5),
+    teacher.days.some((day) => isWeekend(day.date) && day.entries.some((e) => !e.blocked)) || teacher.teachingWindows.some((w) => w.weekday >= 5),
   );
   let pages = 0;
   for (const teacher of teachers) {
@@ -85,7 +85,11 @@ function writeWeek(
 
   week.forEach((date, i) => {
     const x = left + i * columnWidth;
-    for (const block of withLanes(entriesOn(teacher, date))) {
+    const entries = entriesOn(teacher, date);
+    for (const blocker of entries.filter((e) => e.blocked)) {
+      writeBlocker(doc, blocker, x, columnWidth, y, firstHour, lastHour);
+    }
+    for (const block of withLanes(entries.filter((e) => !e.blocked))) {
       writeBlock(doc, theme, block, x, columnWidth, y);
     }
   });
@@ -155,6 +159,33 @@ function writeBlock(doc: jsPDF, theme: Theme, block: Block, columnX: number, col
   shown.forEach((line, i) => doc.text(fit(doc, line, textWidth), textX, top + 4.4 + i * lineHeight, { baseline: 'top' }));
 }
 
+/** Blocker als graue, schraffierte Fläche über die ganze Spalte, auf den sichtbaren Ausschnitt begrenzt */
+function writeBlocker(
+  doc: jsPDF,
+  entry: ScheduleEntry,
+  x: number,
+  width: number,
+  y: (minutes: number) => number,
+  firstHour: number,
+  lastHour: number,
+): void {
+  const start = Math.max(entry.startMinutes, firstHour * 60);
+  const end = Math.min(entry.startMinutes + entry.durationMinutes, lastHour * 60);
+  if (end <= start) return;
+  const [top, bottom] = [y(start), y(end)];
+  doc.setFillColor('#eef0f2').rect(x, top, width, bottom - top, 'F');
+  doc.setDrawColor('#c9ced4').setLineWidth(0.2);
+  // Schraffur: diagonale Linien, auf die Fläche zugeschnitten
+  for (let offset = -(bottom - top); offset < width; offset += 4) {
+    const x1 = x + Math.max(0, offset);
+    const y1 = top + Math.max(0, -offset);
+    const length = Math.min(width - Math.max(0, offset), bottom - top - Math.max(0, -offset));
+    if (length > 0) doc.line(x1, y1, x1 + length, y1 + length);
+  }
+  doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(MUTED);
+  doc.text(fit(doc, entry.name, width - 3), x + 1.5, top + 1.5, { baseline: 'top' });
+}
+
 function writeFooters(doc: jsPDF): void {
   const total = doc.getNumberOfPages();
   for (let page = 1; page <= total; page++) {
@@ -167,12 +198,13 @@ function writeFooters(doc: jsPDF): void {
 
 /** Ganze Stunden, die alle Termine und Unterrichtszeiten des Lehrers umfassen; mindestens vier Stunden. */
 function hourRange(teacher: ScheduleTeacher): [number, number] {
+  const appointments = teacher.days.flatMap((day) => day.entries.filter((e) => !e.blocked));
   const starts = [
-    ...teacher.days.flatMap((day) => day.entries.map((e) => e.startMinutes)),
+    ...appointments.map((e) => e.startMinutes),
     ...teacher.teachingWindows.map((w) => minutesOf(w.from)),
   ];
   const ends = [
-    ...teacher.days.flatMap((day) => day.entries.map((e) => e.startMinutes + e.durationMinutes)),
+    ...appointments.map((e) => e.startMinutes + e.durationMinutes),
     ...teacher.teachingWindows.map((w) => minutesOf(w.to)),
   ];
   if (starts.length === 0) return [8, 18];

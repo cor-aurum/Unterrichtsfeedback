@@ -5,6 +5,9 @@ import { CalendarStore } from '../calendar/calendar.store';
 import { Clock } from '../calendar/clock';
 import { QuickStart } from '../calendar/quick-start';
 import { ActiveTeacher } from '../active-teacher';
+import { GroupList } from '../groups/group-list';
+import { GroupPanel } from '../groups/group-panel';
+import { GroupsStore } from '../groups.store';
 import { ConfigStore } from '../config.store';
 import { ReportPeriod } from '../report-period';
 import {
@@ -25,12 +28,13 @@ import { sortedLessons, StudentsStore } from '../students.store';
 
 @Component({
   selector: 'app-lessons',
-  imports: [RouterLink, QuickStart],
+  imports: [RouterLink, QuickStart, GroupList, GroupPanel],
   templateUrl: './lessons.html',
   styleUrl: './lessons.scss',
 })
 export class Lessons {
   protected readonly store = inject(StudentsStore);
+  protected readonly groups = inject(GroupsStore);
   private readonly configStore = inject(ConfigStore);
   protected readonly config = this.configStore.config;
   private readonly calendar = inject(CalendarStore);
@@ -57,10 +61,7 @@ export class Lessons {
     if (!student) return null;
     const config = this.config();
     const teacher = teacherOf(student, config);
-    const studentIds = new Set(
-      this.store.students().filter((s) => teacherOf(s, config).id === teacher.id).map((s) => s.id),
-    );
-    return this.calendar.nextFreeSlot(config.calendar, teacher, studentIds, this.clock.now());
+    return this.calendar.nextFreeSlot(config.calendar, teacher, this.groups.calendarOwnerIds(teacher), this.clock.now());
   });
   protected readonly slotText = slotText;
   protected readonly teachers = computed(() => this.config().teachers);
@@ -113,7 +114,8 @@ export class Lessons {
   protected removeStudent(student: Student): void {
     if (confirm(`${student.name} mit allen Unterrichtsstunden und Terminen löschen?`)) {
       this.store.removeStudent(student.id);
-      this.calendar.removeForStudent(student.id);
+      this.calendar.removeForOwner(student.id);
+      this.groups.removeMember(student.id);
     }
   }
 

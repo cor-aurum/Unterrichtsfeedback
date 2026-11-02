@@ -1,6 +1,7 @@
 <app-quick-start />
 
 <div class="layout">
+  <div class="column">
   <section class="card">
     <h2>Personen</h2>
     <div class="new-student">
@@ -47,8 +48,12 @@
       }
     </ul>
   </section>
+  <app-group-list />
+  </div>
 
-  @if (store.selectedStudent(); as student) {
+  @if (groups.selectedGroup(); as group) {
+    <app-group-panel [group]="group" />
+  } @else if (store.selectedStudent(); as student) {
     <section class="card">
       <h2>Stunden</h2>
       <button class="full" (click)="store.addLesson(student.id)">+ Neue Stunde</button>

@@ -2,6 +2,7 @@ import { computed, inject, Injectable } from '@angular/core';
 import { Appointment, parseAppointments } from './calendar/appointments';
 import { CalendarStore } from './calendar/calendar.store';
 import { ConfigStore, parseConfig } from './config.store';
+import { GroupsStore } from './groups.store';
 import { FeedbackConfig, Student, today } from './model';
 import { saveFile } from './save-file';
 import { parseStudents, StudentsStore } from './students.store';
@@ -24,11 +25,14 @@ export class BackupService {
   private readonly configStore = inject(ConfigStore);
   private readonly studentsStore = inject(StudentsStore);
   private readonly calendarStore = inject(CalendarStore);
+  private readonly groupsStore = inject(GroupsStore);
 
   readonly data = computed<AppData>(() => ({
     config: this.configStore.config(),
     students: this.studentsStore.students(),
+    groups: this.groupsStore.groups(),
     appointments: this.calendarStore.appointments(),
+    blockers: this.calendarStore.blockers(),
   }));
   readonly files = computed(() => toSyncFiles(this.data()));
 
@@ -63,8 +67,10 @@ export class BackupService {
     this.apply({
       config: parseConfig(backup.config),
       students: parseStudents(backup.students),
+      groups: [],
       // Ältere Sicherungen ohne Termine lassen die vorhandenen Termine stehen.
       appointments: 'appointments' in backup ? parseAppointments(backup.appointments) : this.calendarStore.appointments(),
+      blockers: this.calendarStore.blockers(),
     });
   }
 
@@ -72,7 +78,9 @@ export class BackupService {
   applySynced(data: AppData): void {
     this.configStore.config.set(data.config);
     this.studentsStore.students.set(data.students);
+    this.groupsStore.groups.set(data.groups);
     this.calendarStore.appointments.set(data.appointments);
+    this.calendarStore.blockers.set(data.blockers);
   }
 
   private apply(data: AppData): void {

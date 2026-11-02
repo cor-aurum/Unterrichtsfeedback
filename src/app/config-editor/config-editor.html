@@ -101,95 +101,7 @@
       }
       @case ('sections') {
         <h2 class="tab-title">Abschnitte</h2>
-
-        @for (section of store.config().sections; track section.id; let first = $first, last = $last) {
-          <section class="card section">
-            <div class="row">
-              <span class="type">{{ section.type === 'checklist' ? 'Textbausteine' : 'Freitext' }}</span>
-              <input
-                type="text"
-                class="grow title"
-                [value]="section.title"
-                (change)="store.renameSection(section.id, valueOf($event))"
-                aria-label="Titel des Abschnitts"
-              />
-              <button class="icon" [disabled]="first" (click)="store.moveSection(section.id, -1)" title="Nach oben">↑</button>
-              <button class="icon" [disabled]="last" (click)="store.moveSection(section.id, 1)" title="Nach unten">↓</button>
-              <button class="icon" (click)="removeSection(section)" title="Abschnitt löschen">✕</button>
-            </div>
-
-            <label class="scope">
-          Im PDF
-          <select
-            (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
-          >
-            <option value="lesson" [selected]="section.scope === 'lesson'">
-              bei der jeweiligen Stunde
-            </option>
-            @if (section.type === 'checklist') {
-              <option value="general" [selected]="section.scope === 'general'">
-                im allgemeinen Teil (einmal, sobald in einer Stunde angehakt)
-              </option>
-            } @else {
-              <option value="general" [selected]="section.scope === 'general'">
-                im allgemeinen Teil (ein Text je Person für alle Stunden)
-              </option>
-            }
-          </select>
-        </label>
-
-
-            @if (section.type === 'checklist') {
-              <ul class="items">
-                @for (item of section.items; track item.id; let firstItem = $first, lastItem = $last) {
-                  <li class="row">
-                    <input
-                      type="text"
-                      class="grow"
-                      [value]="item.text"
-                      (change)="store.updateItem(section.id, item.id, valueOf($event))"
-                      aria-label="Text des Bausteins"
-                    />
-                    <button class="icon" [disabled]="firstItem" (click)="store.moveItem(section.id, item.id, -1)" title="Nach oben">↑</button>
-                    <button class="icon" [disabled]="lastItem" (click)="store.moveItem(section.id, item.id, 1)" title="Nach unten">↓</button>
-                    <button class="icon" (click)="store.removeItem(section.id, item.id)" title="Baustein löschen">✕</button>
-                  </li>
-                }
-              </ul>
-              <div class="row">
-                <input
-                  #newItem
-                  type="text"
-                  class="grow"
-                  placeholder="Neuer Textbaustein"
-                  (keydown.enter)="addItem(section, newItem)"
-                />
-                <button class="secondary" (click)="addItem(section, newItem)">Hinzufügen</button>
-              </div>
-            } @else {
-              <label class="show-title">
-                <input
-                  type="checkbox"
-                  [checked]="section.showTitle"
-                  (change)="store.setShowTitle(section.id, $any($event.target).checked)"
-                />
-                Überschrift im PDF voranstellen („{{ section.title }}: …“)
-              </label>
-              <p class="muted small">
-                @if (section.scope === 'general') {
-                  Beim Erfassen erscheint hier ein Freitextfeld, das für alle Stunden der Person gilt.
-                } @else {
-                  Während der Stunde erscheint hier ein Freitextfeld.
-                }
-              </p>
-            }
-          </section>
-        }
-
-        <div class="row add">
-          <button (click)="store.addSection('checklist')">+ Abschnitt mit Textbausteinen</button>
-          <button (click)="store.addSection('text')">+ Freitextfeld</button>
-        </div>
+        <ng-container *ngTemplateOutlet="sectionsPanel; context: { $implicit: 'single' }" />
       }
       @case ('blocks') {
         <h2 class="tab-title">Feste Inhalte im PDF</h2>
@@ -199,93 +111,23 @@
           sind. Mit Varianten lässt sich ein Inhalt je Instrument oder Lehrer austauschen; ist der Standardinhalt
           leer, erscheint der Block nur bei den Personen, auf die eine Variante passt.
         </p>
-
-        @for (block of store.config().blocks; track block.id; let first = $first, last = $last) {
-          <section class="card section">
-            <div class="row block-head">
-              <span class="type">{{ block.type === 'image' ? 'Bild' : 'Fester Text' }}</span>
-              <select
-                class="grow"
-                [value]="block.position"
-                (change)="store.setBlockPosition(block.id, $any(valueOf($event)))"
-                aria-label="Position im PDF"
-              >
-                <option value="start">Am Anfang</option>
-                <option value="end">Am Ende</option>
-              </select>
-              <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1)" title="Nach oben">↑</button>
-              <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1)" title="Nach unten">↓</button>
-              <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
-            </div>
-
-            @if (block.variants.length > 0) {
-              <p class="variant-label">Standard (für alle anderen Personen)</p>
-            }
-            <app-block-content-editor
-              [type]="block.type"
-              [content]="block"
-              placeholder="z. B. Hallo {vorname},"
-              (contentChange)="store.updateContent({ blockId: block.id, variantId: null }, $event)"
-              (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: null }, $event)"
-              (error)="showError($event)"
-            />
-
-            @for (variant of block.variants; track variant.id) {
-              <div class="variant">
-                <div class="row">
-                  <p class="variant-label grow">Variante für</p>
-                  <button class="icon" (click)="store.removeVariant(block.id, variant.id)" title="Variante löschen">✕</button>
-                </div>
-                <div class="instrument-choice">
-                  <span class="choice-label">Instrumente</span>
-                  @for (instrument of store.config().instruments; track instrument.id) {
-                    <label>
-                      <input
-                        type="checkbox"
-                        [checked]="variant.instrumentIds.includes(instrument.id)"
-                        (change)="store.toggleVariantCondition(block.id, variant.id, 'instrumentIds', instrument.id)"
-                      />
-                      {{ instrument.name }}
-                    </label>
-                  }
-                </div>
-                <div class="instrument-choice">
-                  <span class="choice-label">Lehrer</span>
-                  @for (teacher of store.config().teachers; track teacher.id) {
-                    <label>
-                      <input
-                        type="checkbox"
-                        [checked]="variant.teacherIds.includes(teacher.id)"
-                        (change)="store.toggleVariantCondition(block.id, variant.id, 'teacherIds', teacher.id)"
-                      />
-                      {{ teacher.name }}
-                    </label>
-                  }
-                </div>
-                <p class="muted small variant-rule">
-                  Nichts angehakt heißt „egal“. Sind Instrumente und Lehrer angehakt, müssen beide passen.
-                </p>
-                <app-block-content-editor
-                  [type]="block.type"
-                  [content]="variant"
-                  (contentChange)="store.updateContent({ blockId: block.id, variantId: variant.id }, $event)"
-                  (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: variant.id }, $event)"
-                  (error)="showError($event)"
-                />
-              </div>
-            }
-
-            <button class="secondary add-variant" (click)="store.addVariant(block.id)">
-              + Variante für bestimmte Instrumente oder Lehrer
-            </button>
-          </section>
-        }
-
-        <div class="row add">
-          <button class="secondary" (click)="store.addTextBlock()">+ Fester Text</button>
-          <button class="secondary" (click)="imageInput.click()">+ Bild</button>
-          <input #imageInput type="file" accept="image/*" hidden (change)="addImage(imageInput)" />
-        </div>
+        <ng-container *ngTemplateOutlet="blocksPanel; context: { $implicit: 'single' }" />
+      }
+      @case ('groupSections') {
+        <h2 class="tab-title">Gruppen-Abschnitte</h2>
+        <p class="muted group-hint">
+          Diese Abschnitte erscheinen beim Erfassen einer Gruppenstunde und im Gruppen-PDF. Schreibe die Bausteine
+          am besten in der Ihr-Form. {{ groupPlaceholderHint }}
+        </p>
+        <ng-container *ngTemplateOutlet="sectionsPanel; context: { $implicit: 'group' }" />
+      }
+      @case ('groupBlocks') {
+        <h2 class="tab-title">Feste Inhalte im Gruppen-PDF</h2>
+        <p class="muted group-hint">
+          Wie die festen Inhalte bei Personen, aber für das Gruppen-PDF. Varianten je Lehrer richten sich nach dem
+          Lehrer der Gruppe. {{ groupPlaceholderHint }}
+        </p>
+        <ng-container *ngTemplateOutlet="blocksPanel; context: { $implicit: 'group' }" />
       }
       @case ('layout') {
         <h2 class="tab-title">Kopf- und Fußzeile im PDF</h2>
@@ -537,3 +379,185 @@
     }
   </div>
 </div>
+
+<!-- Abschnitte für Einzelunterricht (kind = 'single') oder Gruppen (kind = 'group') -->
+<ng-template #sectionsPanel let-kind>
+    @for (section of sectionsOf(kind); track section.id; let first = $first, last = $last) {
+      <section class="card section">
+        <div class="row">
+          <span class="type">{{ section.type === 'checklist' ? 'Textbausteine' : 'Freitext' }}</span>
+          <input
+            type="text"
+            class="grow title"
+            [value]="section.title"
+            (change)="store.renameSection(section.id, valueOf($event))"
+            aria-label="Titel des Abschnitts"
+          />
+          <button class="icon" [disabled]="first" (click)="store.moveSection(section.id, -1)" title="Nach oben">↑</button>
+          <button class="icon" [disabled]="last" (click)="store.moveSection(section.id, 1)" title="Nach unten">↓</button>
+          <button class="icon" (click)="removeSection(section)" title="Abschnitt löschen">✕</button>
+        </div>
+
+        <label class="scope">
+      Im PDF
+      <select
+        (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
+      >
+        <option value="lesson" [selected]="section.scope === 'lesson'">
+          bei der jeweiligen Stunde
+        </option>
+        @if (section.type === 'checklist') {
+          <option value="general" [selected]="section.scope === 'general'">
+            im allgemeinen Teil (einmal, sobald in einer Stunde angehakt)
+          </option>
+        } @else {
+          <option value="general" [selected]="section.scope === 'general'">
+            im allgemeinen Teil (ein Text je {{ kind === 'group' ? 'Gruppe' : 'Person' }} für alle Stunden)
+          </option>
+        }
+      </select>
+    </label>
+
+
+        @if (section.type === 'checklist') {
+          <ul class="items">
+            @for (item of section.items; track item.id; let firstItem = $first, lastItem = $last) {
+              <li class="row">
+                <input
+                  type="text"
+                  class="grow"
+                  [value]="item.text"
+                  (change)="store.updateItem(section.id, item.id, valueOf($event))"
+                  aria-label="Text des Bausteins"
+                />
+                <button class="icon" [disabled]="firstItem" (click)="store.moveItem(section.id, item.id, -1)" title="Nach oben">↑</button>
+                <button class="icon" [disabled]="lastItem" (click)="store.moveItem(section.id, item.id, 1)" title="Nach unten">↓</button>
+                <button class="icon" (click)="store.removeItem(section.id, item.id)" title="Baustein löschen">✕</button>
+              </li>
+            }
+          </ul>
+          <div class="row">
+            <input
+              #newItem
+              type="text"
+              class="grow"
+              placeholder="Neuer Textbaustein"
+              (keydown.enter)="addItem(section, newItem)"
+            />
+            <button class="secondary" (click)="addItem(section, newItem)">Hinzufügen</button>
+          </div>
+        } @else {
+          <label class="show-title">
+            <input
+              type="checkbox"
+              [checked]="section.showTitle"
+              (change)="store.setShowTitle(section.id, $any($event.target).checked)"
+            />
+            Überschrift im PDF voranstellen („{{ section.title }}: …“)
+          </label>
+          <p class="muted small">
+            @if (section.scope === 'general') {
+              Beim Erfassen erscheint hier ein Freitextfeld, das für alle Stunden der {{ kind === 'group' ? 'Gruppe' : 'Person' }} gilt.
+            } @else {
+              Während der Stunde erscheint hier ein Freitextfeld.
+            }
+          </p>
+        }
+      </section>
+    }
+
+    <div class="row add">
+      <button (click)="store.addSection('checklist', kind)">+ Abschnitt mit Textbausteinen</button>
+      <button (click)="store.addSection('text', kind)">+ Freitextfeld</button>
+    </div>
+</ng-template>
+
+<!-- Feste Inhalte für Einzelunterricht (kind = 'single') oder Gruppen (kind = 'group') -->
+<ng-template #blocksPanel let-kind>
+    @for (block of blocksOf(kind); track block.id; let first = $first, last = $last) {
+      <section class="card section">
+        <div class="row block-head">
+          <span class="type">{{ block.type === 'image' ? 'Bild' : 'Fester Text' }}</span>
+          <select
+            class="grow"
+            [value]="block.position"
+            (change)="store.setBlockPosition(block.id, $any(valueOf($event)))"
+            aria-label="Position im PDF"
+          >
+            <option value="start">Am Anfang</option>
+            <option value="end">Am Ende</option>
+          </select>
+          <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1)" title="Nach oben">↑</button>
+          <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1)" title="Nach unten">↓</button>
+          <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
+        </div>
+
+        @if (block.variants.length > 0) {
+          <p class="variant-label">Standard (für alle anderen {{ kind === 'group' ? 'Gruppen' : 'Personen' }})</p>
+        }
+        <app-block-content-editor
+          [type]="block.type"
+          [content]="block"
+          [placeholder]="kind === 'group' ? 'z. B. Hallo {mitglieder},' : 'z. B. Hallo {vorname},'"
+          (contentChange)="store.updateContent({ blockId: block.id, variantId: null }, $event)"
+          (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: null }, $event)"
+          (error)="showError($event)"
+        />
+
+        @for (variant of block.variants; track variant.id) {
+          <div class="variant">
+            <div class="row">
+              <p class="variant-label grow">Variante für</p>
+              <button class="icon" (click)="store.removeVariant(block.id, variant.id)" title="Variante löschen">✕</button>
+            </div>
+            <div class="instrument-choice">
+              <span class="choice-label">Instrumente</span>
+              @for (instrument of store.config().instruments; track instrument.id) {
+                <label>
+                  <input
+                    type="checkbox"
+                    [checked]="variant.instrumentIds.includes(instrument.id)"
+                    (change)="store.toggleVariantCondition(block.id, variant.id, 'instrumentIds', instrument.id)"
+                  />
+                  {{ instrument.name }}
+                </label>
+              }
+            </div>
+            <div class="instrument-choice">
+              <span class="choice-label">Lehrer</span>
+              @for (teacher of store.config().teachers; track teacher.id) {
+                <label>
+                  <input
+                    type="checkbox"
+                    [checked]="variant.teacherIds.includes(teacher.id)"
+                    (change)="store.toggleVariantCondition(block.id, variant.id, 'teacherIds', teacher.id)"
+                  />
+                  {{ teacher.name }}
+                </label>
+              }
+            </div>
+            <p class="muted small variant-rule">
+              Nichts angehakt heißt „egal“. Sind Instrumente und Lehrer angehakt, müssen beide passen.
+            </p>
+            <app-block-content-editor
+              [type]="block.type"
+              [content]="variant"
+              (contentChange)="store.updateContent({ blockId: block.id, variantId: variant.id }, $event)"
+              (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: variant.id }, $event)"
+              (error)="showError($event)"
+            />
+          </div>
+        }
+
+        <button class="secondary add-variant" (click)="store.addVariant(block.id)">
+          + Variante für bestimmte Instrumente oder Lehrer
+        </button>
+      </section>
+    }
+
+    <div class="row add">
+      <button class="secondary" (click)="store.addTextBlock(kind)">+ Fester Text</button>
+      <button class="secondary" (click)="imageInput.click()">+ Bild</button>
+      <input #imageInput type="file" accept="image/*" hidden (change)="addImage(imageInput, kind)" />
+    </div>
+</ng-template>

@@ -1,0 +1,23 @@
+<section class="card">
+  <div class="row">
+    <h2 class="grow">Gruppen</h2>
+    <button class="secondary small-button" (click)="add()" title="Gruppe anlegen">+ Gruppe</button>
+  </div>
+  <ul class="list">
+    @for (group of groups(); track group.id) {
+      <li [class.selected]="group.id === store.selectedGroupId()" (click)="store.select(group.id)">
+        <span class="grow">
+          {{ label(group) }}
+          <span class="sub">
+            {{ memberCount(group) }} {{ memberCount(group) === 1 ? 'Person' : 'Personen' }}
+            @if (multipleTeachers()) {
+              · {{ teacherName(group) }}
+            }
+          </span>
+        </span>
+      </li>
+    } @empty {
+      <li class="empty muted">Personen, die zusammen Unterricht haben, fasst du hier zusammen.</li>
+    }
+  </ul>
+</section>
