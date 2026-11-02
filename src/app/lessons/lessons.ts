@@ -1,19 +1,43 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { FreeSlot, slotText } from '../calendar/appointments';
+import { CalendarStore } from '../calendar/calendar.store';
+import { Clock } from '../calendar/clock';
+import { QuickStart } from '../calendar/quick-start';
+import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
-import { defaultInstrument, formatDate, Instrument, instrumentOf, Lesson, PLACEHOLDERS, Student } from '../model';
+import { ReportPeriod } from '../report-period';
+import {
+  defaultInstrument,
+  doubleLessonDates,
+  formatDate,
+  Instrument,
+  instrumentOf,
+  Lesson,
+  lessonTime,
+  PLACEHOLDERS,
+  Student,
+  Teacher,
+  teacherOf,
+} from '../model';
 import { sortedLessons, StudentsStore } from '../students.store';
 
 @Component({
   selector: 'app-lessons',
-  imports: [RouterLink],
+  imports: [RouterLink, QuickStart],
   templateUrl: './lessons.html',
   styleUrl: './lessons.scss',
 })
 export class Lessons {
   protected readonly store = inject(StudentsStore);
   protected readonly config = inject(ConfigStore).config;
+  private readonly calendar = inject(CalendarStore);
+  private readonly clock = inject(Clock);
+  private readonly activeTeacher = inject(ActiveTeacher);
+  protected readonly reportPeriod = inject(ReportPeriod);
+  protected readonly slotMessage = signal<string | null>(null);
   protected readonly formatDate = formatDate;
+  protected readonly lessonTime = lessonTime;
   protected readonly placeholderHint = 'Platzhalter: ' + PLACEHOLDERS.map((p) => p.key).join(', ');
   protected readonly defaultInstrumentId = computed(() => defaultInstrument(this.config()).id);
 
@@ -22,11 +46,36 @@ export class Lessons {
     return student ? sortedLessons(student).reverse() : [];
   });
 
-  /** Nach dem Anlegen steht die Auswahl wieder auf dem Standardinstrument. */
+  /**
+   * Nächster freier Slot im Kalender des Lehrers der ausgewählten Person; aktualisiert sich mit der
+   * Uhrzeit und neuen Terminen.
+   */
+  protected readonly nextSlot = computed(() => {
+    const student = this.store.selectedStudent();
+    if (!student) return null;
+    const config = this.config();
+    const teacher = teacherOf(student, config);
+    const studentIds = new Set(
+      this.store.students().filter((s) => teacherOf(s, config).id === teacher.id).map((s) => s.id),
+    );
+    return this.calendar.nextFreeSlot(config.calendar, teacher, studentIds, this.clock.now());
+  });
+  protected readonly slotText = slotText;
+  protected readonly teachers = computed(() => this.config().teachers);
+
+  constructor() {
+    // Die Meldung zum vergebenen Termin gehört zur Person, bei der sie entstanden ist.
+    effect(() => {
+      this.store.selectedStudentId();
+      this.slotMessage.set(null);
+    });
+  }
+
+  /** Neue Personen gehören zum aktiven Lehrer; danach steht die Auswahl wieder auf dem Standardinstrument. */
   protected addStudent(nameInput: HTMLInputElement, instrumentSelect: HTMLSelectElement): void {
     const name = nameInput.value.trim();
     if (!name) return;
-    this.store.addStudent(name, instrumentSelect.value);
+    this.store.addStudent(name, instrumentSelect.value, this.activeTeacher.teacher().id);
     nameInput.value = '';
     instrumentSelect.value = this.defaultInstrumentId();
   }
@@ -35,8 +84,17 @@ export class Lessons {
     this.store.setInstrument(student.id, (event.target as HTMLSelectElement).value);
   }
 
+  /** Mit dem Lehrer wechseln auch die Termine der Person in dessen Kalender. */
+  protected setTeacher(student: Student, event: Event): void {
+    this.store.setTeacher(student.id, (event.target as HTMLSelectElement).value);
+  }
+
   protected instrumentOf(student: Student): Instrument {
     return instrumentOf(student, this.config());
+  }
+
+  protected teacherOf(student: Student): Teacher {
+    return teacherOf(student, this.config());
   }
 
   protected renameStudent(student: Student, event: Event): void {
@@ -44,9 +102,16 @@ export class Lessons {
     if (name) this.store.renameStudent(student.id, name);
   }
 
+  /** Trägt die Person in den angezeigten nächsten freien Slot ein; danach zeigt der Hinweis den folgenden. */
+  protected placeInSlot(student: Student, slot: FreeSlot): void {
+    this.calendar.add({ ...slot, studentId: student.id });
+    this.slotMessage.set(`Eingetragen: ${slotText(slot)}.`);
+  }
+
   protected removeStudent(student: Student): void {
-    if (confirm(`${student.name} mit allen Unterrichtsstunden löschen?`)) {
+    if (confirm(`${student.name} mit allen Unterrichtsstunden und Terminen löschen?`)) {
       this.store.removeStudent(student.id);
+      this.calendar.removeForStudent(student.id);
     }
   }
 
@@ -59,6 +124,10 @@ export class Lessons {
   protected setDate(student: Student, lesson: Lesson, event: Event): void {
     const date = (event.target as HTMLInputElement).value;
     if (date) this.store.setLessonDate(student.id, lesson.id, date);
+  }
+
+  protected setStart(student: Student, lesson: Lesson, event: Event): void {
+    this.store.setLessonStart(student.id, lesson.id, (event.target as HTMLInputElement).value);
   }
 
   protected setText(student: Student, lesson: Lesson, sectionId: string, event: Event): void {
@@ -81,8 +150,56 @@ export class Lessons {
     return lesson.checked[sectionId]?.includes(itemId) ?? false;
   }
 
-  protected checkedInOtherLesson(student: Student, lesson: Lesson, sectionId: string, itemId: string): boolean {
-    return student.lessons.some((other) => other.id !== lesson.id && this.isChecked(other, sectionId, itemId));
+  /**
+   * Stunden, für die die Haken im allgemeinen Teil gelten: alle im Berichtszeitraum, oder nur die Stunde
+   * selbst, wenn sie außerhalb liegt.
+   */
+  protected generalLessons(student: Student, lesson: Lesson): Lesson[] {
+    return this.reportPeriod.contains(lesson.date) ? this.reportPeriod.lessonsOf(student) : [lesson];
+  }
+
+  protected isGeneralChecked(student: Student, lesson: Lesson, sectionId: string, itemId: string): boolean {
+    return this.generalLessons(student, lesson).some((l) => this.isChecked(l, sectionId, itemId));
+  }
+
+  /** Anhaken gilt für diese Stunde, Entfernen für alle Stunden, für die der allgemeine Teil gilt. */
+  protected toggleGeneralItem(student: Student, lesson: Lesson, sectionId: string, itemId: string): void {
+    if (this.isGeneralChecked(student, lesson, sectionId, itemId)) {
+      const lessonIds = this.generalLessons(student, lesson).map((l) => l.id);
+      this.store.uncheckItem(student.id, lessonIds, sectionId, itemId);
+    } else {
+      this.store.toggleItem(student.id, lesson.id, sectionId, itemId);
+    }
+  }
+
+  /** Daten der anderen Stunden, in denen der Textbaustein angehakt ist, neueste zuerst */
+  protected checkedElsewhere(lessons: Lesson[], lesson: Lesson, sectionId: string, itemId: string): string {
+    return this.otherLessons(lessons, lesson)
+      .filter((other) => this.isChecked(other, sectionId, itemId))
+      .map((other) => formatDate(other.date))
+      .join(', ');
+  }
+
+  /** Freitexte desselben Abschnitts aus den anderen Stunden, neueste zuerst */
+  protected textsElsewhere(student: Student, lesson: Lesson, sectionId: string): { date: string; text: string }[] {
+    return this.otherLessons(student.lessons, lesson)
+      .filter((other) => this.textOf(other, sectionId).trim())
+      .map((other) => ({ date: formatDate(other.date), text: this.textOf(other, sectionId) }));
+  }
+
+  private otherLessons(lessons: Lesson[], lesson: Lesson): Lesson[] {
+    return lessons
+      .filter((other) => other.id !== lesson.id)
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.start ?? '').localeCompare(a.start ?? ''));
+  }
+
+  /** Warnung nur in der App; die Exporte kennen sie nicht. */
+  protected hasDoubleLessons(student: Student): boolean {
+    return doubleLessonDates(student).size > 0;
+  }
+
+  protected isDoubleLesson(student: Student, lesson: Lesson): boolean {
+    return doubleLessonDates(student).has(lesson.date);
   }
 
   protected entryCount(lesson: Lesson): number {

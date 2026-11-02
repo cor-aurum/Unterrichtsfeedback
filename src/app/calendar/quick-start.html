@@ -1,0 +1,22 @@
+@if (entries().length > 0) {
+  <section class="card">
+    <h2>Heute geplant</h2>
+    <div class="entries">
+      @for (entry of entries(); track entry.appointment.id) {
+        <button
+          [class.secondary]="!entry.current"
+          [class.current]="entry.current"
+          (click)="open(entry.appointment)"
+        >
+          <span class="time">
+            {{ entry.time }}
+            @if (entry.current) {
+              · jetzt
+            }
+          </span>
+          <span class="action">{{ entry.hasLesson ? 'Stunde öffnen' : '+ Neue Stunde' }}: {{ entry.student.name }}</span>
+        </button>
+      }
+    </div>
+  </section>
+}

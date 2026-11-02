@@ -29,3 +29,47 @@ h1 {
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
+
+.card p.period {
+  margin: 0 0 0.5rem;
+
+  .muted {
+    margin-left: 0.3rem;
+  }
+}
+
+.actions-row {
+  flex-wrap: wrap;
+}
+
+.card .message {
+  margin-bottom: 0.75rem;
+}
+
+.sync-state {
+  margin: 0 0 0.75rem;
+}
+
+.webdav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+  }
+
+  .small {
+    margin: 0;
+    font-size: 0.85rem;
+  }
+}
+
+.webdav-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}

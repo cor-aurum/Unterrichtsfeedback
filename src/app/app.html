@@ -5,13 +5,33 @@
   </a>
   <nav>
     <a routerLink="/stunden" routerLinkActive="active">Stunden erfassen</a>
+    <a routerLink="/kalender" routerLinkActive="active">Kalender</a>
     <a routerLink="/konfiguration" routerLinkActive="active">Konfiguration</a>
     <a routerLink="/export" routerLinkActive="active">Export &amp; Sicherung</a>
   </nav>
-  <a class="help" routerLink="/hilfe" routerLinkActive="active" title="Hilfe" aria-label="Hilfe">?</a>
+  <div class="tools">
+    @if (teachers().length > 1) {
+      <select
+        class="teacher-select"
+        (change)="activeTeacher.select(valueOf($event))"
+        aria-label="Aktiver Lehrer"
+        title="Lehrer, dessen Kalender und Termine angezeigt werden"
+      >
+        @for (teacher of teachers(); track teacher.id) {
+          <option [value]="teacher.id" [selected]="teacher.id === activeTeacher.teacher().id">{{ teacher.name }}</option>
+        }
+      </select>
+    }
+    <a class="help" routerLink="/hilfe" routerLinkActive="active" title="Hilfe" aria-label="Hilfe">?</a>
+  </div>
 </header>
 
 <main>
+  @if (syncNeedsAttention()) {
+    <p class="message warning sync-banner">
+      Die Synchronisation wartet auf dich. <a routerLink="/export">Zu Export &amp; Sicherung</a>
+    </p>
+  }
   <router-outlet />
 </main>
 

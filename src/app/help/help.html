@@ -27,14 +27,69 @@
   </figure>
   <ul>
     <li><strong>Person anlegen:</strong> Namen eingeben, Instrument wählen und auf <kbd>+</kbd> klicken.</li>
-    <li><strong>Stunde anlegen:</strong> Person anklicken, dann <kbd>+ Neue Stunde</kbd>. Das Datum ist heute, du kannst es ändern.</li>
+    <li>
+      <strong>Stunde anlegen:</strong> Person anklicken, dann <kbd>+ Neue Stunde</kbd>. Das Datum ist heute, du kannst
+      es ändern. Daneben kannst du eine Uhrzeit eintragen; Stunden aus dem Kalender haben sie schon.
+    </li>
     <li><strong>Feedback geben:</strong> Passende Textbausteine anhaken und bei Bedarf etwas in die Freitextfelder schreiben.</li>
     <li><strong>Speichern musst du nicht</strong> – jede Änderung wird sofort übernommen.</li>
     <li>
-      Abschnitte mit dem Kennzeichen <span class="tag">allgemein</span> gelten für die Person insgesamt. Ein dort
-      angehakter Baustein steht im PDF nur einmal, egal in wie vielen Stunden er angehakt ist.
+      Abschnitte mit dem Kennzeichen <span class="tag">allgemein</span> gelten für alle Stunden der Person im
+      Berichtszeitraum (einstellbar unter <a routerLink="/konfiguration">Konfiguration</a> → Allgemein). Ein dort angehakter
+      Baustein steht im PDF nur einmal. Nimmst du den Haken heraus, verschwindet er aus allen Stunden im Zeitraum.
+    </li>
+    <li>
+      <strong>Andere Stunden im Blick:</strong> Unter jedem Textbaustein steht, an welchen Tagen du ihn schon
+      angehakt hast. Unter den Freitextfeldern klappst du die Einträge aus den anderen Stunden auf.
     </li>
     <li>Name und Instrument einer Person änderst du unter ihrer Stundenliste.</li>
+    <li>
+      Hat eine Person an einem Tag mehr als eine Stunde, warnt ein <span class="tag">⚠</span> in der Personen- und
+      Stundenliste sowie ein Hinweis über der Stunde. Die Warnung erscheint in keinem Export.
+    </li>
+    <li>
+      <strong>Schnellauswahl:</strong> Hast du im Kalender Termine eingetragen, stehen die heutigen oben unter
+      „Heute geplant“. Ab 10 Minuten vor Beginn ist der Termin hervorgehoben. Ein Klick legt für die Person die
+      Stunde von heute an – oder öffnet sie, wenn es sie schon gibt.
+    </li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Kalender</h2>
+  <figure>
+    <img src="help/kalender.jpg" alt="Seite „Kalender“ mit einer Woche und den Terminen je Tag" />
+    <figcaption>Eine Woche mit den Terminen je Tag; mit den Pfeilen blätterst du weiter.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      Der Kalender gehört zum Lehrer, der oben rechts ausgewählt ist, und zeigt nur die Termine seiner Personen.
+    </li>
+    <li>
+      <strong>Termin anlegen:</strong> <kbd>+ Termin</kbd> oben oder <kbd>+</kbd> an einem Tag, dann Person, Datum,
+      Beginn und Dauer wählen.
+    </li>
+    <li>
+      Hakst du <strong>„Jede Woche wiederholen“</strong> an, steht der Termin ab diesem Datum in jeder Woche am
+      selben Wochentag. Änderungen und Löschen gelten dann für alle Wiederholungen.
+    </li>
+    <li>
+      Einen Termin änderst oder löschst du, indem du ihn anklickst. Dort öffnet <kbd>Stunde bearbeiten</kbd> die
+      Stunde dieses Tages – oder legt sie mit Datum und Uhrzeit des Termins an. Termine mit erfasster Stunde sind
+      im Kalender mit „Stunde erfasst“ markiert.
+    </li>
+    <li>
+      <strong>Automatisch einplanen:</strong> In der <a routerLink="/konfiguration">Konfiguration</a> legst du
+      bei jedem Lehrer fest, wann er an welchem Tag unterrichtet, und unter „Kalender“, wie lang ein Termin
+      standardmäßig ist und ob neue Termine wöchentlich wiederholt werden. Bei einer Person steht dann der nächste freie Termin; <kbd>Termin eintragen</kbd> trägt sie in
+      diesen Slot ein. Die Unterrichtszeiten werden dafür in Slots der Standardlänge geteilt; ein
+      wöchentlicher Termin muss auch in den folgenden Wochen frei sein.
+    </li>
+    <li>
+      <strong>Termine als PDF-Liste:</strong> Unten wählst du einen Zeitraum (anfangs die angezeigte Woche) und
+      erstellst daraus eine Liste: für jeden Lehrer mit Name und Raum seine Termine, Tag für Tag. Die Liste
+      enthält immer alle Lehrer, nicht nur den oben ausgewählten.
+    </li>
   </ul>
 </section>
 
@@ -42,10 +97,17 @@
   <h2>Konfiguration</h2>
   <figure>
     <img src="help/konfiguration.jpg" alt="Seite „Konfiguration“ mit Überschrift, Themenfarbe und Instrumenten" />
-    <figcaption>Hier richtest du ein, was du im Unterricht anklicken kannst und was im PDF steht.</figcaption>
+    <figcaption>
+      Hier richtest du ein, was du im Unterricht anklicken kannst und was im PDF steht. Links wählst du den
+      Bereich: Allgemein, Abschnitte, Feste Inhalte, Kopf- &amp; Fußzeile, Instrumente, Lehrer und Kalender.
+    </figcaption>
   </figure>
   <ul>
     <li><strong>Überschrift und Themenfarbe</strong> bestimmen, wie das PDF und die App aussehen.</li>
+    <li>
+      Der <strong>Berichtszeitraum</strong> (ebenfalls unter <em>Allgemein</em>) legt fest, welche Personen und Stunden
+      im PDF stehen und für welche Stunden die Haken im allgemeinen Teil gelten.
+    </li>
     <li>
       <strong>Kopf- und Fußzeile:</strong> Hier legst du den Untertitel unter der Überschrift, die Kopfzeile ab
       der zweiten Seite und die Fußzeile fest, zum Beispiel mit deinem Namen links und der Seitenzahl rechts.
@@ -56,8 +118,19 @@
       Anlegen einer Person schon ausgewählt.
     </li>
     <li>
+      <strong>Lehrer:</strong> Jeder Lehrer hat einen Namen, ein Instrument, einen Ort und eigene Unterrichtszeiten.
+      Jede Person gehört zu einem Lehrer; ihre Termine stehen in seinem Kalender. Gibt es mehrere Lehrer, wählst
+      du oben rechts in der Leiste aus, wer gerade arbeitet. Kalender, „Heute geplant“ und neue Personen richten
+      sich danach; den Lehrer einer Person änderst du unter ihrer Stundenliste.
+    </li>
+    <li>
+      <strong>Standardunterrichtszeiten:</strong> Im Tab „Kalender“ legst du eine Vorlage für einen Unterrichtstag
+      fest, z. B. 14:00–18:30. Bei einem Lehrer übernimmt <kbd>Standard</kbd> sie auf einen Wochentag; neue Lehrer
+      bekommen sie von Montag bis Freitag.
+    </li>
+    <li>
       <strong>Feste Inhalte</strong> stehen in jedem PDF, zum Beispiel eine Anrede am Anfang, ein Gruß oder
-      ein Logo am Ende. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument austauschen.
+      ein Logo am Ende. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument oder Lehrer austauschen.
     </li>
     <li>
       <strong>Abschnitte</strong> sind entweder <em>Textbausteine</em> zum Anhaken oder ein <em>Freitextfeld</em>.
@@ -100,17 +173,30 @@
   </figure>
   <ul>
     <li>
-      <strong>PDF erstellen:</strong> Wähle <em>Alle Personen</em> oder <em>Nur eine Person</em> und klicke auf
-      <kbd>PDF erstellen</kbd>. Jede Person beginnt auf einer neuen Seite.
+      <strong>PDF erstellen:</strong> Wähle <em>Alle Personen</em> oder <em>Nur eine Person</em> und klicke auf <kbd>PDF erstellen</kbd>. Jede Person
+      beginnt auf einer neuen Seite.
+    </li>
+    <li>
+      Das PDF enthält nur Personen mit mindestens einer Stunde im Berichtszeitraum und nur diese Stunden. Den
+      Zeitraum (voreingestellt das aktuelle Schulhalbjahr) legst du unter <a routerLink="/konfiguration">Konfiguration</a>
+      → Allgemein fest; er gilt nur auf diesem Gerät.
     </li>
     <li>
       Im PDF stehen nacheinander: die festen Inhalte für den Anfang, der allgemeine Teil, die Stunden als
       Zeitleiste und die festen Inhalte für das Ende. Bei nur einer Stunde steht ihr Datum oben im Kopf.
     </li>
     <li>
-      <strong>Daten exportieren</strong> lädt eine Sicherungsdatei mit allen Personen, Stunden und der
-      Konfiguration herunter. <strong>Daten importieren</strong> stellt eine Sicherung wieder her und ersetzt
-      dabei alles, was gerade in der App ist.
+      <strong>Daten exportieren</strong> lädt ein ZIP mit allen Personen, Stunden, Terminen und der
+      Konfiguration herunter: <code>konfiguration.json</code> für alles Gemeinsame und je Lehrer eine Datei
+      <code>lehrer-….json</code> mit seinen Textvarianten, Personen, Stunden und Terminen. Löschst du eine
+      Lehrerdatei, fehlt nach dem Import nur dieser Lehrer. <strong>Daten importieren</strong> stellt eine
+      Sicherung (ZIP oder ältere JSON-Datei) wieder her und ersetzt dabei alles, was gerade in der App ist.
+    </li>
+    <li>
+      <strong>Synchronisation:</strong> Bei jeder Änderung schreibt die App dieselben Dateien wie im ZIP in einen
+      Ordner – lokal auf dem Gerät oder direkt per WebDAV in deine Nextcloud (siehe unten). Ändert ein anderes
+      Gerät die Dateien, schreibt die App nichts mehr, bis du entscheidest: <kbd>Daten aus dem Ordner laden</kbd>
+      oder <kbd>Ordner überschreiben</kbd>.
     </li>
     <li>
       In der <strong>Android-App</strong> gibt es statt <kbd>PDF erstellen</kbd> zwei Knöpfe:
@@ -119,13 +205,111 @@
       unter „Dateien“ speichern. Auch die Datensicherung läuft in der App über den Teilen-Dialog.
     </li>
   </ul>
+
+  <h3>Auf welchen Geräten funktioniert die Synchronisation?</h3>
+  <div class="table-scroll">
+    <table class="devices">
+      <thead>
+        <tr>
+          <th>Gerät</th>
+          <th>Lokaler Ordner</th>
+          <th>Nextcloud per WebDAV</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Windows, macOS, Linux, ChromeOS mit Chrome, Edge, Opera</td>
+          <td>✅ (bei Brave ggf. erst einschalten)</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>Dieselben Rechner mit Firefox oder Safari</td>
+          <td>❌ Diese Browser erlauben keinen Ordnerzugriff.</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>Android-App</td>
+          <td>✅ ab Android 7.0</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>Android im Browser</td>
+          <td>❌ Chrome bietet den Ordnerzugriff nur auf Rechnern an.</td>
+          <td>✅</td>
+        </tr>
+        <tr>
+          <td>iPhone, iPad im Browser</td>
+          <td>❌ Alle Browser dort nutzen die Technik von Safari.</td>
+          <td>✅</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    WebDAV setzt voraus, dass die Nextcloud Zugriffe von dieser Seite erlaubt (siehe unten). Ohne Synchronisation
+    sicherst du mit <kbd>Daten exportieren</kbd> und <kbd>Daten importieren</kbd> (ZIP).
+  </p>
+
+  <h3>Lokaler Ordner</h3>
+  <ul>
+    <li>
+      <strong>Am Rechner:</strong> Wähle einen eigenen Ordner innerhalb des Sync-Ordners des
+      Nextcloud-Desktop-Clients. Der Client lädt die Dateien hoch. Nach einem Neustart des Browsers musst du den
+      Zugriff einmal erneut erlauben.
+    </li>
+    <li>
+      <strong>In der Android-App, Ordner auf dem Gerät oder der SD-Karte:</strong> funktioniert immer. Den obersten
+      Ordner des internen Speichers und den Ordner „Download“ selbst lässt Android nicht zu, nur einen Unterordner.
+    </li>
+    <li>
+      <strong>In der Android-App, Nextcloud:</strong> funktioniert, wenn die Nextcloud-App im Auswahldialog
+      erscheint und sich dort ein Ordner wählen lässt. Falls nicht: Nutze WebDAV oder wähle einen Ordner auf dem
+      Gerät und lass ihn von der Nextcloud-App über „Automatischer Upload“ hochladen.
+    </li>
+  </ul>
+
+  <h3>Nextcloud per WebDAV</h3>
+  <ol>
+    <li>
+      <strong>Einmalig, durch die Administration der Nextcloud:</strong> Die App <em>WebAppPassword</em> aus dem
+      Nextcloud-App-Store installieren und in den Verwaltungseinstellungen unter <em>WebAppPassword</em> bei den
+      erlaubten Origins für WebDAV eintragen:
+      @if (origin) {
+        <code>{{ origin }}</code> für diese Webseite und
+      } @else {
+        die Adresse der Webseite (nur Protokoll und Server, z. B. <code>https://name.github.io</code>) und
+      }
+      <code>https://localhost</code> für die Android-App. Ohne diesen Schritt blockiert der Browser die Zugriffe.
+    </li>
+    <li>
+      In der Nextcloud unter <em>Persönliche Einstellungen → Sicherheit</em> ein <strong>App-Passwort</strong>
+      anlegen. Nimm nicht dein Login-Passwort.
+    </li>
+    <li>
+      Unter <a routerLink="/export">Export &amp; Sicherung</a> → <kbd>Nextcloud/WebDAV einrichten</kbd> die Adresse
+      der Nextcloud (z. B. <code>https://cloud.example.de</code>), Benutzername, App-Passwort und Ordner eintragen.
+      Andere WebDAV-Server gibst du mit ihrer vollständigen WebDAV-Adresse an.
+    </li>
+  </ol>
+  <p class="muted">
+    Das App-Passwort wird in diesem Browser bzw. in der App auf diesem Gerät gespeichert. Wer das Gerät benutzt,
+    kommt damit an deine Nextcloud-Dateien. Verlierst du das Gerät, widerrufe das App-Passwort in der Nextcloud.
+  </p>
+
+  <h3>Wichtig auf iPhone und iPad</h3>
+  <p>
+    Safari löscht die Daten einer Webseite, wenn sie sieben Tage lang nicht benutzt wurde. Füge die Seite deshalb
+    über <em>Teilen → Zum Home-Bildschirm</em> hinzu und öffne sie von dort – dann gilt diese Regel nicht.
+    Richte zusätzlich die Synchronisation ein oder sichere regelmäßig.
+  </p>
 </section>
 
 <section class="card important">
   <h2>Wo sind meine Daten?</h2>
   <p>
     Deine Daten liegen <strong>nur in diesem Browser bzw. in dieser App auf diesem Gerät</strong>. Sie
-    werden nirgendwohin hochgeladen. Das heißt auch:
+    werden nirgendwohin hochgeladen – außer du richtest die Synchronisation ein; dann liegt eine Kopie in dem
+    gewählten Ordner, z. B. in deiner Nextcloud. Das heißt auch:
   </p>
   <ul>
     <li>Ein anderer Browser, die Android-App oder ein anderes Gerät sieht deine Daten nicht.</li>

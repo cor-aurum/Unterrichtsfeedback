@@ -10,332 +10,530 @@
   <p class="message" [class.error]="msg.error">{{ msg.text }}</p>
 }
 
-<section class="card">
-  <label for="config-title"><strong>Überschrift im PDF</strong></label>
-  <input
-    id="config-title"
-    type="text"
-    class="full"
-    [value]="store.config().title"
-    (change)="store.setTitle(valueOf($event))"
-  />
-
-  <label class="color-label" for="config-color"><strong>Themenfarbe für App und PDF</strong></label>
-  <div class="row color-row">
-    <input
-      id="config-color"
-      type="color"
-      [value]="store.config().themeColor"
-      (input)="store.setThemeColor(valueOf($event))"
-    />
-    <input
-      type="text"
-      class="hex"
-      [value]="store.config().themeColor"
-      (change)="setThemeColorFromText($event)"
-      aria-label="Themenfarbe als Hex-Wert"
-    />
-    <span class="swatch" [style.background]="store.theme().primaryText" title="Text in Themenfarbe"></span>
-    <span class="swatch" [style.background]="store.theme().primaryLight" title="Heller Hintergrund"></span>
-    <button
-      class="secondary"
-      [disabled]="store.config().themeColor === defaultThemeColor"
-      (click)="store.setThemeColor(defaultThemeColor)"
-    >
-      Standardfarbe
-    </button>
-  </div>
-
-  <p class="muted small">
-    Platzhalter für alle Texte im PDF (Überschrift, Kopf- und Fußzeile, feste Texte, Textbausteine und
-    Freitextfelder):
-    @for (placeholder of placeholders; track placeholder.key; let lastPlaceholder = $last) {
-      <code>{{ placeholder.key }}</code> ({{ placeholder.description }}){{ lastPlaceholder ? '' : ',' }}
-    }
-  </p>
-</section>
-
-<h2 class="group-title">Kopf- und Fußzeile im PDF</h2>
-<p class="muted group-hint">
-  Ein leeres Feld blendet die Zeile aus. Alle Platzhalter von oben sind möglich, zum Beispiel
-  <code>{{ '{seite}' }}</code> und <code>{{ '{seiten}' }}</code> für die Seitenzahl.
-</p>
-
-<section class="card layout">
-  <label>
-    Untertitel unter der Überschrift
-    <input
-      type="text"
-      [value]="store.config().pdfLayout.subtitle"
-      (change)="store.setPdfLayout({ subtitle: valueOf($event) })"
-    />
-  </label>
-  <label class="show-title">
-    <input
-      type="checkbox"
-      [checked]="store.config().pdfLayout.showInfoLine"
-      (change)="store.setPdfLayout({ showInfoLine: $any($event.target).checked })"
-    />
-    Infozeile anzeigen (Anzahl der Stunden und Stand, bei nur einer Stunde ihr Datum)
-  </label>
-  <label>
-    Kopfzeile ab der zweiten Seite
-    <input
-      type="text"
-      [value]="store.config().pdfLayout.runningHeader"
-      (change)="store.setPdfLayout({ runningHeader: valueOf($event) })"
-    />
-  </label>
-  <div class="footer-fields">
-    <label>
-      Fußzeile links
-      <input
-        type="text"
-        [value]="store.config().pdfLayout.footerLeft"
-        (change)="store.setPdfLayout({ footerLeft: valueOf($event) })"
-      />
-    </label>
-    <label>
-      Fußzeile Mitte
-      <input
-        type="text"
-        [value]="store.config().pdfLayout.footerCenter"
-        (change)="store.setPdfLayout({ footerCenter: valueOf($event) })"
-      />
-    </label>
-    <label>
-      Fußzeile rechts
-      <input
-        type="text"
-        [value]="store.config().pdfLayout.footerRight"
-        (change)="store.setPdfLayout({ footerRight: valueOf($event) })"
-      />
-    </label>
-  </div>
-  <div>
-    <button class="secondary" [disabled]="isDefaultPdfLayout()" (click)="store.resetPdfLayout()">
-      Standard wiederherstellen
-    </button>
-  </div>
-</section>
-
-<h2 class="group-title">Instrumente</h2>
-<p class="muted group-hint">
-  Stehen beim Anlegen einer Person zur Auswahl, ersetzen den Platzhalter <code>{{ '{instrument}' }}</code>
-  und steuern die Varianten der festen Inhalte. Jede Person hat ein Instrument; das Standardinstrument
-  ist beim Anlegen vorausgewählt.
-</p>
-
-<section class="card">
-  <ul class="instruments">
-    @for (instrument of store.config().instruments; track instrument.id; let first = $first, last = $last) {
-      <li class="row">
-        <label class="default-choice" title="Standardinstrument für neue Personen">
-          <input
-            type="radio"
-            name="default-instrument"
-            [checked]="instrument.id === defaultInstrumentId()"
-            (change)="store.setDefaultInstrument(instrument.id)"
-          />
-          Standard
-        </label>
-        <input
-          type="text"
-          class="grow"
-          [value]="instrument.name"
-          (change)="store.renameInstrument(instrument.id, valueOf($event))"
-          aria-label="Name des Instruments"
-        />
-        <button class="icon" [disabled]="first" (click)="store.moveInstrument(instrument.id, -1)" title="Nach oben">↑</button>
-        <button class="icon" [disabled]="last" (click)="store.moveInstrument(instrument.id, 1)" title="Nach unten">↓</button>
-        <button
-          class="icon"
-          [disabled]="first && last"
-          (click)="removeInstrument(instrument)"
-          [title]="first && last ? 'Mindestens ein Instrument wird gebraucht' : 'Instrument löschen'"
-        >✕</button>
-      </li>
-    }
-  </ul>
-  <div class="row">
-    <input
-      #newInstrument
-      type="text"
-      class="grow"
-      placeholder="Neues Instrument"
-      (keydown.enter)="addInstrument(newInstrument)"
-    />
-    <button class="secondary" (click)="addInstrument(newInstrument)">Hinzufügen</button>
-  </div>
-</section>
-
-<h2 class="group-title">Feste Inhalte im PDF</h2>
-<p class="muted group-hint">
-  Erscheinen bei jeder Person: „Am Anfang“ unter der Überschrift, „Am Ende“ nach der letzten Stunde.
-  Dazwischen, vor den Stunden, steht der allgemeine Teil mit den Abschnitten, die dafür eingestellt
-  sind. Mit Varianten lässt sich ein Inhalt je Instrument austauschen; ist der Standardinhalt leer,
-  erscheint der Block nur bei den Instrumenten der Varianten.
-</p>
-
-@for (block of store.config().blocks; track block.id; let first = $first, last = $last) {
-  <section class="card section">
-    <div class="row block-head">
-      <span class="type">{{ block.type === 'image' ? 'Bild' : 'Fester Text' }}</span>
-      <select
-        class="grow"
-        [value]="block.position"
-        (change)="store.setBlockPosition(block.id, $any(valueOf($event)))"
-        aria-label="Position im PDF"
+<div class="config-layout">
+  <nav class="tabs" role="tablist" aria-label="Bereiche der Konfiguration">
+    @for (entry of tabs; track entry.id) {
+      <button
+        role="tab"
+        class="tab"
+        [class.active]="tab() === entry.id"
+        [attr.aria-selected]="tab() === entry.id"
+        (click)="tab.set(entry.id)"
       >
-        <option value="start">Am Anfang</option>
-        <option value="end">Am Ende</option>
-      </select>
-      <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1)" title="Nach oben">↑</button>
-      <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1)" title="Nach unten">↓</button>
-      <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
-    </div>
-
-    @if (block.variants.length > 0) {
-      <p class="variant-label">Standard (alle anderen Instrumente)</p>
-    }
-    <app-block-content-editor
-      [type]="block.type"
-      [content]="block"
-      placeholder="z. B. Hallo {vorname},"
-      (contentChange)="store.updateContent({ blockId: block.id, variantId: null }, $event)"
-      (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: null }, $event)"
-      (error)="showError($event)"
-    />
-
-    @for (variant of block.variants; track variant.id) {
-      <div class="variant">
-        <div class="row">
-          <p class="variant-label grow">Variante für</p>
-          <button class="icon" (click)="store.removeVariant(block.id, variant.id)" title="Variante löschen">✕</button>
-        </div>
-        <div class="instrument-choice">
-          @for (instrument of store.config().instruments; track instrument.id) {
-            <label>
-              <input
-                type="checkbox"
-                [checked]="variant.instrumentIds.includes(instrument.id)"
-                (change)="store.toggleVariantInstrument(block.id, variant.id, instrument.id)"
-              />
-              {{ instrument.name }}
-            </label>
-          }
-        </div>
-        <app-block-content-editor
-          [type]="block.type"
-          [content]="variant"
-          (contentChange)="store.updateContent({ blockId: block.id, variantId: variant.id }, $event)"
-          (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: variant.id }, $event)"
-          (error)="showError($event)"
-        />
-      </div>
-    }
-
-    @if (store.config().instruments.length > 0) {
-      <button class="secondary add-variant" (click)="store.addVariant(block.id)">
-        + Variante für bestimmte Instrumente
+        {{ entry.label }}
       </button>
     }
-  </section>
-}
+  </nav>
 
-<div class="row add">
-  <button class="secondary" (click)="store.addTextBlock()">+ Fester Text</button>
-  <button class="secondary" (click)="imageInput.click()">+ Bild</button>
-  <input #imageInput type="file" accept="image/*" hidden (change)="addImage(imageInput)" />
-</div>
+  <div class="tab-content" role="tabpanel">
+    @switch (tab()) {
+      @case ('general') {
+        <h2 class="tab-title">Allgemein</h2>
 
-<h2 class="group-title">Abschnitte</h2>
+        <section class="card">
+          <label for="config-title"><strong>Überschrift im PDF</strong></label>
+          <input
+            id="config-title"
+            type="text"
+            class="full"
+            [value]="store.config().title"
+            (change)="store.setTitle(valueOf($event))"
+          />
 
-@for (section of store.config().sections; track section.id; let first = $first, last = $last) {
-  <section class="card section">
-    <div class="row">
-      <span class="type">{{ section.type === 'checklist' ? 'Textbausteine' : 'Freitext' }}</span>
-      <input
-        type="text"
-        class="grow title"
-        [value]="section.title"
-        (change)="store.renameSection(section.id, valueOf($event))"
-        aria-label="Titel des Abschnitts"
-      />
-      <button class="icon" [disabled]="first" (click)="store.moveSection(section.id, -1)" title="Nach oben">↑</button>
-      <button class="icon" [disabled]="last" (click)="store.moveSection(section.id, 1)" title="Nach unten">↓</button>
-      <button class="icon" (click)="removeSection(section)" title="Abschnitt löschen">✕</button>
-    </div>
-
-    <label class="scope">
-  Im PDF
-  <select
-    (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
-  >
-    <option value="lesson" [selected]="section.scope === 'lesson'">
-      bei der jeweiligen Stunde
-    </option>
-    @if (section.type === 'checklist') {
-      <option value="general" [selected]="section.scope === 'general'">
-        im allgemeinen Teil (einmal, sobald in einer Stunde angehakt)
-      </option>
-    } @else {
-      <option value="general" [selected]="section.scope === 'general'">
-        im allgemeinen Teil (ein Text je Person für alle Stunden)
-      </option>
-    }
-  </select>
-</label>
-
-
-    @if (section.type === 'checklist') {
-      <ul class="items">
-        @for (item of section.items; track item.id; let firstItem = $first, lastItem = $last) {
-          <li class="row">
+          <label class="color-label" for="config-color"><strong>Themenfarbe für App und PDF</strong></label>
+          <div class="row color-row">
+            <input
+              id="config-color"
+              type="color"
+              [value]="store.config().themeColor"
+              (input)="store.setThemeColor(valueOf($event))"
+            />
             <input
               type="text"
-              class="grow"
-              [value]="item.text"
-              (change)="store.updateItem(section.id, item.id, valueOf($event))"
-              aria-label="Text des Bausteins"
+              class="hex"
+              [value]="store.config().themeColor"
+              (change)="setThemeColorFromText($event)"
+              aria-label="Themenfarbe als Hex-Wert"
             />
-            <button class="icon" [disabled]="firstItem" (click)="store.moveItem(section.id, item.id, -1)" title="Nach oben">↑</button>
-            <button class="icon" [disabled]="lastItem" (click)="store.moveItem(section.id, item.id, 1)" title="Nach unten">↓</button>
-            <button class="icon" (click)="store.removeItem(section.id, item.id)" title="Baustein löschen">✕</button>
-          </li>
-        }
-      </ul>
-      <div class="row">
-        <input
-          #newItem
-          type="text"
-          class="grow"
-          placeholder="Neuer Textbaustein"
-          (keydown.enter)="addItem(section, newItem)"
-        />
-        <button class="secondary" (click)="addItem(section, newItem)">Hinzufügen</button>
-      </div>
-    } @else {
-      <label class="show-title">
-        <input
-          type="checkbox"
-          [checked]="section.showTitle"
-          (change)="store.setShowTitle(section.id, $any($event.target).checked)"
-        />
-        Überschrift im PDF voranstellen („{{ section.title }}: …“)
-      </label>
-      <p class="muted small">
-        @if (section.scope === 'general') {
-          Beim Erfassen erscheint hier ein Freitextfeld, das für alle Stunden der Person gilt.
-        } @else {
-          Während der Stunde erscheint hier ein Freitextfeld.
-        }
-      </p>
-    }
-  </section>
-}
+            <span class="swatch" [style.background]="store.theme().primaryText" title="Text in Themenfarbe"></span>
+            <span class="swatch" [style.background]="store.theme().primaryLight" title="Heller Hintergrund"></span>
+            <button
+              class="secondary"
+              [disabled]="store.config().themeColor === defaultThemeColor"
+              (click)="store.setThemeColor(defaultThemeColor)"
+            >
+              Standardfarbe
+            </button>
+          </div>
 
-<div class="row add">
-  <button (click)="store.addSection('checklist')">+ Abschnitt mit Textbausteinen</button>
-  <button (click)="store.addSection('text')">+ Freitextfeld</button>
+          <p class="muted small">
+            Platzhalter für alle Texte im PDF (Überschrift, Kopf- und Fußzeile, feste Texte, Textbausteine und
+            Freitextfelder):
+            @for (placeholder of placeholders; track placeholder.key; let lastPlaceholder = $last) {
+              <code>{{ placeholder.key }}</code> ({{ placeholder.description }}){{ lastPlaceholder ? '' : ',' }}
+            }
+          </p>
+        </section>
+
+        <section class="card">
+          <strong>Berichtszeitraum</strong>
+          <div class="period">
+            <input
+              type="date"
+              aria-label="Berichtszeitraum von"
+              [value]="reportPeriod.period().from"
+              (change)="setPeriod('from', $event)"
+            />
+            <span>bis</span>
+            <input
+              type="date"
+              aria-label="Berichtszeitraum bis"
+              [value]="reportPeriod.period().to"
+              (change)="setPeriod('to', $event)"
+            />
+          </div>
+          <p class="muted small">
+            Im PDF stehen nur Personen mit mindestens einer Stunde in diesem Zeitraum und nur diese Stunden. Die
+            Textbausteine im allgemeinen Teil gelten beim Erfassen und im PDF für alle Stunden im Zeitraum.
+            Voreingestellt ist das aktuelle Schulhalbjahr. Der Zeitraum gilt nur auf diesem Gerät.
+          </p>
+        </section>
+      }
+      @case ('sections') {
+        <h2 class="tab-title">Abschnitte</h2>
+
+        @for (section of store.config().sections; track section.id; let first = $first, last = $last) {
+          <section class="card section">
+            <div class="row">
+              <span class="type">{{ section.type === 'checklist' ? 'Textbausteine' : 'Freitext' }}</span>
+              <input
+                type="text"
+                class="grow title"
+                [value]="section.title"
+                (change)="store.renameSection(section.id, valueOf($event))"
+                aria-label="Titel des Abschnitts"
+              />
+              <button class="icon" [disabled]="first" (click)="store.moveSection(section.id, -1)" title="Nach oben">↑</button>
+              <button class="icon" [disabled]="last" (click)="store.moveSection(section.id, 1)" title="Nach unten">↓</button>
+              <button class="icon" (click)="removeSection(section)" title="Abschnitt löschen">✕</button>
+            </div>
+
+            <label class="scope">
+          Im PDF
+          <select
+            (change)="store.setSectionScope(section.id, $any(valueOf($event)))"
+          >
+            <option value="lesson" [selected]="section.scope === 'lesson'">
+              bei der jeweiligen Stunde
+            </option>
+            @if (section.type === 'checklist') {
+              <option value="general" [selected]="section.scope === 'general'">
+                im allgemeinen Teil (einmal, sobald in einer Stunde angehakt)
+              </option>
+            } @else {
+              <option value="general" [selected]="section.scope === 'general'">
+                im allgemeinen Teil (ein Text je Person für alle Stunden)
+              </option>
+            }
+          </select>
+        </label>
+
+
+            @if (section.type === 'checklist') {
+              <ul class="items">
+                @for (item of section.items; track item.id; let firstItem = $first, lastItem = $last) {
+                  <li class="row">
+                    <input
+                      type="text"
+                      class="grow"
+                      [value]="item.text"
+                      (change)="store.updateItem(section.id, item.id, valueOf($event))"
+                      aria-label="Text des Bausteins"
+                    />
+                    <button class="icon" [disabled]="firstItem" (click)="store.moveItem(section.id, item.id, -1)" title="Nach oben">↑</button>
+                    <button class="icon" [disabled]="lastItem" (click)="store.moveItem(section.id, item.id, 1)" title="Nach unten">↓</button>
+                    <button class="icon" (click)="store.removeItem(section.id, item.id)" title="Baustein löschen">✕</button>
+                  </li>
+                }
+              </ul>
+              <div class="row">
+                <input
+                  #newItem
+                  type="text"
+                  class="grow"
+                  placeholder="Neuer Textbaustein"
+                  (keydown.enter)="addItem(section, newItem)"
+                />
+                <button class="secondary" (click)="addItem(section, newItem)">Hinzufügen</button>
+              </div>
+            } @else {
+              <label class="show-title">
+                <input
+                  type="checkbox"
+                  [checked]="section.showTitle"
+                  (change)="store.setShowTitle(section.id, $any($event.target).checked)"
+                />
+                Überschrift im PDF voranstellen („{{ section.title }}: …“)
+              </label>
+              <p class="muted small">
+                @if (section.scope === 'general') {
+                  Beim Erfassen erscheint hier ein Freitextfeld, das für alle Stunden der Person gilt.
+                } @else {
+                  Während der Stunde erscheint hier ein Freitextfeld.
+                }
+              </p>
+            }
+          </section>
+        }
+
+        <div class="row add">
+          <button (click)="store.addSection('checklist')">+ Abschnitt mit Textbausteinen</button>
+          <button (click)="store.addSection('text')">+ Freitextfeld</button>
+        </div>
+      }
+      @case ('blocks') {
+        <h2 class="tab-title">Feste Inhalte im PDF</h2>
+        <p class="muted group-hint">
+          Erscheinen bei jeder Person: „Am Anfang“ unter der Überschrift, „Am Ende“ nach der letzten Stunde.
+          Dazwischen, vor den Stunden, steht der allgemeine Teil mit den Abschnitten, die dafür eingestellt
+          sind. Mit Varianten lässt sich ein Inhalt je Instrument oder Lehrer austauschen; ist der Standardinhalt
+          leer, erscheint der Block nur bei den Personen, auf die eine Variante passt.
+        </p>
+
+        @for (block of store.config().blocks; track block.id; let first = $first, last = $last) {
+          <section class="card section">
+            <div class="row block-head">
+              <span class="type">{{ block.type === 'image' ? 'Bild' : 'Fester Text' }}</span>
+              <select
+                class="grow"
+                [value]="block.position"
+                (change)="store.setBlockPosition(block.id, $any(valueOf($event)))"
+                aria-label="Position im PDF"
+              >
+                <option value="start">Am Anfang</option>
+                <option value="end">Am Ende</option>
+              </select>
+              <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1)" title="Nach oben">↑</button>
+              <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1)" title="Nach unten">↓</button>
+              <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
+            </div>
+
+            @if (block.variants.length > 0) {
+              <p class="variant-label">Standard (für alle anderen Personen)</p>
+            }
+            <app-block-content-editor
+              [type]="block.type"
+              [content]="block"
+              placeholder="z. B. Hallo {vorname},"
+              (contentChange)="store.updateContent({ blockId: block.id, variantId: null }, $event)"
+              (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: null }, $event)"
+              (error)="showError($event)"
+            />
+
+            @for (variant of block.variants; track variant.id) {
+              <div class="variant">
+                <div class="row">
+                  <p class="variant-label grow">Variante für</p>
+                  <button class="icon" (click)="store.removeVariant(block.id, variant.id)" title="Variante löschen">✕</button>
+                </div>
+                <div class="instrument-choice">
+                  <span class="choice-label">Instrumente</span>
+                  @for (instrument of store.config().instruments; track instrument.id) {
+                    <label>
+                      <input
+                        type="checkbox"
+                        [checked]="variant.instrumentIds.includes(instrument.id)"
+                        (change)="store.toggleVariantCondition(block.id, variant.id, 'instrumentIds', instrument.id)"
+                      />
+                      {{ instrument.name }}
+                    </label>
+                  }
+                </div>
+                <div class="instrument-choice">
+                  <span class="choice-label">Lehrer</span>
+                  @for (teacher of store.config().teachers; track teacher.id) {
+                    <label>
+                      <input
+                        type="checkbox"
+                        [checked]="variant.teacherIds.includes(teacher.id)"
+                        (change)="store.toggleVariantCondition(block.id, variant.id, 'teacherIds', teacher.id)"
+                      />
+                      {{ teacher.name }}
+                    </label>
+                  }
+                </div>
+                <p class="muted small variant-rule">
+                  Nichts angehakt heißt „egal“. Sind Instrumente und Lehrer angehakt, müssen beide passen.
+                </p>
+                <app-block-content-editor
+                  [type]="block.type"
+                  [content]="variant"
+                  (contentChange)="store.updateContent({ blockId: block.id, variantId: variant.id }, $event)"
+                  (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: variant.id }, $event)"
+                  (error)="showError($event)"
+                />
+              </div>
+            }
+
+            <button class="secondary add-variant" (click)="store.addVariant(block.id)">
+              + Variante für bestimmte Instrumente oder Lehrer
+            </button>
+          </section>
+        }
+
+        <div class="row add">
+          <button class="secondary" (click)="store.addTextBlock()">+ Fester Text</button>
+          <button class="secondary" (click)="imageInput.click()">+ Bild</button>
+          <input #imageInput type="file" accept="image/*" hidden (change)="addImage(imageInput)" />
+        </div>
+      }
+      @case ('layout') {
+        <h2 class="tab-title">Kopf- und Fußzeile im PDF</h2>
+        <p class="muted group-hint">
+          Ein leeres Feld blendet die Zeile aus. Alle Platzhalter von oben sind möglich, zum Beispiel
+          <code>{{ '{seite}' }}</code> und <code>{{ '{seiten}' }}</code> für die Seitenzahl.
+        </p>
+
+        <section class="card layout">
+          <label>
+            Untertitel unter der Überschrift
+            <input
+              type="text"
+              [value]="store.config().pdfLayout.subtitle"
+              (change)="store.setPdfLayout({ subtitle: valueOf($event) })"
+            />
+          </label>
+          <label class="show-title">
+            <input
+              type="checkbox"
+              [checked]="store.config().pdfLayout.showInfoLine"
+              (change)="store.setPdfLayout({ showInfoLine: $any($event.target).checked })"
+            />
+            Infozeile anzeigen (Anzahl der Stunden und Stand, bei nur einer Stunde ihr Datum)
+          </label>
+          <label>
+            Kopfzeile ab der zweiten Seite
+            <input
+              type="text"
+              [value]="store.config().pdfLayout.runningHeader"
+              (change)="store.setPdfLayout({ runningHeader: valueOf($event) })"
+            />
+          </label>
+          <div class="footer-fields">
+            <label>
+              Fußzeile links
+              <input
+                type="text"
+                [value]="store.config().pdfLayout.footerLeft"
+                (change)="store.setPdfLayout({ footerLeft: valueOf($event) })"
+              />
+            </label>
+            <label>
+              Fußzeile Mitte
+              <input
+                type="text"
+                [value]="store.config().pdfLayout.footerCenter"
+                (change)="store.setPdfLayout({ footerCenter: valueOf($event) })"
+              />
+            </label>
+            <label>
+              Fußzeile rechts
+              <input
+                type="text"
+                [value]="store.config().pdfLayout.footerRight"
+                (change)="store.setPdfLayout({ footerRight: valueOf($event) })"
+              />
+            </label>
+          </div>
+          <div>
+            <button class="secondary" [disabled]="isDefaultPdfLayout()" (click)="store.resetPdfLayout()">
+              Standard wiederherstellen
+            </button>
+          </div>
+        </section>
+      }
+      @case ('instruments') {
+        <h2 class="tab-title">Instrumente</h2>
+        <p class="muted group-hint">
+          Stehen beim Anlegen einer Person zur Auswahl, ersetzen den Platzhalter <code>{{ '{instrument}' }}</code>
+          und steuern die Varianten der festen Inhalte. Jede Person hat ein Instrument; das Standardinstrument
+          ist beim Anlegen vorausgewählt.
+        </p>
+
+        <section class="card">
+          <ul class="instruments">
+            @for (instrument of store.config().instruments; track instrument.id; let first = $first, last = $last) {
+              <li class="row">
+                <label class="default-choice" title="Standardinstrument für neue Personen">
+                  <input
+                    type="radio"
+                    name="default-instrument"
+                    [checked]="instrument.id === defaultInstrumentId()"
+                    (change)="store.setDefaultInstrument(instrument.id)"
+                  />
+                  Standard
+                </label>
+                <input
+                  type="text"
+                  class="grow"
+                  [value]="instrument.name"
+                  (change)="store.renameInstrument(instrument.id, valueOf($event))"
+                  aria-label="Name des Instruments"
+                />
+                <button class="icon" [disabled]="first" (click)="store.moveInstrument(instrument.id, -1)" title="Nach oben">↑</button>
+                <button class="icon" [disabled]="last" (click)="store.moveInstrument(instrument.id, 1)" title="Nach unten">↓</button>
+                <button
+                  class="icon"
+                  [disabled]="first && last"
+                  (click)="removeInstrument(instrument)"
+                  [title]="first && last ? 'Mindestens ein Instrument wird gebraucht' : 'Instrument löschen'"
+                >✕</button>
+              </li>
+            }
+          </ul>
+          <div class="row">
+            <input
+              #newInstrument
+              type="text"
+              class="grow"
+              placeholder="Neues Instrument"
+              (keydown.enter)="addInstrument(newInstrument)"
+            />
+            <button class="secondary" (click)="addInstrument(newInstrument)">Hinzufügen</button>
+          </div>
+        </section>
+      }
+      @case ('teachers') {
+        <h2 class="tab-title">Lehrer</h2>
+        <p class="muted group-hint">
+          Jede Person gehört zu einem Lehrer; dessen Kalender enthält ihre Termine. Platzhalter:
+          <code>{{ '{lehrer}' }}</code>, <code>{{ '{lehrerinstrument}' }}</code>, <code>{{ '{ort}' }}</code>.
+        </p>
+
+        @for (teacher of store.config().teachers; track teacher.id; let first = $first, last = $last) {
+          <section class="card teacher">
+            <div class="row teacher-head">
+              <input
+                type="text"
+                class="grow title"
+                [value]="teacher.name"
+                (change)="setTeacherName(teacher, $event)"
+                aria-label="Name des Lehrers"
+              />
+              <button class="icon" [disabled]="first" (click)="store.moveTeacher(teacher.id, -1)" title="Nach oben">↑</button>
+              <button class="icon" [disabled]="last" (click)="store.moveTeacher(teacher.id, 1)" title="Nach unten">↓</button>
+              <button
+                class="icon"
+                [disabled]="first && last"
+                (click)="removeTeacher(teacher)"
+                [title]="first && last ? 'Mindestens ein Lehrer wird gebraucht' : 'Lehrer löschen'"
+              >✕</button>
+            </div>
+            <div class="teacher-fields">
+              <label>
+                Instrument
+                <select (change)="store.updateTeacher(teacher.id, { instrumentId: valueOf($event) })">
+                  @for (instrument of store.config().instruments; track instrument.id) {
+                    <option [value]="instrument.id" [selected]="instrument.id === teacherInstrumentId(teacher)">
+                      {{ instrument.name }}
+                    </option>
+                  }
+                </select>
+              </label>
+              <label>
+                Ort
+                <input
+                  type="text"
+                  [value]="teacher.location"
+                  (change)="store.updateTeacher(teacher.id, { location: valueOf($event) })"
+                  placeholder="z. B. Raum 3, Musikschule Mitte"
+                />
+              </label>
+            </div>
+
+            <h3>Unterrichtszeiten</h3>
+            @for (day of weekdays; track day.index) {
+              <div class="weekday-row">
+                <span class="weekday">{{ day.name }}</span>
+                <div class="windows">
+                  @for (window of windowsOf(teacher, day.index); track window.id) {
+                    <span class="window">
+                      <input type="time" [value]="window.from" (change)="setWindowTime(teacher, window, 'from', $event)" aria-label="Von" />
+                      –
+                      <input type="time" [value]="window.to" (change)="setWindowTime(teacher, window, 'to', $event)" aria-label="Bis" />
+                      <button class="icon" (click)="store.removeTeachingWindow(teacher.id, window.id)" title="Zeitfenster löschen">✕</button>
+                    </span>
+                  } @empty {
+                    <span class="muted">kein Unterricht</span>
+                  }
+                </div>
+                <button
+                  class="icon"
+                  (click)="store.applyStandardWindows(teacher.id, day.index)"
+                  title="Unterrichtszeiten dieses Tages durch die Standardunterrichtszeiten ersetzen"
+                >
+                  Standard
+                </button>
+                <button class="icon" (click)="store.addTeachingWindow(teacher.id, day.index)" title="Zeitfenster hinzufügen">+</button>
+              </div>
+            }
+          </section>
+        }
+
+        <div class="row add">
+          <input #newTeacher type="text" class="grow" placeholder="Neuer Lehrer" (keydown.enter)="addTeacher(newTeacher)" />
+          <button class="secondary" (click)="addTeacher(newTeacher)">Hinzufügen</button>
+        </div>
+      }
+      @case ('calendar') {
+        <h2 class="tab-title">Kalender</h2>
+        <p class="muted group-hint">
+          Gilt für alle Lehrer. Ihre Unterrichtszeiten legst du im Tab „Lehrer“ fest; sie werden in Slots der
+          Standardlänge geteilt.
+        </p>
+
+        <section class="card calendar-settings">
+          <div class="calendar-defaults">
+            <label class="duration">
+              Standardlänge (Minuten)
+              <input
+                type="number"
+                min="5"
+                step="5"
+                [value]="store.config().calendar.defaultDurationMinutes"
+                (change)="setDefaultDuration($event)"
+              />
+            </label>
+            <label class="show-title">
+              <input
+                type="checkbox"
+                [checked]="store.config().calendar.weeklyByDefault"
+                (change)="store.setCalendarDefaults({ weeklyByDefault: $any($event.target).checked })"
+              />
+              „Jede Woche wiederholen“ bei neuen Terminen angehakt
+            </label>
+          </div>
+
+          <h3>Standardunterrichtszeiten</h3>
+          <p class="muted small">
+            Vorlage für einen Unterrichtstag. Im Tab „Lehrer“ übernimmt <strong>Standard</strong> sie auf einen
+            Wochentag; neue Lehrer bekommen sie von Montag bis Freitag.
+          </p>
+          <div class="standard-windows">
+            @for (window of standardWindows(); track window.id) {
+              <span class="window">
+                <input type="time" [value]="window.from" (change)="setStandardWindowTime(window, 'from', $event)" aria-label="Von" />
+                –
+                <input type="time" [value]="window.to" (change)="setStandardWindowTime(window, 'to', $event)" aria-label="Bis" />
+                <button class="icon" (click)="store.removeStandardWindow(window.id)" title="Zeitfenster löschen">✕</button>
+              </span>
+            } @empty {
+              <span class="muted">Keine Standardunterrichtszeiten</span>
+            }
+            <button class="icon" (click)="store.addStandardWindow()" title="Zeitfenster hinzufügen">+</button>
+          </div>
+        </section>
+      }
+    }
+  </div>
 </div>

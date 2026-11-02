@@ -4,7 +4,10 @@ import {
   BlockImage,
   BlockPosition,
   BlockVariant,
+  CalendarSettings,
   DEFAULT_PDF_LAYOUT,
+  defaultCalendarSettings,
+  defaultTeachingWindows,
   defaultInstrument,
   FeedbackConfig,
   FixedBlock,
@@ -14,6 +17,10 @@ import {
   Section,
   SectionScope,
   SectionType,
+  Teacher,
+  TeachingWindow,
+  TimeWindow,
+  standardWindowsFor,
 } from './model';
 import { saveFile } from './save-file';
 import { storedSignal } from './stored-signal';
@@ -45,6 +52,100 @@ export class ConfigStore {
 
   setThemeColor(color: string): void {
     if (isHexColor(color)) this.mutate((config) => (config.themeColor = color.toLowerCase()));
+  }
+
+  setCalendarDefaults(change: Partial<CalendarSettings>): void {
+    this.mutate((config) => Object.assign(config.calendar, change));
+  }
+
+  addTeacher(name: string): void {
+    this.mutate((config) =>
+      config.teachers.push({
+        id: newId(),
+        name,
+        instrumentId: config.defaultInstrumentId,
+        location: '',
+        teachingWindows: defaultTeachingWindows(config.calendar),
+      }),
+    );
+  }
+
+  updateTeacher(teacherId: string, change: Partial<Pick<Teacher, 'name' | 'instrumentId' | 'location'>>): void {
+    this.mutateTeacher(teacherId, (teacher) => Object.assign(teacher, change));
+  }
+
+  /**
+   * Entfernt den Lehrer auch aus allen Varianten. Personen dieses Lehrers gehören danach zum ersten Lehrer.
+   * Der letzte Lehrer bleibt immer erhalten.
+   */
+  removeTeacher(teacherId: string): void {
+    this.mutate((config) => {
+      if (config.teachers.length <= 1) return;
+      config.teachers = config.teachers.filter((t) => t.id !== teacherId);
+      config.blocks
+        .flatMap((block) => block.variants)
+        .forEach((variant) => (variant.teacherIds = variant.teacherIds.filter((id) => id !== teacherId)));
+    });
+  }
+
+  moveTeacher(teacherId: string, offset: -1 | 1): void {
+    this.mutate((config) => move(config.teachers, teacherId, offset));
+  }
+
+  addTeachingWindow(teacherId: string, weekday: number): void {
+    this.mutateTeacher(teacherId, (teacher) =>
+      teacher.teachingWindows.push({ id: newId(), weekday, from: '14:00', to: '18:00' }),
+    );
+  }
+
+  updateTeachingWindow(teacherId: string, windowId: string, change: Partial<Pick<TeachingWindow, 'from' | 'to'>>): void {
+    this.mutateTeacher(teacherId, (teacher) => {
+      const window = teacher.teachingWindows.find((w) => w.id === windowId);
+      if (window) Object.assign(window, change);
+    });
+  }
+
+  removeTeachingWindow(teacherId: string, windowId: string): void {
+    this.mutateTeacher(
+      teacherId,
+      (teacher) => (teacher.teachingWindows = teacher.teachingWindows.filter((w) => w.id !== windowId)),
+    );
+  }
+
+  /** Ersetzt die Unterrichtszeiten des Lehrers an diesem Wochentag durch die Standardunterrichtszeiten. */
+  applyStandardWindows(teacherId: string, weekday: number): void {
+    this.mutate((config) => {
+      const teacher = config.teachers.find((t) => t.id === teacherId);
+      if (!teacher) return;
+      teacher.teachingWindows = [
+        ...teacher.teachingWindows.filter((w) => w.weekday !== weekday),
+        ...standardWindowsFor(config.calendar, weekday),
+      ];
+    });
+  }
+
+  addStandardWindow(): void {
+    this.mutate((config) => config.calendar.defaultWindows.push({ id: newId(), from: '14:00', to: '18:00' }));
+  }
+
+  updateStandardWindow(windowId: string, change: Partial<Pick<TimeWindow, 'from' | 'to'>>): void {
+    this.mutate((config) => {
+      const window = config.calendar.defaultWindows.find((w) => w.id === windowId);
+      if (window) Object.assign(window, change);
+    });
+  }
+
+  removeStandardWindow(windowId: string): void {
+    this.mutate(
+      (config) => (config.calendar.defaultWindows = config.calendar.defaultWindows.filter((w) => w.id !== windowId)),
+    );
+  }
+
+  private mutateTeacher(teacherId: string, change: (teacher: Teacher) => void): void {
+    this.mutate((config) => {
+      const teacher = config.teachers.find((t) => t.id === teacherId);
+      if (teacher) change(teacher);
+    });
   }
 
   addSection(type: SectionType): void {
@@ -172,20 +273,21 @@ export class ConfigStore {
   }
 
   addVariant(blockId: string): void {
-    this.mutateBlock(blockId, (block) => block.variants.push({ id: newId(), instrumentIds: [], text: '' }));
+    this.mutateBlock(blockId, (block) =>
+      block.variants.push({ id: newId(), instrumentIds: [], teacherIds: [], text: '' }),
+    );
   }
 
   removeVariant(blockId: string, variantId: string): void {
     this.mutateBlock(blockId, (block) => (block.variants = block.variants.filter((v) => v.id !== variantId)));
   }
 
-  toggleVariantInstrument(blockId: string, variantId: string, instrumentId: string): void {
+  /** Hakt ein Instrument (`instrumentIds`) oder einen Lehrer (`teacherIds`) einer Variante an oder ab. */
+  toggleVariantCondition(blockId: string, variantId: string, list: 'instrumentIds' | 'teacherIds', id: string): void {
     this.mutateBlock(blockId, (block) => {
       const variant = block.variants.find((v) => v.id === variantId);
       if (!variant) return;
-      variant.instrumentIds = variant.instrumentIds.includes(instrumentId)
-        ? variant.instrumentIds.filter((id) => id !== instrumentId)
-        : [...variant.instrumentIds, instrumentId];
+      variant[list] = variant[list].includes(id) ? variant[list].filter((x) => x !== id) : [...variant[list], id];
     });
   }
 
@@ -249,12 +351,65 @@ export function parseConfig(data: unknown): FeedbackConfig {
     title: typeof config.title === 'string' ? config.title : 'Unterrichtsfeedback',
     themeColor: isHexColor(config.themeColor) ? config.themeColor : DEFAULT_THEME_COLOR,
     pdfLayout: parsePdfLayout(config.pdfLayout),
+    calendar: parseCalendarSettings(config.calendar),
+    teachers: parseTeachers(config),
     instruments,
     defaultInstrumentId,
     // Ältere Konfigurationen haben noch keine festen Blöcke.
     blocks: Array.isArray(config.blocks) ? config.blocks.map(parseBlock) : [],
     sections: config.sections.map(parseSection),
   };
+}
+
+/** Ältere Konfigurationen haben noch keine Kalender-Einstellungen; dann gilt der Standard. */
+function parseCalendarSettings(data: Partial<CalendarSettings> | undefined): CalendarSettings {
+  if (!data || typeof data !== 'object') return defaultCalendarSettings();
+  return {
+    defaultDurationMinutes: Number(data.defaultDurationMinutes) > 0 ? Number(data.defaultDurationMinutes) : 45,
+    weeklyByDefault: data.weeklyByDefault !== false,
+    // Ältere Konfigurationen haben noch keine Standardunterrichtszeiten.
+    defaultWindows: Array.isArray(data.defaultWindows)
+      ? parseTimeWindows(data.defaultWindows)
+      : defaultCalendarSettings().defaultWindows,
+  };
+}
+
+/**
+ * Es gibt immer mindestens einen Lehrer. Ältere Konfigurationen bekommen einen Lehrer „Lehrkraft“, der die
+ * bisher gemeinsamen Unterrichtszeiten (`calendar.teachingWindows`) übernimmt.
+ */
+function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
+  const teachers = Array.isArray(config.teachers) ? config.teachers.filter((t) => typeof t?.name === 'string') : [];
+  if (teachers.length > 0) {
+    return teachers.map((t: Teacher) => ({
+      id: typeof t.id === 'string' ? t.id : newId(),
+      name: t.name,
+      instrumentId: typeof t.instrumentId === 'string' ? t.instrumentId : null,
+      location: typeof t.location === 'string' ? t.location : '',
+      teachingWindows: parseTeachingWindows(t.teachingWindows),
+    }));
+  }
+  const legacyWindows = (config.calendar as { teachingWindows?: unknown } | undefined)?.teachingWindows;
+  return [{
+    id: newId(),
+    name: 'Lehrkraft',
+    instrumentId: null,
+    location: '',
+    teachingWindows: legacyWindows === undefined ? defaultTeachingWindows() : parseTeachingWindows(legacyWindows),
+  }];
+}
+
+function parseTeachingWindows(data: unknown): TeachingWindow[] {
+  return (Array.isArray(data) ? data : [])
+    .filter((w) => Number.isInteger(w?.weekday) && w.weekday >= 0 && w.weekday <= 6)
+    .flatMap((w) => parseTimeWindows([w]).map((window) => ({ ...window, weekday: w.weekday })));
+}
+
+function parseTimeWindows(data: unknown[]): TimeWindow[] {
+  const time = (value: unknown) => typeof value === 'string' && /^\d{2}:\d{2}$/.test(value);
+  return (data as Partial<TimeWindow>[])
+    .filter((w) => time(w?.from) && time(w?.to))
+    .map((w) => ({ id: typeof w.id === 'string' ? w.id : newId(), from: w.from!, to: w.to! }));
 }
 
 /** Ältere Konfigurationen haben noch keine Kopf- und Fußzeile; fehlende Werte kommen vom Standard. */
@@ -295,6 +450,8 @@ function parseVariant(data: Partial<BlockVariant>): BlockVariant {
   return {
     id: typeof data?.id === 'string' ? data.id : newId(),
     instrumentIds: Array.isArray(data?.instrumentIds) ? data.instrumentIds.filter((id) => typeof id === 'string') : [],
+    // Ältere Varianten kennen nur Instrumente.
+    teacherIds: Array.isArray(data?.teacherIds) ? data.teacherIds.filter((id) => typeof id === 'string') : [],
     ...parseContent(data),
   };
 }
@@ -344,6 +501,10 @@ function defaultConfig(): FeedbackConfig {
     title: 'Dein Feedback zum Unterricht',
     themeColor: DEFAULT_THEME_COLOR,
     pdfLayout: { ...DEFAULT_PDF_LAYOUT },
+    calendar: defaultCalendarSettings(),
+    teachers: [
+      { id: newId(), name: 'Lehrkraft', instrumentId: piano.id, location: '', teachingWindows: defaultTeachingWindows() },
+    ],
     instruments: [piano, guitar, violin],
     defaultInstrumentId: piano.id,
     blocks: [
@@ -363,6 +524,7 @@ function defaultConfig(): FeedbackConfig {
           {
             id: newId(),
             instrumentIds: [guitar.id, violin.id],
+            teacherIds: [],
             text: 'Viel Spaß beim Üben und bis zur nächsten Stunde! Denk daran, deine {instrument} vor dem Spielen zu stimmen.',
           },
         ],

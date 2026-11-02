@@ -63,6 +63,11 @@ h3 {
     background: #fbe9e7;
     color: var(--danger);
   }
+
+  &.warning {
+    background: #fff4d6;
+    color: #7a5200;
+  }
 }
 
 .muted {
@@ -83,6 +88,7 @@ h3 {
 input[type='text'],
 input[type='date'],
 input[type='number'],
+input[type='time'],
 select,
 textarea {
   font: inherit;

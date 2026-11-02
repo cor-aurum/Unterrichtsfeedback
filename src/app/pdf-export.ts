@@ -8,6 +8,7 @@ import {
   fillPlaceholders,
   formatLongDate,
   instrumentOf,
+  teacherOf,
   Lesson,
   Section,
   Student,
@@ -63,9 +64,73 @@ export class PdfExport {
     // {seiten} im Text steht erst fest, wenn alle Seiten geschrieben sind. Deshalb zählt ein erster
     // Durchlauf die Seiten je Person, der zweite schreibt die echten Zahlen.
     const writer = render(render().pageCounts());
-    const pdfName = `${safeFileName(fileName)}_${today()}.pdf`;
-    await (action === 'open' ? openFile(pdfName, writer.toBlob()) : saveFile(pdfName, writer.toBlob()));
+    await deliver(`${safeFileName(fileName)}_${today()}.pdf`, writer.toBlob(), action);
   }
+
+  /** Terminliste aller Lehrer: je Lehrer Name und Raum, darunter je Tag die Termine mit Uhrzeit und Person. */
+  async exportSchedule(
+    config: FeedbackConfig,
+    teachers: ScheduleTeacher[],
+    range: SchedulePeriod,
+    action: 'open' | 'share',
+  ): Promise<void> {
+    const period = range.label;
+    const { jsPDF } = await import('jspdf');
+    const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), pdfColors(themeFrom(config.themeColor)));
+    writer.beginSection(`Unterrichtsplan · ${period}`, { left: 'Unterrichtsplan', center: '', right: 'Seite {seite} von {seiten}' });
+    writer.text('Unterrichtsplan', { size: 22, bold: true });
+    writer.text(period, { size: 14, color: writer.colors.accentText, gapAfter: 0 });
+    writer.gap(10, false);
+    for (const teacher of teachers) {
+      writeScheduleTeacher(writer, teacher);
+    }
+    writer.addFooters();
+    await deliver(`Unterrichtsplan_${range.from}_${range.to}.pdf`, writer.toBlob(), action);
+  }
+}
+
+function writeScheduleTeacher(writer: PdfWriter, teacher: ScheduleTeacher): void {
+  writer.keepTogether(30);
+  writer.text(teacher.name, { size: 15, bold: true, gapAfter: 0.5 });
+  if (teacher.location.trim()) {
+    writer.text(teacher.location, { size: 11, color: writer.colors.muted, gapAfter: 0 });
+  }
+  writer.gap(4, false);
+  if (teacher.days.length === 0) {
+    writer.text('In diesem Zeitraum sind keine Termine geplant.', { size: 11, italic: true, color: writer.colors.muted });
+  }
+  for (const day of teacher.days) {
+    writer.keepTogether(16);
+    writer.text(formatLongDate(day.date), { size: 12, bold: true, color: writer.colors.accentText, gapAfter: 1.5 });
+    for (const entry of day.entries) {
+      writer.text(`${entry.time}    ${entry.name}`, { size: 11, lineHeight: 0.53, indent: 4, gapAfter: 0.5 });
+    }
+    writer.gap(4, false);
+  }
+  writer.gap(6, false);
+}
+
+/** Ein Lehrer in der Terminliste mit seinen Terminen im Zeitraum. */
+export interface ScheduleTeacher {
+  name: string;
+  location: string;
+  days: ScheduleDay[];
+}
+
+/** Zeitraum der Terminliste als ISO-Daten und lesbarer Text, z. B. „2. November – 8. November 2026“ */
+export interface SchedulePeriod {
+  from: string;
+  to: string;
+  label: string;
+}
+
+export interface ScheduleDay {
+  date: string;
+  entries: { time: string; name: string }[];
+}
+
+function deliver(fileName: string, pdf: Blob, action: 'open' | 'share'): Promise<void> {
+  return action === 'open' ? openFile(fileName, pdf) : saveFile(fileName, pdf);
 }
 
 /**
@@ -95,7 +160,7 @@ function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Studen
 
 function writeFixedBlocks(writer: PdfWriter, config: FeedbackConfig, position: BlockPosition, student: Student): void {
   for (const block of config.blocks.filter((b) => b.position === position)) {
-    const content = contentFor(block, instrumentOf(student, config));
+    const content = contentFor(block, instrumentOf(student, config), teacherOf(student, config));
     const text = fillPlaceholders(content.text, student, config).trim();
     if (block.type === 'image' && content.image) {
       // Am Ende soll ein Bild nicht allein auf eine neue Seite rutschen.
@@ -145,7 +210,7 @@ function writeFixedText(writer: PdfWriter, text: string): void {
 function writeHeader(writer: PdfWriter, config: FeedbackConfig, student: Student, lessons: Lesson[]): void {
   const layout = config.pdfLayout;
   const fill = (text: string) => fillPlaceholders(text, student, config).trim();
-  writer.beginStudent(fill(layout.runningHeader), {
+  writer.beginSection(fill(layout.runningHeader), {
     left: fill(layout.footerLeft),
     center: fill(layout.footerCenter),
     right: fill(layout.footerRight),
@@ -185,7 +250,7 @@ function writeParagraphs(writer: PdfWriter, paragraphs: string[], layout: { inde
 function paragraphsOf(config: FeedbackConfig, lesson: Lesson, student: Student): string[] {
   return config.sections
     .filter((section) => section.scope === 'lesson')
-    .map((section) => fillPlaceholders(sentencesOf(section, lesson).join(' '), student, config))
+    .map((section) => fillPlaceholders(sentencesOf(section, lesson).join(' '), student, config, lesson))
     .filter((paragraph) => paragraph.length > 0);
 }
 
@@ -244,7 +309,7 @@ interface FooterTexts {
 
 /**
  * Schreibt Text fortlaufend von oben nach unten und beginnt bei Bedarf eine neue Seite.
- * Jede Person bekommt eigene Seiten mit eigener Seitenzählung in der Fußzeile.
+ * Jeder Abschnitt (z. B. jede Person) beginnt auf einer neuen Seite und hat eine eigene Seitenzählung.
  *
  * {seite} und {seiten} ersetzt der Writer selbst, Zeile für Zeile, weil erst beim Schreiben feststeht,
  * auf welcher Seite eine Zeile landet. Die Seitenanzahl kommt aus einem vorherigen Durchlauf
@@ -268,7 +333,7 @@ class PdfWriter {
   }
 
   /** `footer` darf noch {seite} und {seiten} enthalten. */
-  beginStudent(runningHeader: string, footer: FooterTexts): void {
+  beginSection(runningHeader: string, footer: FooterTexts): void {
     if (this.students.length > 0) this.doc.addPage();
     this.students.push({ footer, firstPage: this.doc.getNumberOfPages() });
     this.runningHeader = runningHeader;

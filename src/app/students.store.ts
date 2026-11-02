@@ -1,5 +1,5 @@
 import { computed, Injectable } from '@angular/core';
-import { Lesson, newId, Student, today } from './model';
+import { Lesson, lessonAt, newId, Student, today } from './model';
 import { storedSignal } from './stored-signal';
 
 @Injectable({ providedIn: 'root' })
@@ -18,14 +18,18 @@ export class StudentsStore {
     this.selectedStudent()?.lessons.find((l) => l.id === this.selectedLessonId()),
   );
 
-  addStudent(name: string, instrumentId: string | null): void {
-    const student: Student = { id: newId(), name, instrumentId, generalTexts: {}, lessons: [] };
+  addStudent(name: string, instrumentId: string | null, teacherId: string | null): void {
+    const student: Student = { id: newId(), name, instrumentId, teacherId, generalTexts: {}, lessons: [] };
     this.students.update((students) => [...students, student]);
     this.selectStudent(student.id);
   }
 
   renameStudent(studentId: string, name: string): void {
     this.mutateStudent(studentId, (student) => (student.name = name));
+  }
+
+  setTeacher(studentId: string, teacherId: string): void {
+    this.mutateStudent(studentId, (student) => (student.teacherId = teacherId));
   }
 
   setInstrument(studentId: string, instrumentId: string | null): void {
@@ -49,6 +53,37 @@ export class StudentsStore {
     this.selectedLessonId.set(lesson.id);
   }
 
+  /**
+   * Wählt die Person und ihre Stunde zu einem Termin aus; gibt es noch keine, wird sie mit Datum und
+   * Uhrzeit des Termins angelegt. Einer vorhandenen Stunde ohne Uhrzeit wird die des Termins ergänzt.
+   */
+  openLesson(studentId: string, date: string, time?: { start: string; durationMinutes: number }): void {
+    this.selectStudent(studentId);
+    const student = this.selectedStudent();
+    if (!student) return;
+    const existing = lessonAt(student, date, time?.start);
+    if (existing) {
+      if (time && !existing.start) this.mutateLesson(studentId, existing.id, (lesson) => Object.assign(lesson, time));
+      this.selectedLessonId.set(existing.id);
+      return;
+    }
+    const lesson: Lesson = { id: newId(), date, ...time, checked: {}, texts: {} };
+    this.mutateStudent(studentId, (s) => s.lessons.push(lesson));
+    this.selectedLessonId.set(lesson.id);
+  }
+
+  /** Ohne `start` hat die Stunde keine Uhrzeit mehr; die Länge gilt nur zusammen mit dem Beginn. */
+  setLessonStart(studentId: string, lessonId: string, start: string): void {
+    this.mutateLesson(studentId, lessonId, (lesson) => {
+      if (start) {
+        lesson.start = start;
+      } else {
+        delete lesson.start;
+        delete lesson.durationMinutes;
+      }
+    });
+  }
+
   removeLesson(studentId: string, lessonId: string): void {
     this.mutateStudent(studentId, (student) => (student.lessons = student.lessons.filter((l) => l.id !== lessonId)));
     if (this.selectedLessonId() === lessonId) this.selectedLessonId.set(null);
@@ -64,6 +99,15 @@ export class StudentsStore {
       lesson.checked[sectionId] = checked.includes(itemId)
         ? checked.filter((id) => id !== itemId)
         : [...checked, itemId];
+    });
+  }
+
+  /** Entfernt einen Textbaustein aus mehreren Stunden, z. B. aus allen im Berichtszeitraum. */
+  uncheckItem(studentId: string, lessonIds: string[], sectionId: string, itemId: string): void {
+    this.mutateStudent(studentId, (student) => {
+      for (const lesson of student.lessons.filter((l) => lessonIds.includes(l.id))) {
+        lesson.checked[sectionId] = (lesson.checked[sectionId] ?? []).filter((id) => id !== itemId);
+      }
     });
   }
 
@@ -106,6 +150,7 @@ export function parseStudents(data: unknown): Student[] {
       id: typeof student.id === 'string' ? student.id : newId(),
       name: student.name,
       instrumentId: typeof student.instrumentId === 'string' ? student.instrumentId : null,
+      teacherId: typeof student.teacherId === 'string' ? student.teacherId : null,
       // Ältere Daten haben noch keine allgemeinen Freitexte.
       generalTexts: isRecord(student.generalTexts) ? student.generalTexts : {},
       lessons: student.lessons.map(parseLesson),
@@ -117,9 +162,13 @@ function parseLesson(lesson: Partial<Lesson>): Lesson {
   if (typeof lesson?.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(lesson.date)) {
     throw new Error('Eine Unterrichtsstunde hat kein gültiges Datum.');
   }
+  const start = typeof lesson.start === 'string' && /^\d{2}:\d{2}$/.test(lesson.start) ? lesson.start : undefined;
+  const durationMinutes = start && Number(lesson.durationMinutes) > 0 ? Number(lesson.durationMinutes) : undefined;
   return {
     id: typeof lesson.id === 'string' ? lesson.id : newId(),
     date: lesson.date,
+    ...(start ? { start } : {}),
+    ...(durationMinutes ? { durationMinutes } : {}),
     checked: isRecord(lesson.checked) ? lesson.checked : {},
     texts: isRecord(lesson.texts) ? lesson.texts : {},
   };
@@ -130,5 +179,7 @@ function isRecord<T>(value: Record<string, T> | undefined): value is Record<stri
 }
 
 export function sortedLessons(student: Student): Lesson[] {
-  return [...student.lessons].sort((a, b) => a.date.localeCompare(b.date));
+  return [...student.lessons].sort(
+    (a, b) => a.date.localeCompare(b.date) || (a.start ?? '').localeCompare(b.start ?? ''),
+  );
 }

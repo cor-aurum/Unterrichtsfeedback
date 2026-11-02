@@ -127,6 +127,30 @@ fieldset {
   font-weight: normal;
 }
 
+.lesson-time {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: normal;
+  color: var(--muted);
+}
+
+.next-slot {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+
+  span {
+    display: block;
+  }
+}
+
+.slot-message {
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  background: var(--primary-light);
+  font-size: 0.85rem;
+}
+
 .field-hint {
   margin: 0.3rem 0 0;
   font-size: 0.8rem;
@@ -149,4 +173,40 @@ fieldset {
   @media (max-width: 900px) {
     grid-column: auto;
   }
+}
+
+.period-hint {
+  margin: 0 0 0.4rem;
+}
+
+/* Freitexte aus anderen Stunden zum Nachlesen */
+.earlier {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+
+  summary {
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  p {
+    margin: 0.35rem 0 0;
+    white-space: pre-line;
+  }
+}
+
+.earlier-date {
+  margin-right: 0.3rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Zwei Stunden am selben Tag; nur in der App, nicht im Export */
+.double-warning {
+  color: #b07400;
+  font-weight: normal;
+}
+
+.editor .message.warning {
+  margin-bottom: 0.75rem;
 }

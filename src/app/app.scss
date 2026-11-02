@@ -68,19 +68,39 @@
     }
   }
 
+  .tools {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+  }
+
+  // Die Leiste hat Schrift in --on-primary; die Auswahl selbst ist hell und braucht dunkle Schrift.
+  .teacher-select {
+    max-width: 11rem;
+    padding: 0.3rem 0.5rem;
+    border: none;
+    background: white;
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+
   .help {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 2rem;
     height: 2rem;
-    margin-left: auto;
     padding: 0;
     border: 2px solid var(--on-primary);
     border-radius: 50%;
     font-weight: 700;
     line-height: 1;
   }
+}
+
+.sync-banner {
+  margin-bottom: 1rem;
 }
 
 main {

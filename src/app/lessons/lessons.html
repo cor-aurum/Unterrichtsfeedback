@@ -1,3 +1,5 @@
+<app-quick-start />
+
 <div class="layout">
   <section class="card">
     <h2>Personen</h2>
@@ -28,8 +30,16 @@
         >
           <span class="grow">
             {{ student.name }}
-            <span class="instrument">{{ instrumentOf(student).name }}</span>
+            <span class="instrument">
+              {{ instrumentOf(student).name }}
+              @if (teachers().length > 1) {
+                · {{ teacherOf(student).name }}
+              }
+            </span>
           </span>
+          @if (hasDoubleLessons(student)) {
+            <span class="double-warning" title="Mindestens zwei Stunden am selben Tag">⚠</span>
+          }
           <span class="badge" title="Unterrichtsstunden">{{ student.lessons.length }}</span>
         </li>
       } @empty {
@@ -48,7 +58,15 @@
             [class.selected]="lesson.id === store.selectedLessonId()"
             (click)="store.selectedLessonId.set(lesson.id)"
           >
-            <span class="grow">{{ formatDate(lesson.date) }}</span>
+            <span class="grow">
+              {{ formatDate(lesson.date) }}
+              @if (lessonTime(lesson); as time) {
+                <span class="lesson-time">{{ time }}</span>
+              }
+            </span>
+            @if (isDoubleLesson(student, lesson)) {
+              <span class="double-warning" title="An diesem Tag ist noch eine Stunde eingetragen">⚠</span>
+            }
             <span class="badge" title="Einträge">{{ entryCount(lesson) }}</span>
           </li>
         } @empty {
@@ -72,6 +90,29 @@
             </option>
           }
         </select>
+        @if (teachers().length > 1) {
+          <label class="muted" for="student-teacher">Lehrer</label>
+          <select id="student-teacher" (change)="setTeacher(student, $event)">
+            @for (teacher of teachers(); track teacher.id) {
+              <option [value]="teacher.id" [selected]="teacher.id === teacherOf(student).id">{{ teacher.name }}</option>
+            }
+          </select>
+        }
+        @if (slotMessage(); as text) {
+          <p class="slot-message">{{ text }}</p>
+        }
+        @if (nextSlot(); as slot) {
+          <p class="next-slot">
+            <span class="muted">Nächster freier Termin</span>
+            {{ slotText(slot) }}
+          </p>
+          <button class="secondary" (click)="placeInSlot(student, slot)">Termin eintragen</button>
+        } @else {
+          <p class="next-slot muted">
+            Kein freier Termin in den nächsten 8 Wochen. Unterrichtszeiten legst du unter
+            <a routerLink="/konfiguration">Konfiguration</a> → Kalender fest.
+          </p>
+        }
         <button class="danger" (click)="removeStudent(student)">Person löschen</button>
       </div>
     </section>
@@ -86,8 +127,22 @@
             (change)="setDate(student, lesson, $event)"
             aria-label="Datum der Stunde"
           />
+          <input
+            type="time"
+            [value]="lesson.start ?? ''"
+            (change)="setStart(student, lesson, $event)"
+            aria-label="Uhrzeit der Stunde"
+            title="Uhrzeit (leer lassen, wenn keine)"
+          />
           <button class="danger" (click)="removeLesson(student, lesson)">Stunde löschen</button>
         </div>
+
+        @if (isDoubleLesson(student, lesson)) {
+          <p class="message warning">
+            ⚠ {{ student.name }} hat am {{ formatDate(lesson.date) }} mehr als eine Stunde eingetragen. Prüfe, ob eine
+            davon doppelt ist oder ein falsches Datum hat.
+          </p>
+        }
 
         @for (section of config().sections; track section.id) {
           <fieldset>
@@ -97,7 +152,33 @@
                 <span class="scope-badge" title="Erscheint einmal im allgemeinen Teil des PDFs">allgemein</span>
               }
             </legend>
-            @if (section.type === 'checklist') {
+            @if (section.type === 'checklist' && section.scope === 'general') {
+              <p class="muted field-hint period-hint">
+                @if (reportPeriod.contains(lesson.date)) {
+                  Gilt für alle Stunden im Zeitraum {{ reportPeriod.label() }}. Entfernen nimmt den Haken aus all
+                  diesen Stunden.
+                } @else {
+                  Diese Stunde liegt außerhalb des Zeitraums {{ reportPeriod.label() }}; die Haken gelten nur für sie.
+                }
+              </p>
+              @for (item of section.items; track item.id) {
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    [checked]="isGeneralChecked(student, lesson, section.id, item.id)"
+                    (change)="toggleGeneralItem(student, lesson, section.id, item.id)"
+                  />
+                  <span>
+                    {{ item.text }}
+                    @if (checkedElsewhere(generalLessons(student, lesson), lesson, section.id, item.id); as dates) {
+                      <span class="other-lesson">angehakt am {{ dates }}</span>
+                    }
+                  </span>
+                </label>
+              } @empty {
+                <p class="muted">Für diesen Abschnitt sind keine Textbausteine konfiguriert.</p>
+              }
+            } @else if (section.type === 'checklist') {
               @for (item of section.items; track item.id) {
                 <label class="check">
                   <input
@@ -107,8 +188,8 @@
                   />
                   <span>
                     {{ item.text }}
-                    @if (section.scope === 'general' && checkedInOtherLesson(student, lesson, section.id, item.id)) {
-                      <span class="other-lesson">schon in einer anderen Stunde angehakt</span>
+                    @if (checkedElsewhere(student.lessons, lesson, section.id, item.id); as dates) {
+                      <span class="other-lesson">auch am {{ dates }}</span>
                     }
                   </span>
                 </label>
@@ -128,6 +209,16 @@
                 (input)="setText(student, lesson, section.id, $event)"
                 [placeholder]="placeholderHint"
               ></textarea>
+              @if (textsElsewhere(student, lesson, section.id); as entries) {
+                @if (entries.length > 0) {
+                  <details class="earlier">
+                    <summary>Einträge aus anderen Stunden ({{ entries.length }})</summary>
+                    @for (entry of entries; track $index) {
+                      <p><span class="earlier-date">{{ entry.date }}</span> {{ entry.text }}</p>
+                    }
+                  </details>
+                }
+              }
             }
           </fieldset>
         } @empty {

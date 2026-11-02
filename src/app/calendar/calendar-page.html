@@ -1,0 +1,132 @@
+<div class="row head">
+  <h1 class="grow">Kalender <span class="teacher-name">{{ teacher().name }}</span></h1>
+  <button [disabled]="students().length === 0" (click)="newAppointment()">+ Termin</button>
+</div>
+
+@if (students().length === 0) {
+  <p class="card muted">
+    {{ teacher().name }} hat noch keine Personen. Lege sie unter <a routerLink="/stunden">Stunden erfassen</a> an
+    (oder ordne sie dort diesem Lehrer zu), dann kannst du ihnen Termine geben.
+  </p>
+}
+
+@if (message(); as text) {
+  <p class="message error">{{ text }}</p>
+}
+
+@if (draft(); as d) {
+  <section class="card form">
+    <h2>{{ d.id ? 'Termin bearbeiten' : 'Neuer Termin' }}</h2>
+    <div class="fields">
+      <label>
+        Person
+        <select (change)="setDraft({ studentId: valueOf($event) })">
+          @for (student of students(); track student.id) {
+            <option [value]="student.id" [selected]="student.id === d.studentId">{{ student.name }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        {{ d.weekly ? 'Erster Termin' : 'Datum' }}
+        <input type="date" [value]="d.date" (change)="setDraft({ date: valueOf($event) })" />
+      </label>
+      <label>
+        Beginn
+        <input type="time" [value]="d.start" (change)="setDraft({ start: valueOf($event) })" />
+      </label>
+      <label>
+        Dauer (Minuten)
+        <input
+          type="number"
+          min="5"
+          step="5"
+          [value]="d.durationMinutes"
+          (change)="setDraft({ durationMinutes: numberOf($event) })"
+        />
+      </label>
+    </div>
+    <label class="weekly">
+      <input type="checkbox" [checked]="d.weekly" (change)="setDraft({ weekly: $any($event.target).checked })" />
+      Jede Woche wiederholen
+    </label>
+    @if (d.id && d.weekly) {
+      <p class="muted small">Änderungen und Löschen gelten für alle Wiederholungen dieses Termins.</p>
+    }
+    <div class="row actions">
+      <button (click)="save()">Speichern</button>
+      <button class="secondary" (click)="draft.set(null)">Abbrechen</button>
+      <span class="grow"></span>
+      @if (d.id) {
+        <button class="danger" (click)="remove()">Löschen</button>
+      }
+    </div>
+    @if (openedOccurrence(); as occurrence) {
+      <div class="row lesson-link">
+        <span class="grow muted">Unterricht am {{ formatDate(occurrence.date) }}</span>
+        <button class="secondary" (click)="openLesson(occurrence)">
+          {{ lessonOf(occurrence) ? 'Stunde bearbeiten' : 'Stunde anlegen' }}
+        </button>
+      </div>
+    }
+  </section>
+}
+
+<div class="row week-nav">
+  <button class="icon" (click)="moveWeek(-1)" title="Vorherige Woche" aria-label="Vorherige Woche">‹</button>
+  <strong class="grow">{{ weekLabel() }}</strong>
+  <button class="secondary" (click)="showToday()">Heute</button>
+  <button class="icon" (click)="moveWeek(1)" title="Nächste Woche" aria-label="Nächste Woche">›</button>
+</div>
+
+<div class="week">
+  @for (day of week(); track day.date) {
+    <section class="card day" [class.today]="day.date === today">
+      <div class="row day-head">
+        <h3 class="grow">{{ day.label }}</h3>
+        @if (students().length > 0) {
+          <button class="icon" (click)="newAppointment(day.date)" title="Termin an diesem Tag" aria-label="Termin an diesem Tag">+</button>
+        }
+      </div>
+      @for (occurrence of day.occurrences; track occurrence.appointment.id) {
+        @if (studentOf(occurrence.appointment); as student) {
+          <button class="appointment" (click)="edit(occurrence)">
+            <span class="time">{{ occurrence.appointment.start }}–{{ endTime(occurrence.appointment) }}</span>
+            <span class="name">{{ student.name }}</span>
+            <span class="detail">
+              {{ instrumentName(student) }}
+              @if (occurrence.appointment.weekly) {
+                · wöchentlich
+              }
+              @if (hasLesson(student, occurrence)) {
+                · Stunde erfasst
+              }
+            </span>
+          </button>
+        }
+      } @empty {
+        <p class="muted empty">Keine Termine</p>
+      }
+    </section>
+  }
+</div>
+
+<section class="card">
+  <h2>Termine aller Lehrer als PDF-Liste</h2>
+  <div class="row period">
+    <label>
+      Von
+      <input type="date" [value]="pdfFrom()" (change)="pdfFrom.set(valueOf($event))" />
+    </label>
+    <label>
+      Bis
+      <input type="date" [value]="pdfTo()" (change)="pdfTo.set(valueOf($event))" />
+    </label>
+    <span class="grow"></span>
+    @if (nativeApp) {
+      <button class="secondary" (click)="exportPdf('share')">PDF teilen</button>
+      <button (click)="exportPdf('open')">PDF öffnen</button>
+    } @else {
+      <button (click)="exportPdf('share')">PDF erstellen</button>
+    }
+  </div>
+</section>

@@ -1,12 +1,18 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { BackupService } from '../backup';
+import { FolderSync } from '../sync/folder-sync';
+import { WebDavSettings } from '../sync/sync-folder';
 import { ConfigStore } from '../config.store';
 import { PdfExport } from '../pdf-export';
+import { ReportPeriod } from '../report-period';
 import { isNativeApp } from '../save-file';
 import { StudentsStore } from '../students.store';
+import { Student } from '../model';
 
 type Scope = 'all' | 'single';
+
+const EMPTY_WEBDAV: WebDavSettings = { url: '', user: '', password: '', folder: 'Unterrichtsfeedback' };
 
 @Component({
   selector: 'app-export-page',
@@ -20,15 +26,28 @@ export class ExportPage {
   protected readonly store = inject(StudentsStore);
   protected readonly nativeApp = isNativeApp;
   protected readonly backup = inject(BackupService);
+  protected readonly sync = inject(FolderSync);
+  protected readonly webDavFormOpen = signal(false);
+  protected readonly webDavError = signal<string | null>(null);
+  protected readonly connecting = signal(false);
+  protected readonly webDav = signal<WebDavSettings>(EMPTY_WEBDAV);
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
+  protected readonly reportPeriod = inject(ReportPeriod);
 
   protected readonly scope = signal<Scope>('all');
   protected readonly studentId = signal<string | null>(this.store.selectedStudentId());
 
+  /** Personen mit mindestens einer Stunde im Berichtszeitraum, jeweils nur mit diesen Stunden */
+  protected readonly studentsInPeriod = computed(() =>
+    this.store
+      .sortedStudents()
+      .map((student) => ({ ...student, lessons: this.reportPeriod.lessonsOf(student) }))
+      .filter((student) => student.lessons.length > 0),
+  );
   protected readonly studentsToExport = computed(() =>
     this.scope() === 'all'
-      ? this.store.sortedStudents()
-      : this.store.sortedStudents().filter((s) => s.id === this.studentId()),
+      ? this.studentsInPeriod()
+      : this.studentsInPeriod().filter((s) => s.id === this.studentId()),
   );
   protected readonly lessonCount = computed(() =>
     this.studentsToExport().reduce((sum, student) => sum + student.lessons.length, 0),
@@ -36,6 +55,10 @@ export class ExportPage {
 
   protected setScope(event: Event): void {
     this.scope.set((event.target as HTMLInputElement).value as Scope);
+  }
+
+  protected lessonsInPeriod(student: Student): number {
+    return this.reportPeriod.lessonsOf(student).length;
   }
 
   protected selectStudent(event: Event): void {
@@ -50,13 +73,53 @@ export class ExportPage {
       return;
     }
     try {
-      this.backup.importFromJson(await file.text());
+      await this.backup.importFile(file);
       this.studentId.set(null);
       this.message.set({ text: `Daten aus „${file.name}“ importiert.`, error: false });
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
       this.message.set({ text: `Import fehlgeschlagen: ${reason}`, error: true });
     }
+  }
+
+  protected async loadFromFolder(): Promise<void> {
+    if (confirm('Alle Personen, Stunden und die Konfiguration auf diesem Gerät werden durch den Ordnerinhalt ersetzt. Fortfahren?')) {
+      await this.sync.loadFromFolder();
+    }
+  }
+
+  protected async overwriteFolder(): Promise<void> {
+    if (confirm('Die Dateien im Ordner werden durch die Daten auf diesem Gerät ersetzt. Fortfahren?')) {
+      await this.sync.overwriteFolder();
+    }
+  }
+
+  protected openWebDavForm(): void {
+    this.webDav.set(this.sync.webDavSettings() ?? EMPTY_WEBDAV);
+    this.webDavError.set(null);
+    this.webDavFormOpen.set(true);
+  }
+
+  protected async connectWebDav(event: Event): Promise<void> {
+    event.preventDefault();
+    const form = new FormData(event.target as HTMLFormElement);
+    const value = (key: string) => String(form.get(key) ?? '').trim();
+    const settings = { url: value('url'), user: value('user'), password: value('password'), folder: value('folder') };
+    this.webDav.set(settings);
+    this.connecting.set(true);
+    this.webDavError.set(null);
+    try {
+      await this.sync.connectWebDav(settings);
+      this.webDavFormOpen.set(false);
+    } catch (e) {
+      this.webDavError.set(e instanceof Error ? e.message : String(e));
+    } finally {
+      this.connecting.set(false);
+    }
+  }
+
+  protected disconnectFolder(): void {
+    if (confirm('Ordner-Synchronisation beenden? Die Dateien im Ordner bleiben erhalten.')) this.sync.disconnect();
   }
 
   protected exportPdf(action: 'open' | 'share'): void {

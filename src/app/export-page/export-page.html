@@ -7,9 +7,17 @@
       Noch keine Personen erfasst. <a routerLink="/stunden">Stunden erfassen</a>
     </p>
   } @else {
+    <p class="period">
+      Berichtszeitraum: <strong>{{ reportPeriod.label() }}</strong>
+      <span class="muted">(ändern unter <a routerLink="/konfiguration">Konfiguration</a> → Allgemein)</span>
+    </p>
+
     <label class="option">
       <input type="radio" name="scope" value="all" [checked]="scope() === 'all'" (change)="setScope($event)" />
-      <span class="grow">Alle Personen ({{ store.students().length }}), jede Person beginnt auf einer neuen Seite</span>
+      <span class="grow">
+        Alle Personen mit Stunden im Zeitraum ({{ studentsInPeriod().length }}), jede Person beginnt auf einer neuen
+        Seite
+      </span>
     </label>
 
     <label class="option">
@@ -19,7 +27,7 @@
         <option value="" disabled [selected]="!studentId()">Bitte wählen</option>
         @for (student of store.sortedStudents(); track student.id) {
           <option [value]="student.id" [selected]="student.id === studentId()">
-            {{ student.name }} ({{ student.lessons.length }})
+            {{ student.name }} ({{ lessonsInPeriod(student) }})
           </option>
         }
       </select>
@@ -44,8 +52,10 @@
 <section class="card">
   <h2>Datensicherung</h2>
   <p class="muted">
-    Die Sicherung enthält alle Personen und Unterrichtsstunden sowie die Konfiguration. Beim Import
-    werden die Daten in diesem Browser vollständig ersetzt.
+    Die Sicherung ist ein ZIP mit der allgemeinen Konfiguration (<code>konfiguration.json</code>) und einer Datei je
+    Lehrer (<code>lehrer-….json</code>) mit seinen Textvarianten, Personen, Stunden und Terminen. Fehlt beim Import
+    eine Lehrerdatei, fehlt nur dieser Lehrer. Beim Import werden die Daten auf diesem Gerät vollständig ersetzt;
+    ältere Sicherungen als JSON lassen sich weiterhin importieren.
   </p>
 
   @if (message(); as msg) {
@@ -55,6 +65,114 @@
   <div class="row">
     <button (click)="backup.exportToFile()">Daten exportieren</button>
     <button class="secondary" (click)="backupInput.click()">Daten importieren</button>
-    <input #backupInput type="file" accept=".json,application/json" hidden (change)="importBackup(backupInput)" />
+    <input #backupInput type="file" accept=".zip,.json,application/zip,application/json" hidden (change)="importBackup(backupInput)" />
   </div>
+</section>
+
+<section class="card">
+  <h2>Synchronisation</h2>
+  <p class="muted">
+    Bei jeder Änderung schreibt die App dieselben Dateien wie in der Sicherung in einen Ordner:
+    @if (sync.localFoldersSupported) {
+      @if (nativeApp) {
+        in einen Ordner auf dem Gerät, z. B. der Nextcloud-App, oder
+      } @else {
+        in einen eigenen Ordner auf diesem Rechner, z. B. im Nextcloud-Sync-Ordner, oder
+      }
+    }
+    direkt per WebDAV in deine Nextcloud. Für WebDAV muss die Nextcloud Zugriffe von dieser Seite erlauben,
+    siehe <a routerLink="/hilfe">Hilfe</a>.
+  </p>
+
+  @if (webDavFormOpen()) {
+    <form class="webdav" (submit)="connectWebDav($event)">
+      <label>
+        Nextcloud- oder WebDAV-Adresse
+        <input name="url" type="url" required placeholder="https://cloud.example.de" [value]="webDav().url" />
+      </label>
+      <div class="webdav-row">
+        <label>
+          Benutzername
+          <input name="user" type="text" required autocomplete="username" [value]="webDav().user" />
+        </label>
+        <label>
+          App-Passwort
+          <input name="password" type="password" required autocomplete="current-password" [value]="webDav().password" />
+        </label>
+      </div>
+      <label>
+        Ordner
+        <input name="folder" type="text" placeholder="Unterrichtsfeedback" [value]="webDav().folder" />
+      </label>
+      <p class="muted small">
+        Lege das App-Passwort in der Nextcloud unter Einstellungen → Sicherheit an, nicht dein Login-Passwort. Es
+        wird auf diesem Gerät gespeichert; du kannst es in der Nextcloud jederzeit widerrufen. Gibt es den Ordner
+        noch nicht, wird er angelegt.
+      </p>
+      @if (webDavError(); as error) {
+        <p class="message error">{{ error }}</p>
+      }
+      <div class="row actions-row">
+        <button type="submit" [disabled]="connecting()">{{ connecting() ? 'Verbinde …' : 'Verbinden' }}</button>
+        <button type="button" class="secondary" (click)="webDavFormOpen.set(false)">Abbrechen</button>
+      </div>
+    </form>
+  } @else {
+    @switch (sync.status()) {
+      @case ('off') {
+        <div class="row actions-row">
+          @if (sync.localFoldersSupported) {
+            <button (click)="sync.connect()">Ordner wählen</button>
+          }
+          <button [class.secondary]="sync.localFoldersSupported" (click)="openWebDavForm()">
+            Nextcloud/WebDAV einrichten
+          </button>
+        </div>
+      }
+      @case ('reconnect') {
+        <p class="message warning">
+          Der Zugriff auf „{{ sync.folderName() }}“ muss erneut erlaubt werden.
+        </p>
+        <div class="row actions-row">
+          <button (click)="sync.reconnect()">Zugriff erlauben</button>
+          <button class="secondary" (click)="disconnectFolder()">Synchronisation beenden</button>
+        </div>
+      }
+      @case ('changed') {
+        <p class="message warning">
+          Die Dateien in „{{ sync.folderName() }}“ wurden außerhalb dieser App geändert, z. B. auf einem anderen
+          Gerät. Bis du entscheidest, wird nichts geschrieben.
+        </p>
+        <div class="row actions-row">
+          <button (click)="loadFromFolder()">Daten aus dem Ordner laden</button>
+          <button class="secondary" (click)="overwriteFolder()">Ordner überschreiben</button>
+          <button class="secondary" (click)="disconnectFolder()">Synchronisation beenden</button>
+        </div>
+      }
+      @default {
+        @if (sync.status() === 'error') {
+          <p class="message error">Synchronisation fehlgeschlagen: {{ sync.error() }}</p>
+        } @else {
+          <p class="sync-state">
+            ✓ Synchronisiert mit „{{ sync.folderName() }}“
+            @if (sync.lastWrite(); as time) {
+              <span class="muted">(zuletzt {{ time.toLocaleTimeString('de-DE') }})</span>
+            }
+          </p>
+        }
+        <div class="row actions-row">
+          @if (sync.status() === 'error') {
+            <button (click)="sync.overwriteFolder()">Erneut versuchen</button>
+          }
+          <button class="secondary" (click)="loadFromFolder()">Daten aus dem Ordner laden</button>
+          @if (sync.webDavSettings()) {
+            <button class="secondary" (click)="openWebDavForm()">Zugangsdaten ändern</button>
+          } @else {
+            <button class="secondary" (click)="sync.connect()">Anderen Ordner wählen</button>
+          }
+          <button class="secondary" (click)="disconnectFolder()">Synchronisation beenden</button>
+        </div>
+      }
+    }
+  }
 </section>
