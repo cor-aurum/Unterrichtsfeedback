@@ -84,6 +84,19 @@ export class StudentsStore {
     });
   }
 
+  /** Aus dem Kalender: Datum, Beginn und Dauer der Stunde ändern sich mit ihrem Termin. */
+  setLessonTime(
+    studentId: string,
+    lessonId: string,
+    time: { date: string; start: string; durationMinutes: number },
+  ): void {
+    this.mutateLesson(studentId, lessonId, (lesson) => Object.assign(lesson, {
+      date: time.date,
+      start: time.start,
+      durationMinutes: time.durationMinutes,
+    }));
+  }
+
   removeLesson(studentId: string, lessonId: string): void {
     this.mutateStudent(studentId, (student) => (student.lessons = student.lessons.filter((l) => l.id !== lessonId)));
     if (this.selectedLessonId() === lessonId) this.selectedLessonId.set(null);

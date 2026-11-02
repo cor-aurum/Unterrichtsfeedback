@@ -143,8 +143,12 @@ export class CalendarPage {
       this.message.set('Bitte Person, Datum, Beginn und Dauer angeben.');
       return;
     }
-    const { id, ...appointment } = draft;
-    if (id) {
+    const { id, lessonId, ...appointment } = draft;
+    if (lessonId && !appointment.weekly) {
+      // Der Termin gehört zu einer erfassten Stunde: Die Stunde bekommt Datum, Uhrzeit und Dauer, der Termin folgt.
+      this.studentsStore.setLessonTime(appointment.studentId, lessonId, appointment);
+    } else if (id) {
+      // Wird aus dem Termin einer Stunde ein wöchentlicher, ist er ein gewöhnlicher Termin, der die Stunde abdeckt.
       this.calendar.update(id, appointment);
     } else {
       this.calendar.add(appointment);

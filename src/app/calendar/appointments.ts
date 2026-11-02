@@ -1,4 +1,4 @@
-import { formatLongDate, newId } from '../model';
+import { formatLongDate, Lesson, newId, Student } from '../model';
 
 /** Geplanter Unterricht einer Person. Mit `weekly` wiederholt er sich ab `date` jede Woche ohne Ende. */
 export interface Appointment {
@@ -10,6 +10,11 @@ export interface Appointment {
   start: string;
   durationMinutes: number;
   weekly: boolean;
+  /**
+   * Gesetzt, wenn der Termin aus einer erfassten Stunde mit Uhrzeit entstanden ist. Er folgt dann der Stunde
+   * (siehe `withLessonAppointments`) und verschwindet mit ihr.
+   */
+  lessonId?: string;
 }
 
 /** Freier Slot, in den sich eine Person eintragen lässt. */
@@ -95,5 +100,49 @@ export function parseAppointments(data: unknown): Appointment[] {
       start: a.start,
       durationMinutes: Number(a.durationMinutes) > 0 ? Number(a.durationMinutes) : 45,
       weekly: a.weekly === true,
+      ...(typeof a.lessonId === 'string' ? { lessonId: a.lessonId } : {}),
     }));
+}
+
+/**
+ * Ergänzt die Termine so, dass jede erfasste Stunde mit Uhrzeit im Kalender steht: Deckt kein anderer Termin der
+ * Person Tag und Beginn ab, bekommt die Stunde einen eigenen einmaligen Termin. Dieser folgt Datum und Uhrzeit der
+ * Stunde und entfällt, wenn die Stunde gelöscht wird, keine Uhrzeit mehr hat oder ein anderer Termin sie abdeckt.
+ * Gibt dieselbe Liste zurück, wenn nichts zu ändern ist.
+ */
+export function withLessonAppointments(
+  appointments: Appointment[],
+  students: Student[],
+  defaultDurationMinutes: number,
+): Appointment[] {
+  const timedLessons = new Map(
+    students.flatMap((student) =>
+      student.lessons.filter((lesson) => lesson.start).map((lesson) => [lesson.id, { student, lesson }] as const),
+    ),
+  );
+  const planned = appointments.filter((appointment) => !appointment.lessonId);
+  const covered = (studentId: string, lesson: Lesson) =>
+    planned.some((a) => a.studentId === studentId && a.start === lesson.start && occursOn(a, lesson.date));
+
+  const result = [...planned];
+  for (const [lessonId, { student, lesson }] of timedLessons) {
+    if (covered(student.id, lesson)) continue;
+    const existing = appointments.find((a) => a.lessonId === lessonId);
+    result.push({
+      id: existing?.id ?? `lesson-${lessonId}`,
+      studentId: student.id,
+      date: lesson.date,
+      start: lesson.start!,
+      durationMinutes: lesson.durationMinutes ?? existing?.durationMinutes ?? defaultDurationMinutes,
+      weekly: false,
+      lessonId,
+    });
+  }
+  const unchanged =
+    result.length === appointments.length &&
+    result.every((a) => {
+      const before = appointments.find((b) => b.id === a.id);
+      return before !== undefined && JSON.stringify(before) === JSON.stringify(a);
+    });
+  return unchanged ? appointments : result;
 }

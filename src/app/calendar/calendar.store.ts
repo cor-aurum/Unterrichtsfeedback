@@ -1,6 +1,8 @@
-import { Injectable } from '@angular/core';
+import { effect, inject, Injectable } from '@angular/core';
+import { ConfigStore } from '../config.store';
 import { CalendarSettings, newId, Teacher, today } from '../model';
 import { storedSignal } from '../stored-signal';
+import { StudentsStore } from '../students.store';
 import {
   addDays,
   Appointment,
@@ -13,6 +15,7 @@ import {
   startMinutes,
   timeOf,
   weekday,
+  withLessonAppointments,
 } from './appointments';
 
 /** So weit im Voraus sucht `nextFreeSlot` einen freien Slot. */
@@ -23,6 +26,17 @@ const WEEKLY_CHECK_WEEKS = 12;
 @Injectable({ providedIn: 'root' })
 export class CalendarStore {
   readonly appointments = storedSignal<Appointment[]>('feedback.appointments', () => [], parseAppointments);
+  private readonly students = inject(StudentsStore).students;
+  private readonly config = inject(ConfigStore).config;
+
+  constructor() {
+    // Erfasste Stunden mit Uhrzeit stehen immer im Kalender, auch nachträglich angelegte.
+    effect(() => {
+      const appointments = this.appointments();
+      const next = withLessonAppointments(appointments, this.students(), this.config().calendar.defaultDurationMinutes);
+      if (next !== appointments) this.appointments.set(next);
+    });
+  }
 
   add(appointment: Omit<Appointment, 'id'>): void {
     this.appointments.update((list) => [...list, { ...appointment, id: newId() }]);

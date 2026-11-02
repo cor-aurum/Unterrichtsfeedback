@@ -20,7 +20,7 @@
     <div class="fields">
       <label>
         Person
-        <select (change)="setDraft({ studentId: valueOf($event) })">
+        <select [disabled]="!!d.lessonId" (change)="setDraft({ studentId: valueOf($event) })">
           @for (student of students(); track student.id) {
             <option [value]="student.id" [selected]="student.id === d.studentId">{{ student.name }}</option>
           }
@@ -52,11 +52,17 @@
     @if (d.id && d.weekly) {
       <p class="muted small">Änderungen und Löschen gelten für alle Wiederholungen dieses Termins.</p>
     }
+    @if (d.lessonId && !d.weekly) {
+      <p class="muted small">
+        Dieser Termin gehört zu einer erfassten Stunde. Änderungen an Datum, Beginn und Dauer gelten auch für die
+        Stunde; er verschwindet, wenn du die Stunde löschst oder ihre Uhrzeit entfernst.
+      </p>
+    }
     <div class="row actions">
       <button (click)="save()">Speichern</button>
       <button class="secondary" (click)="draft.set(null)">Abbrechen</button>
       <span class="grow"></span>
-      @if (d.id) {
+      @if (d.id && !d.lessonId) {
         <button class="danger" (click)="remove()">Löschen</button>
       }
     </div>
