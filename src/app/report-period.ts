@@ -1,51 +1,72 @@
-import { computed, Injectable } from '@angular/core';
-import { formatDate, Lesson, today } from './model';
+import { computed, inject, Injectable } from '@angular/core';
+import { ConfigStore, isPeriod } from './config.store';
+import { containsDate, formatDate, Lesson, Period, ReportPeriodEntry, today } from './model';
 import { storedSignal } from './stored-signal';
 
-/** Zeitraum als ISO-Daten, jeweils einschließlich */
-export interface Period {
-  from: string;
-  to: string;
-}
+/** Früher galt ein unbenannter Zeitraum nur auf dem Gerät; er wird beim ersten Start übernommen. */
+const LEGACY_KEY = 'feedback.reportPeriod';
 
 /**
- * Berichtszeitraum, z. B. ein Schulhalbjahr. Er bestimmt, welche Personen und Stunden im PDF stehen und
- * welche Stunden für den allgemeinen Teil zählen. Er gilt nur auf diesem Gerät.
+ * Der gerade geltende Berichtszeitraum. Die Zeiträume selbst stehen in der Konfiguration (und damit in der
+ * Synchronisation); welcher gilt, wählt jedes Gerät selbst. Ohne Wahl gilt der, in dem heute liegt.
  */
 @Injectable({ providedIn: 'root' })
 export class ReportPeriod {
-  readonly period = storedSignal<Period>('feedback.reportPeriod', currentSchoolHalfYear, parsePeriod);
-  readonly label = computed(() => `${formatDate(this.period().from)} – ${formatDate(this.period().to)}`);
+  private readonly configStore = inject(ConfigStore);
+  private readonly selectedId = storedSignal<string | null>('feedback.reportPeriodId', () => null, (data) =>
+    typeof data === 'string' ? data : null,
+  );
 
-  set(period: Period): void {
-    this.period.set(period);
+  readonly periods = computed(() => this.configStore.config().reportPeriods);
+  readonly period = computed(
+    () => this.periods().find((p) => p.id === this.selectedId()) ?? currentPeriod(this.periods()),
+  );
+  readonly label = computed(() => labelOf(this.period()));
+
+  constructor() {
+    this.adoptLegacyPeriod();
+  }
+
+  select(periodId: string): void {
+    this.selectedId.set(periodId);
   }
 
   contains(date: string): boolean {
-    const { from, to } = this.period();
-    return date >= from && date <= to;
+    return containsDate(this.period(), date);
   }
 
   /** Stunden einer Person oder Gruppe im Zeitraum */
   lessonsOf(owner: { lessons: Lesson[] }): Lesson[] {
     return owner.lessons.filter((lesson) => this.contains(lesson.date));
   }
+
+  /** Ein auf diesem Gerät gewählter Zeitraum einer älteren Version wird zum benannten Zeitraum. */
+  private adoptLegacyPeriod(): void {
+    const legacy = readLegacyPeriod();
+    if (!legacy) return;
+    const existing = this.periods().find((p) => p.from === legacy.from && p.to === legacy.to);
+    const teacherIds = this.configStore.config().teachers.map((t) => t.id);
+    this.select(existing?.id ?? this.configStore.addReportPeriod({ name: 'Berichtszeitraum', ...legacy, teacherIds }));
+    localStorage.removeItem(LEGACY_KEY);
+  }
 }
 
-/** Schulhalbjahr, in dem heute liegt: 1. August bis 31. Januar oder 1. Februar bis 31. Juli */
-function currentSchoolHalfYear(): Period {
+export function labelOf(period: ReportPeriodEntry): string {
+  return `${period.name} (${formatDate(period.from)} – ${formatDate(period.to)})`;
+}
+
+/** Der Zeitraum, in dem heute liegt (bei mehreren der zuletzt begonnene), sonst der zuletzt begonnene. */
+function currentPeriod(periods: ReportPeriodEntry[]): ReportPeriodEntry {
+  const byStart = [...periods].sort((a, b) => a.from.localeCompare(b.from));
   const date = today();
-  const year = Number(date.slice(0, 4));
-  const month = Number(date.slice(5, 7));
-  if (month >= 8) return { from: `${year}-08-01`, to: `${year + 1}-01-31` };
-  if (month === 1) return { from: `${year - 1}-08-01`, to: `${year}-01-31` };
-  return { from: `${year}-02-01`, to: `${year}-07-31` };
+  return byStart.filter((p) => containsDate(p, date)).at(-1) ?? byStart.filter((p) => p.from <= date).at(-1) ?? byStart[0];
 }
 
-function parsePeriod(data: unknown): Period {
-  const period = data as Partial<Period>;
-  const valid = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
-  return valid(period?.from) && valid(period?.to) && period.from! <= period.to!
-    ? { from: period.from!, to: period.to! }
-    : currentSchoolHalfYear();
+function readLegacyPeriod(): Period | null {
+  try {
+    const data = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? 'null');
+    return isPeriod(data) ? { from: data.from, to: data.to } : null;
+  } catch {
+    return null;
+  }
 }

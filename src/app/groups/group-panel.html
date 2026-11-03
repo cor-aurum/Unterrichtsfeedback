@@ -1,6 +1,6 @@
 <section class="card">
   <h2>Gruppe</h2>
-  <button class="full" (click)="store.addLesson(group().id)">+ Neue Gruppenstunde</button>
+  <button class="full" (click)="startLesson()">+ Neue Gruppenstunde</button>
   <ul class="list">
     @for (lesson of lessons(); track lesson.id) {
       <li [class.selected]="lesson.id === store.selectedLessonId()" (click)="store.selectedLessonId.set(lesson.id)">
@@ -44,6 +44,9 @@
           <label>
             <input type="checkbox" [checked]="isMember(student)" (change)="store.toggleMember(group().id, student.id)" />
             {{ student.name }}
+            @if (otherGroupsText(student); as text) {
+              <span class="other-groups">{{ text }}</span>
+            }
           </label>
         }
       } @empty {

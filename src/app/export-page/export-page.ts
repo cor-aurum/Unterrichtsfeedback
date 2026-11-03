@@ -3,10 +3,10 @@ import { RouterLink } from '@angular/router';
 import { BackupService } from '../backup';
 import { FolderSync } from '../sync/folder-sync';
 import { WebDavSettings } from '../sync/sync-folder';
-import { GENERAL_FILE } from '../sync/sync-files';
+import { GENERAL_FILE, GROUPS_FILE, SHARED_FILE } from '../sync/sync-files';
 import { ConfigStore } from '../config.store';
 import { PdfExport } from '../pdf-export';
-import { ReportPeriod } from '../report-period';
+import { labelOf, ReportPeriod } from '../report-period';
 import { isNativeApp, safeFileName } from '../save-file';
 import { StudentsStore } from '../students.store';
 import { GroupsStore } from '../groups.store';
@@ -35,6 +35,7 @@ export class ExportPage {
   protected readonly webDav = signal<WebDavSettings>(EMPTY_WEBDAV);
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
   protected readonly reportPeriod = inject(ReportPeriod);
+  protected readonly labelOf = labelOf;
   private readonly groupsStore = inject(GroupsStore);
 
   protected readonly scope = signal<Scope>('all');
@@ -175,8 +176,33 @@ export class ExportPage {
   /** Verständlicher Name einer Sync-Datei */
   protected fileLabel(name: string): string {
     if (name === GENERAL_FILE) return 'Allgemeine Konfiguration';
+    if (name === GROUPS_FILE) return 'Gruppen';
+    if (name === SHARED_FILE) return 'Allgemeine Termine';
     const teacher = this.config().teachers.find((t) => name === `lehrer-${safeFileName(t.name)}.json`);
     return teacher ? `Lehrer ${teacher.name}` : name;
+  }
+
+  /**
+   * Löscht alle Daten dieses Geräts nach zweifacher Bestätigung. Eine laufende Synchronisation wird vorher beendet,
+   * damit der Ordner nicht mit der leeren Vorlage überschrieben wird. Danach startet die App neu.
+   */
+  protected async resetAll(): Promise<void> {
+    const answer = prompt(
+      'Wirklich ALLE Daten auf diesem Gerät löschen? Personen, Stunden, Gruppen, Termine, Blocker und die ' +
+        'Konfiguration gehen verloren und lassen sich nur aus einer Datensicherung wiederherstellen.\n\n' +
+        'Zum Bestätigen ZURÜCKSETZEN eingeben:',
+    );
+    if (answer === null) return;
+    if (answer.trim().toUpperCase() !== 'ZURÜCKSETZEN') {
+      this.message.set({ text: 'Nicht zurückgesetzt: Die Eingabe stimmte nicht.', error: true });
+      return;
+    }
+    await this.sync.disconnect();
+    for (const key of Object.keys(localStorage).filter((k) => k.startsWith('feedback.'))) {
+      localStorage.removeItem(key);
+    }
+    location.hash = '#/stunden';
+    location.reload();
   }
 
   protected disconnectFolder(): void {

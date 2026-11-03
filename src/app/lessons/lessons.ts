@@ -1,7 +1,8 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, linkedSignal, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Appointment, FreeSlot, slotText } from '../calendar/appointments';
+import { Appointment, FreeSlot, isRunningSeries, slotText } from '../calendar/appointments';
 import { CalendarStore } from '../calendar/calendar.store';
+import { lessonStartAt } from '../calendar/lesson-start';
 import { Clock } from '../calendar/clock';
 import { QuickStart } from '../calendar/quick-start';
 import { ActiveTeacher } from '../active-teacher';
@@ -11,11 +12,14 @@ import { GroupsStore } from '../groups.store';
 import { TeacherFilter } from '../teacher-filter';
 import { StudentImportPanel } from '../import/student-import-panel';
 import { ConfigStore } from '../config.store';
+import { InstrumentSelect } from '../instrument-select';
 import { ReportPeriod } from '../report-period';
 import {
   defaultInstrument,
   doubleLessonDates,
   formatDate,
+  Group,
+  groupLabel,
   Instrument,
   instrumentOf,
   Lesson,
@@ -25,12 +29,16 @@ import {
   Student,
   Teacher,
   teacherOf,
+  today,
 } from '../model';
 import { sortedLessons, StudentsStore } from '../students.store';
 
+/** Statusfilter der Personenliste; leer zeigt alle. */
+type StatusFilter = '' | 'today' | 'noWeekly' | 'noLessonInPeriod';
+
 @Component({
   selector: 'app-lessons',
-  imports: [RouterLink, QuickStart, GroupList, GroupPanel, StudentImportPanel],
+  imports: [RouterLink, QuickStart, GroupList, GroupPanel, StudentImportPanel, InstrumentSelect],
   templateUrl: './lessons.html',
   styleUrl: './lessons.scss',
 })
@@ -38,9 +46,30 @@ export class Lessons {
   protected readonly store = inject(StudentsStore);
   protected readonly groups = inject(GroupsStore);
   protected readonly teacherFilter = inject(TeacherFilter);
-  protected readonly visibleStudents = computed(() =>
-    this.store.sortedStudents().filter((student) => this.teacherFilter.shows(teacherOf(student, this.config()).id)),
+  // Filter der Personenliste; außer dem Lehrerfilter gelten sie nur bis zum Neuladen.
+  protected readonly search = signal('');
+  protected readonly instrumentFilter = signal('');
+  protected readonly groupFilter = signal('');
+  protected readonly statusFilter = signal<StatusFilter>('');
+  protected readonly extraFilterCount = computed(
+    () =>
+      [this.teacherFilter.teacherId(), this.instrumentFilter(), this.groupFilter(), this.statusFilter()].filter(Boolean)
+        .length,
   );
+  protected readonly visibleStudents = computed(() => {
+    const config = this.config();
+    const search = this.search().trim().toLowerCase();
+    const group = this.groups.groups().find((g) => g.id === this.groupFilter());
+    const status = this.statusFilter();
+    const matchesStatus = status ? this.statusMatcher(status) : () => true;
+    return this.store
+      .sortedStudents()
+      .filter((student) => this.teacherFilter.shows(teacherOf(student, config).id))
+      .filter((student) => !search || student.name.toLowerCase().includes(search))
+      .filter((student) => !this.instrumentFilter() || instrumentOf(student, config).id === this.instrumentFilter())
+      .filter((student) => !group || group.memberIds.includes(student.id))
+      .filter(matchesStatus);
+  });
   private readonly configStore = inject(ConfigStore);
   protected readonly config = this.configStore.config;
   private readonly calendar = inject(CalendarStore);
@@ -54,6 +83,8 @@ export class Lessons {
   protected readonly lessonTime = lessonTime;
   protected readonly placeholderHint = 'Platzhalter: ' + PLACEHOLDERS.map((p) => p.key).join(', ');
   protected readonly defaultInstrumentId = computed(() => defaultInstrument(this.config()).id);
+  /** Instrument für die nächste neue Person; nach dem Anlegen wieder das Standardinstrument */
+  protected readonly newStudentInstrumentId = linkedSignal(() => this.defaultInstrumentId());
 
   protected readonly lessonsOfSelected = computed(() => {
     const student = this.store.selectedStudent();
@@ -96,20 +127,69 @@ export class Lessons {
   }
 
   /** Neue Personen gehören zum aktiven Lehrer; danach steht die Auswahl wieder auf dem Standardinstrument. */
-  protected addStudent(nameInput: HTMLInputElement, instrumentSelect: HTMLSelectElement): void {
+  protected addStudent(nameInput: HTMLInputElement): void {
     const name = nameInput.value.trim();
     if (!name) return;
-    this.store.addStudent(name, instrumentSelect.value, this.activeTeacher.teacher().id);
+    this.store.addStudent(name, this.newStudentInstrumentId(), this.activeTeacher.teacher().id);
     nameInput.value = '';
-    instrumentSelect.value = this.defaultInstrumentId();
+    this.newStudentInstrumentId.set(this.defaultInstrumentId());
   }
 
   protected valueOf(event: Event): string {
     return (event.target as HTMLSelectElement).value;
   }
 
-  protected setInstrument(student: Student, event: Event): void {
-    this.store.setInstrument(student.id, (event.target as HTMLSelectElement).value);
+  /** z. B. „Gruppe Chor“ oder „Gruppen Chor, Streicher“; leer, wenn die Person in keiner Gruppe ist */
+  protected groupsLineOf(student: Student): string {
+    const names = this.groups.groupsOf(student.id).map((group) => this.groupName(group));
+    if (names.length === 0) return '';
+    return `${names.length === 1 ? 'Gruppe' : 'Gruppen'} ${names.join(', ')}`;
+  }
+
+  protected groupName(group: Group): string {
+    return groupLabel(group, this.store.students());
+  }
+
+  protected resetFilters(): void {
+    this.teacherFilter.set(null);
+    this.search.set('');
+    this.instrumentFilter.set('');
+    this.groupFilter.set('');
+    this.statusFilter.set('');
+  }
+
+  /** Prüfung für den Statusfilter; die Termindaten werden einmal je Filterlauf bestimmt. */
+  private statusMatcher(status: Exclude<StatusFilter, ''>): (student: Student) => boolean {
+    if (status === 'noLessonInPeriod') return (student) => this.reportPeriod.lessonsOf(student).length === 0;
+    const appointments = this.calendar.appointments();
+    if (status === 'noWeekly') {
+      const running = new Set(appointments.filter((a) => a.studentId && isRunningSeries(a, today())).map((a) => a.studentId));
+      return (student) => !running.has(student.id);
+    }
+    // Termin heute: eigener Termin oder Termin einer Gruppe, in der die Person ist
+    const date = today();
+    const groups = this.groups.groups();
+    const withAppointment = new Set(
+      this.calendar.occurrences(date, date).flatMap(({ appointment: a }) =>
+        a.studentId ? [a.studentId] : (groups.find((g) => g.id === a.groupId)?.memberIds ?? []),
+      ),
+    );
+    return (student) => withAppointment.has(student.id);
+  }
+
+  /**
+   * „+ Neue Stunde“: Läuft laut Kalender gerade ein Termin der Person (±10 Minuten), öffnet sich dessen Stunde
+   * oder entsteht mit Beginn und Dauer des Termins; sonst beginnt sie zur aktuellen Uhrzeit, gerundet auf 10 Minuten.
+   */
+  protected startLesson(student: Student): void {
+    const date = today();
+    const occurrences = this.calendar.occurrences(date, date, (a) => a.studentId === student.id);
+    const next = lessonStartAt(student, date, occurrences, this.clock.now());
+    if ('open' in next) {
+      this.store.selectedLessonId.set(next.open.id);
+    } else {
+      this.store.openLesson(student.id, date, next.create);
+    }
   }
 
   /** Mit dem Lehrer wechseln auch die Termine der Person in dessen Kalender. */

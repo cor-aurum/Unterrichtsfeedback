@@ -1,0 +1,44 @@
+<section class="card">
+  <h2>Termine für den Systemkalender (iCal)</h2>
+  <p class="muted small">
+    Erstellt eine Kalenderdatei (.ics) mit den Terminen im Zeitraum, die du in Google-, Apple- oder
+    Outlook-Kalender oder eine andere Kalender-App übernimmst. Wöchentliche Termine stehen dort einzeln; exportierst
+    du später neu, werden schon übernommene Termine aktualisiert statt doppelt eingetragen.
+  </p>
+  <div class="row options">
+    @if (teachers().length > 1) {
+      <label>
+        Lehrer
+        <select (change)="teacherId.set(valueOf($event))">
+          @for (teacher of teachers(); track teacher.id) {
+            <option [value]="teacher.id" [selected]="teacher.id === teacherId()">{{ teacher.name }}</option>
+          }
+          <option [value]="allTeachers" [selected]="teacherId() === allTeachers">Alle Lehrer</option>
+        </select>
+      </label>
+    }
+    <label>
+      Von
+      <input type="date" [value]="from()" (change)="from.set(valueOf($event))" />
+    </label>
+    <label>
+      Bis
+      <input type="date" [value]="to()" (change)="to.set(valueOf($event))" />
+    </label>
+    <label class="check">
+      <input type="checkbox" [checked]="includeBlockers()" (change)="includeBlockers.set($any($event.target).checked)" />
+      Blocker mit exportieren
+    </label>
+  </div>
+  @if (message(); as text) {
+    <p class="message error">{{ text }}</p>
+  }
+  <div class="row actions">
+    @if (nativeApp) {
+      <button class="secondary" (click)="export('share')">Datei teilen</button>
+      <button (click)="export('open')">In Kalender-App öffnen</button>
+    } @else {
+      <button (click)="export('share')">iCal-Datei herunterladen</button>
+    }
+  </div>
+</section>

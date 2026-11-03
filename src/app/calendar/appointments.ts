@@ -1,8 +1,14 @@
-import { formatLongDate, Group, Lesson, newId, Student } from '../model';
+import { formatDate, formatLongDate, Group, Lesson, newId, Period, reportPeriodEnd, Student } from '../model';
+
+/** Wiederholung eines Termins: `count` Termine insgesamt (der erste zählt mit), jeweils `everyDays` Tage auseinander */
+export interface Recurrence {
+  everyDays: number;
+  count: number;
+}
 
 /**
  * Geplanter Unterricht einer Person (`studentId`) oder einer Gruppe (`groupId`); genau eins von beiden ist
- * gesetzt, siehe `ownerOf`. Mit `weekly` wiederholt er sich ab `date` jede Woche ohne Ende.
+ * gesetzt, siehe `ownerOf`. Mit `repeat` wiederholt er sich ab `date`; ohne ist er einmalig.
  */
 export interface Appointment {
   id: string;
@@ -13,7 +19,7 @@ export interface Appointment {
   /** Beginn als HH:MM */
   start: string;
   durationMinutes: number;
-  weekly: boolean;
+  repeat?: Recurrence;
   /**
    * Gesetzt, wenn der Termin aus einer erfassten Stunde mit Uhrzeit entstanden ist, bei Gruppen aus einer
    * Gruppenstunde. Er folgt dann der Stunde (siehe `withLessonAppointments`) und verschwindet mit ihr.
@@ -47,23 +53,90 @@ export function followsLesson(appointment: Appointment): boolean {
 /** Freier Slot, in den sich eine Person eintragen lässt. */
 export type FreeSlot = Omit<Appointment, 'id' | 'studentId' | 'groupId'>;
 
-/** z. B. „Montag, 16. November 2026, 14:45–15:30, jede Woche“ */
+/** z. B. „Montag, 16. November 2026, 14:45–15:30, wöchentlich, 12-mal bis 1.2.2027“ */
 export function slotText(slot: FreeSlot): string {
   const end = timeOf(minutesOf(slot.start) + slot.durationMinutes);
-  return `${formatLongDate(slot.date)}, ${slot.start}–${end}${slot.weekly ? ', jede Woche' : ''}`;
+  return `${formatLongDate(slot.date)}, ${slot.start}–${end}${slot.repeat ? `, ${repeatText(slot)}` : ''}`;
 }
 
-/** Ein Termin an einem bestimmten Tag; bei wöchentlichen Terminen eine der Wiederholungen. */
+/** Ein Termin an einem bestimmten Tag; bei Terminserien eine der Wiederholungen. */
 export interface Occurrence {
   date: string;
   appointment: Appointment;
 }
 
-export function occursOn(appointment: Appointment, date: string): boolean {
-  if (appointment.weekly) {
-    return date >= appointment.date && weekday(date) === weekday(appointment.date);
+/** Was sich wiederholen kann: Termine und allgemeine Termine */
+export interface Repeatable {
+  date: string;
+  repeat?: Recurrence;
+}
+
+export function occursOn(appointment: Repeatable, date: string): boolean {
+  const { repeat } = appointment;
+  if (!repeat) return date === appointment.date;
+  const offset = daysFrom(appointment.date, date);
+  return offset >= 0 && offset % repeat.everyDays === 0 && offset / repeat.everyDays < repeat.count;
+}
+
+/** Datum des letzten Termins einer Serie, bei einmaligen Terminen das Datum selbst */
+export function lastDate(appointment: Repeatable): string {
+  const { repeat } = appointment;
+  return repeat ? addDays(appointment.date, repeat.everyDays * (repeat.count - 1)) : appointment.date;
+}
+
+/** Alle Termintage, z. B. zum Prüfen auf Überschneidungen */
+export function occurrenceDates(appointment: Repeatable): string[] {
+  const { repeat } = appointment;
+  if (!repeat) return [appointment.date];
+  return Array.from({ length: repeat.count }, (_, i) => addDays(appointment.date, i * repeat.everyDays));
+}
+
+/** Läuft die Serie am Tag noch (oder beginnt sie später)? */
+export function isRunningSeries(appointment: Repeatable, date: string): boolean {
+  return !!appointment.repeat && lastDate(appointment) >= date;
+}
+
+/** So viele Termine im Abstand `everyDays` passen von `date` bis einschließlich `until`; mindestens einer. */
+export function countUntil(date: string, everyDays: number, until: string): number {
+  return Math.max(1, Math.floor(daysFrom(date, until) / everyDays) + 1);
+}
+
+/** Serie bis zum Ende des Berichtszeitraums, in dem `date` liegt; eine Serie hat mindestens zwei Termine. */
+export function recurrenceUntilPeriodEnd(periods: Period[], date: string, everyDays: number): Recurrence {
+  return { everyDays, count: Math.max(2, countUntil(date, everyDays, reportPeriodEnd(periods, date))) };
+}
+
+/** z. B. „täglich, 5-mal bis 7.11.2026“, „wöchentlich, …“, „alle 3 Tage, …“ */
+export function repeatText(appointment: Repeatable): string {
+  if (!appointment.repeat) return 'einmalig';
+  return `${repeatEveryText(appointment)}, ${appointment.repeat.count}-mal bis ${formatDate(lastDate(appointment))}`;
+}
+
+/** Nur der Abstand, z. B. „wöchentlich“ oder „alle 3 Tage“ */
+export function repeatEveryText(appointment: Repeatable): string {
+  const { repeat } = appointment;
+  if (!repeat) return 'einmalig';
+  if (repeat.everyDays === 1) return 'täglich';
+  if (repeat.everyDays === 7) return 'wöchentlich';
+  return repeat.everyDays % 7 === 0 ? `alle ${repeat.everyDays / 7} Wochen` : `alle ${repeat.everyDays} Tage`;
+}
+
+/** Tage von `from` bis `to` (negativ, wenn `to` früher liegt); in UTC, damit die Zeitumstellung nicht stört */
+export function daysFrom(from: string, to: string): number {
+  return Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 86_400_000);
+}
+
+/**
+ * Wiederholung aus gespeicherten Daten. Frühere wöchentliche Termine ohne Ende (`weekly`) laufen bis zum Ende
+ * des Berichtszeitraums, in dem ihr erster Termin liegt.
+ */
+export function parseRecurrence(data: { date: string; repeat?: unknown; weekly?: unknown }, periods: Period[]): Recurrence | undefined {
+  const repeat = data.repeat as Partial<Recurrence> | undefined;
+  if (repeat && Number(repeat.everyDays) >= 1 && Number(repeat.count) >= 2) {
+    return { everyDays: Math.round(Number(repeat.everyDays)), count: Math.round(Number(repeat.count)) };
   }
-  return date === appointment.date;
+  if (data.weekly === true) return recurrenceUntilPeriodEnd(periods, data.date, 7);
+  return undefined;
 }
 
 export function startMinutes(appointment: Appointment): number {
@@ -109,7 +182,8 @@ export function daysBetween(from: string, to: string): string[] {
   return days;
 }
 
-export function parseAppointments(data: unknown): Appointment[] {
+/** `periods` braucht es nur für frühere wöchentliche Termine (siehe `parseRecurrence`). */
+export function parseAppointments(data: unknown, periods: Period[]): Appointment[] {
   if (!Array.isArray(data)) return [];
   return data
     .filter(
@@ -128,15 +202,20 @@ export function parseAppointments(data: unknown): Appointment[] {
       date: a.date,
       start: a.start,
       durationMinutes: Number(a.durationMinutes) > 0 ? Number(a.durationMinutes) : 45,
-      weekly: a.weekly === true,
+      ...withRepeat(parseRecurrence(a, periods)),
       ...(typeof a.lessonId === 'string' ? { lessonId: a.lessonId } : {}),
       ...(typeof a.teacherId === 'string' ? { teacherId: a.teacherId } : {}),
     }));
 }
 
+/** `repeat` nur, wenn es eine Wiederholung gibt; so steht bei einmaligen Terminen nichts Überflüssiges in der Datei. */
+export function withRepeat(repeat: Recurrence | undefined): { repeat?: Recurrence } {
+  return repeat ? { repeat } : {};
+}
+
 /**
- * Ergänzt die Termine so, dass jede erfasste Stunde mit Uhrzeit im Kalender steht: Deckt kein anderer Termin der
- * Person (oder Gruppe) Tag und Beginn ab, bekommt die Stunde einen eigenen einmaligen Termin. Dieser folgt Datum
+ * Ergänzt die Termine so, dass jede erfasste Stunde mit Uhrzeit im Kalender steht: Beginnt sie in keinem anderen
+ * Termin der Person (oder Gruppe), bekommt die Stunde einen eigenen einmaligen Termin. Dieser folgt Datum
  * und Uhrzeit der Stunde und entfällt, wenn die Stunde gelöscht wird, keine Uhrzeit mehr hat oder ein anderer
  * Termin sie abdeckt. Personen und Gruppen werden getrennt abgeglichen (`kind`); die Termine der anderen Art
  * bleiben unverändert. Gibt dieselbe Liste zurück, wenn nichts zu ändern ist.
@@ -151,8 +230,15 @@ export function withLessonAppointments(
   const isOwnFollower = (a: Appointment) => !!a.lessonId && !!a[ownerKey];
   const kept = appointments.filter((a) => !isOwnFollower(a));
   const planned = kept.filter((a) => !a.lessonId);
+  // Ein Termin deckt die Stunde ab, wenn sie in ihm beginnt (bis 10 Minuten vorher), z. B. leicht verschoben.
   const covered = (owner: string, lesson: Lesson) =>
-    planned.some((a) => ownerOf(a) === owner && a.start === lesson.start && occursOn(a, lesson.date));
+    planned.some(
+      (a) =>
+        ownerOf(a) === owner &&
+        occursOn(a, lesson.date) &&
+        minutesOf(lesson.start!) >= startMinutes(a) - 10 &&
+        minutesOf(lesson.start!) < startMinutes(a) + a.durationMinutes,
+    );
 
   const result = [...kept];
   for (const owner of owners) {
@@ -165,7 +251,6 @@ export function withLessonAppointments(
         date: lesson.date,
         start: lesson.start!,
         durationMinutes: lesson.durationMinutes ?? existing?.durationMinutes ?? defaultDurationMinutes,
-        weekly: false,
         lessonId: lesson.id,
       });
     }

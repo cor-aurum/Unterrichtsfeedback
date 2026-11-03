@@ -8,8 +8,19 @@
     </p>
   } @else {
     <p class="period">
-      Berichtszeitraum: <strong>{{ reportPeriod.label() }}</strong>
-      <span class="muted">(ändern unter <a routerLink="/konfiguration">Konfiguration</a> → Allgemein)</span>
+      @if (reportPeriod.periods().length > 1) {
+        <label>
+          Berichtszeitraum:
+          <select (change)="reportPeriod.select($any($event.target).value)" aria-label="Berichtszeitraum">
+            @for (period of reportPeriod.periods(); track period.id) {
+              <option [value]="period.id" [selected]="period.id === reportPeriod.period().id">{{ labelOf(period) }}</option>
+            }
+          </select>
+        </label>
+      } @else {
+        Berichtszeitraum: <strong>{{ reportPeriod.label() }}</strong>
+      }
+      <span class="muted">(Zeiträume verwalten unter <a routerLink="/konfiguration">Konfiguration</a> → Allgemein)</span>
     </p>
 
     <label class="option">
@@ -236,4 +247,20 @@
       }
     }
   }
+</section>
+
+<section class="card danger-zone">
+  <h2>Alles zurücksetzen</h2>
+  <p class="muted">
+    Löscht auf diesem Gerät alle Personen, Stunden, Gruppen, Termine und Blocker und setzt die Konfiguration auf die
+    Vorlage zurück; danach startet die App mit der Begrüßung wie beim ersten Mal. Erstelle vorher eine
+    Datensicherung, wenn du die Daten noch brauchst.
+    @if (sync.status() !== 'off') {
+      Die Synchronisation mit „{{ sync.folderName() }}“ wird dabei beendet; die Dateien im Ordner bleiben erhalten.
+    }
+  </p>
+  <div class="row">
+    <button class="secondary" (click)="backup.exportToFile()">Erst Daten exportieren</button>
+    <button class="danger" (click)="resetAll()">Alles zurücksetzen …</button>
+  </div>
 </section>

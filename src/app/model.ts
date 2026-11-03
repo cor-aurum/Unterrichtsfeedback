@@ -40,29 +40,38 @@ export interface BlockContent {
   image?: BlockImage;
 }
 
-/** Ersetzt den Inhalt eines festen Blocks für Personen mit einem der Instrumente. */
 /**
- * Ersetzt den Inhalt eines festen Blocks für bestimmte Personen. Sind Instrumente und Lehrer gewählt,
- * müssen beide passen; eine leere Liste bedeutet „egal“.
+ * Ersetzt den Inhalt eines festen Blocks für bestimmte Personen oder Berichtszeiträume. Alle gewählten
+ * Bedingungen müssen passen; eine leere Liste bedeutet „egal“.
  */
 export interface BlockVariant extends BlockContent {
   id: string;
   instrumentIds: string[];
   teacherIds: string[];
+  periodIds: string[];
 }
 
-function variantMatches(variant: BlockVariant, instrument: Instrument, teacher: Teacher): boolean {
-  if (variant.instrumentIds.length === 0 && variant.teacherIds.length === 0) return false;
-  return (
-    (variant.instrumentIds.length === 0 || variant.instrumentIds.includes(instrument.id)) &&
-    (variant.teacherIds.length === 0 || variant.teacherIds.includes(teacher.id))
-  );
+/** Für wen und wann ein fester Block geschrieben wird */
+export interface VariantContext {
+  instrument: Instrument;
+  teacher: Teacher;
+  periodId: string;
+}
+
+function variantMatches(variant: BlockVariant, context: VariantContext): boolean {
+  const conditions: [string[], string][] = [
+    [variant.instrumentIds, context.instrument.id],
+    [variant.teacherIds, context.teacher.id],
+    [variant.periodIds, context.periodId],
+  ];
+  const chosen = conditions.filter(([ids]) => ids.length > 0);
+  return chosen.length > 0 && chosen.every(([ids, id]) => ids.includes(id));
 }
 
 /**
  * Fester Text oder festes Bild, das bei jedem Export am Anfang oder Ende erscheint.
- * Wie bei switch/case gewinnt die erste Variante, die das Instrument der Person enthält;
- * sonst gilt der Standardinhalt (`text`/`image`). Ist dieser leer, entfällt der Block.
+ * Wie bei switch/case gewinnt die erste passende Variante; sonst gilt der Standardinhalt (`text`/`image`).
+ * Ist dieser leer, entfällt der Block.
  */
 export interface FixedBlock extends BlockContent {
   id: string;
@@ -71,8 +80,65 @@ export interface FixedBlock extends BlockContent {
   variants: BlockVariant[];
 }
 
-export function contentFor(block: FixedBlock, instrument: Instrument, teacher: Teacher): BlockContent {
-  return block.variants.find((variant) => variantMatches(variant, instrument, teacher)) ?? block;
+export function contentFor(block: FixedBlock, context: VariantContext): BlockContent {
+  return block.variants.find((variant) => variantMatches(variant, context)) ?? block;
+}
+
+/** Zeitraum als ISO-Daten, jeweils einschließlich */
+export interface Period {
+  from: string;
+  to: string;
+}
+
+/**
+ * Berichtszeitraum, z. B. ein Schulhalbjahr. Er bestimmt, welche Personen und Stunden im PDF stehen, welche
+ * Stunden für den allgemeinen Teil zählen und welche Varianten der festen Inhalte gelten.
+ */
+export interface ReportPeriodEntry extends Period {
+  id: string;
+  name: string;
+  /** Lehrer, die in diesem Zeitraum unterrichten */
+  teacherIds: string[];
+}
+
+/**
+ * Ende des Berichtszeitraums, in dem das Datum liegt (bei mehreren des längsten). Liegt es in keinem, gilt der
+ * nächste spätere Zeitraum, sonst das Schulhalbjahr um das Datum.
+ */
+export function reportPeriodEnd(periods: Period[], date: string): string {
+  const containing = periods.filter((period) => containsDate(period, date)).map((period) => period.to).sort();
+  if (containing.length > 0) return containing.at(-1)!;
+  const later = periods.filter((period) => period.from > date).sort((a, b) => a.from.localeCompare(b.from));
+  return later[0]?.to ?? schoolHalfYear(date).to;
+}
+
+/** Lehrer, die an dem Tag in einem Berichtszeitraum aktiv sind; liegt der Tag in keinem Zeitraum, alle. */
+export function activeTeachersOn(config: FeedbackConfig, date: string): Teacher[] {
+  const periods = config.reportPeriods.filter((period) => containsDate(period, date));
+  if (periods.length === 0) return config.teachers;
+  const ids = new Set(periods.flatMap((period) => period.teacherIds));
+  return config.teachers.filter((teacher) => ids.has(teacher.id));
+}
+
+export function containsDate(period: Period, date: string): boolean {
+  return date >= period.from && date <= period.to;
+}
+
+/** Schulhalbjahr um ein Datum: 1. August bis 31. Januar oder 1. Februar bis 31. Juli */
+export function schoolHalfYear(date: string): Omit<ReportPeriodEntry, 'teacherIds'> {
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  // Schuljahr, z. B. 2026 für 2026/27
+  const start = month >= 8 ? year : year - 1;
+  const first = month >= 8 || month === 1;
+  const from = first ? `${start}-08-01` : `${start + 1}-02-01`;
+  return {
+    // Aus dem Datum abgeleitet, damit mehrere Geräte für dasselbe Halbjahr dieselbe ID erzeugen
+    id: `halbjahr-${from}`,
+    name: `${first ? 1 : 2}. Halbjahr ${start}/${String((start + 1) % 100).padStart(2, '0')}`,
+    from,
+    to: first ? `${start + 1}-01-31` : `${start + 1}-07-31`,
+  };
 }
 
 export interface Instrument {
@@ -94,7 +160,41 @@ export interface PdfLayout {
   footerLeft: string;
   footerCenter: string;
   footerRight: string;
+  /** Logo neben der Überschrift auf der ersten Seite, verkleinert auch neben der Kopfzeile der Folgeseiten */
+  headerLogo: PdfLogo | null;
+  /** Logo in der Fußzeile jeder Seite */
+  footerLogo: PdfLogo | null;
+  /** Alle PDFs in Graustufen, ohne farbige Flächen und mit grauen Bildern, um beim Drucken Farbe zu sparen */
+  grayscale: boolean;
 }
+
+/** Logo in Kopf- oder Fußzeile; die Höhe bestimmt die Größe, die Breite folgt aus dem Seitenverhältnis. */
+export interface PdfLogo {
+  /** Hochgeladenes Bild als Data-URL oder `APP_LOGO_PATH` für das mitgelieferte Logo der App */
+  dataUrl: string;
+  widthPx: number;
+  heightPx: number;
+  /** Höhe im PDF in mm */
+  heightMm: number;
+  align: ImageAlign;
+}
+
+/** Breite und Höhe eines Logos in mm bei der gewünschten Höhe, höchstens `maxWidth` breit */
+export function logoSize(logo: PdfLogo, height: number, maxWidth: number): { width: number; height: number } {
+  const width = height * (logo.widthPx / logo.heightPx);
+  return width <= maxWidth ? { width, height } : { width: maxWidth, height: maxWidth * (logo.heightPx / logo.widthPx) };
+}
+
+/**
+ * Das App-Logo liegt der App bei und wird erst beim PDF-Export eingebettet, damit die Konfiguration klein bleibt.
+ * Für das PDF ohne den cremefarbenen Hintergrund von `logo.png`, damit es auf dem Papier keinen Kasten bildet.
+ */
+export const APP_LOGO_PATH = 'logo-transparent.png';
+/** Frühere Konfigurationen verweisen noch auf das Logo mit Hintergrund. */
+export const LEGACY_APP_LOGO_PATH = 'logo.png';
+export const APP_LOGO: PdfLogo = { dataUrl: APP_LOGO_PATH, widthPx: 256, heightPx: 256, heightMm: 15, align: 'right' };
+
+export const LOGO_HEIGHT_LIMITS = { headerLogo: { min: 5, max: 40 }, footerLogo: { min: 4, max: 12 } } as const;
 
 export const DEFAULT_PDF_LAYOUT: PdfLayout = {
   subtitle: 'für {name}',
@@ -103,6 +203,9 @@ export const DEFAULT_PDF_LAYOUT: PdfLayout = {
   footerLeft: '{name}',
   footerCenter: '',
   footerRight: 'Seite {seite} von {seiten}',
+  headerLogo: APP_LOGO,
+  footerLogo: null,
+  grayscale: false,
 };
 
 /** Zeitfenster ohne Wochentag, z. B. eine der Standardunterrichtszeiten */
@@ -123,16 +226,16 @@ export interface TeachingWindow extends TimeWindow {
 export interface CalendarSettings {
   /** Standardlänge neuer Termine; teilt die Zeitfenster außerdem in Slots */
   defaultDurationMinutes: number;
-  /** Ob „Jede Woche wiederholen“ bei neuen Terminen angehakt ist */
-  weeklyByDefault: boolean;
+  /** Ob „Wiederholen“ bei neuen Terminen angehakt ist */
+  repeatByDefault: boolean;
   /** Vorlage für die Unterrichtszeiten eines Tages; lässt sich bei jedem Lehrer auf einen Tag übernehmen */
   defaultWindows: TimeWindow[];
 }
 
 export function defaultCalendarSettings(): CalendarSettings {
   return {
-    defaultDurationMinutes: 45,
-    weeklyByDefault: true,
+    defaultDurationMinutes: 30,
+    repeatByDefault: false,
     defaultWindows: [{ id: newId(), from: '14:00', to: '18:30' }],
   };
 }
@@ -155,7 +258,28 @@ export interface Teacher {
   instrumentId: string | null;
   /** Freitext, z. B. „Raum 3, Musikschule Mitte“ */
   location: string;
+  /** Unterrichtszeiten außerhalb aller Berichtszeiträume und in Zeiträumen ohne eigene (`periodWindows`) */
   teachingWindows: TeachingWindow[];
+  /** Eigene Unterrichtszeiten je Berichtszeitraum (Schlüssel: ID des Zeitraums) */
+  periodWindows: Record<string, TeachingWindow[]>;
+}
+
+/** Unterrichtszeiten eines Lehrers im Berichtszeitraum; `null` oder ohne eigene: die allgemeinen */
+export function teachingWindowsFor(teacher: Teacher, periodId: string | null): TeachingWindow[] {
+  return (periodId && teacher.periodWindows[periodId]) || teacher.teachingWindows;
+}
+
+/**
+ * Unterrichtszeiten des Lehrers an einem Tag, nach Beginn sortiert: die des Berichtszeitraums, in dem der Tag
+ * liegt (bei mehreren der, in dem der Lehrer aktiv ist), sonst die allgemeinen.
+ */
+export function teachingWindowsOn(teacher: Teacher, config: FeedbackConfig, date: string): TeachingWindow[] {
+  const periods = config.reportPeriods.filter((period) => containsDate(period, date));
+  const period = periods.find((p) => p.teacherIds.includes(teacher.id)) ?? periods[0];
+  const day = (new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7;
+  return teachingWindowsFor(teacher, period?.id ?? null)
+    .filter((window) => window.weekday === day)
+    .sort((a, b) => a.from.localeCompare(b.from));
 }
 
 export function teacherInstrument(teacher: Teacher, config: FeedbackConfig): Instrument {
@@ -184,7 +308,32 @@ export interface FeedbackConfig {
   /** Eigene Abschnitte und feste Inhalte für Gruppenstunden und das Gruppen-PDF */
   groupBlocks: FixedBlock[];
   groupSections: Section[];
+  /** Enthält immer mindestens einen Zeitraum; welcher gerade gilt, wählt jedes Gerät selbst (`ReportPeriod`). */
+  reportPeriods: ReportPeriodEntry[];
+  /** Feste Texte der Kalender-PDFs (Terminlisten, Wochen- und Tagesplan) */
+  calendarPdf: CalendarPdfTexts;
 }
+
+export interface CalendarPdfTexts {
+  listTitle: string;
+  eventListTitle: string;
+  dayPlanTitle: string;
+  /** Links in der Fußzeile jeder Seite */
+  footer: string;
+  /** Steht im PDF, wenn der Zeitraum keine Termine hat */
+  noAppointments: string;
+  /** Bezeichnung von Blockern, z. B. „Blockiert: Fortbildung“ */
+  blocked: string;
+}
+
+export const DEFAULT_CALENDAR_PDF_TEXTS: CalendarPdfTexts = {
+  listTitle: 'Unterrichtsplan',
+  eventListTitle: 'Termine ohne Einzelunterricht',
+  dayPlanTitle: 'Tagesplan aller Lehrer',
+  footer: 'Unterrichtsplan',
+  noAppointments: 'In diesem Zeitraum sind keine Termine geplant.',
+  blocked: 'Blockiert',
+};
 
 /** Einzelunterricht (`single`) oder Gruppen (`group`): welche Abschnitte und festen Inhalte gemeint sind */
 export type ContentKind = 'single' | 'group';
@@ -211,6 +360,7 @@ export const PLACEHOLDERS = [
   { key: '{ort}', description: 'Ort des Lehrers' },
   { key: '{titel}', description: 'Überschrift im PDF' },
   { key: '{datum}', description: 'Datum des Exports' },
+  { key: '{zeitraum}', description: 'Name des Berichtszeitraums, z. B. „1. Halbjahr 2026/27“' },
   { key: '{uhrzeit}', description: 'Beginn der Stunde; außerhalb einer Stunde der letzten Stunde mit Uhrzeit' },
   { key: '{seite}', description: 'Seitennummer bei der Person' },
   { key: '{seiten}', description: 'Seitenanzahl der Person' },

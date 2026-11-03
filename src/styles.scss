@@ -1,4 +1,11 @@
 :root {
+  /* Zustände von Terminen (unabhängig von der Themenfarbe) */
+  --state-done: #2e7d32;
+  --state-done-bg: #e8f5e9;
+  --state-lesson: #1565c0;
+  --state-lesson-bg: #e3f2fd;
+  --state-missed: #7b8590;
+  --state-missed-bg: #f1f3f5;
   /* Standardwerte für das Orange; die App setzt sie aus der konfigurierten Themenfarbe (theme.ts). */
   --primary: #f57115;
   --on-primary: #ffffff;
@@ -86,6 +93,9 @@ h3 {
 }
 
 input[type='text'],
+input[type='search'],
+input[type='url'],
+input[type='password'],
 input[type='date'],
 input[type='number'],
 input[type='time'],

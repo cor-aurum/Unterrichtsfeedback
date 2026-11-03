@@ -4,10 +4,11 @@ import { ActiveTeacher } from './active-teacher';
 import { ConfigStore } from './config.store';
 import { FolderSync } from './sync/folder-sync';
 import { isNativeApp } from './save-file';
+import { WelcomeDialog } from './welcome/welcome-dialog';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, WelcomeDialog],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -15,6 +16,8 @@ export class App {
   private readonly configStore = inject(ConfigStore);
   private readonly theme = this.configStore.theme;
   protected readonly teachers = computed(() => this.configStore.config().teachers);
+  /** Erster Start: Die Begrüßung legt den eigenen Lehrer an oder spielt eine Sicherung ein. */
+  protected readonly setupPending = this.configStore.setupPending;
   protected readonly activeTeacher = inject(ActiveTeacher);
   /** Startet die Ordner-Synchronisation, falls ein Ordner gewählt ist */
   protected readonly folderSync = inject(FolderSync);

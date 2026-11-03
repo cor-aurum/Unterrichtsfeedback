@@ -99,6 +99,9 @@
         Vorschlag berechnen
       </button>
     </div>
+    @if (noSlotsReason(); as reason) {
+      <p class="message warning">{{ reason }}</p>
+    }
   }
 
   @if (proposals(); as list) {

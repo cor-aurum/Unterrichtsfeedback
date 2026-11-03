@@ -1,0 +1,61 @@
+@let d = draft();
+<section class="card form">
+  <h2>{{ d.id ? 'Allgemeinen Termin bearbeiten' : 'Neuer allgemeiner Termin' }}</h2>
+  <p class="muted small">Steht im Kalender jedes ausgewählten Lehrers, z. B. eine Konferenz oder ein Vorspiel.</p>
+  <div class="fields">
+    <label class="wide-field">
+      Bezeichnung
+      <input type="text" [value]="d.title" placeholder="z. B. Konferenz" (change)="set({ title: valueOf($event) })" />
+    </label>
+    <label>
+      {{ d.repeat ? 'Erster Termin' : 'Datum' }}
+      <input type="date" [value]="d.date" (change)="set({ date: valueOf($event) })" />
+    </label>
+    <label>
+      Beginn
+      <input type="time" [value]="d.start" (change)="set({ start: valueOf($event) })" />
+    </label>
+    <label>
+      Dauer (Minuten)
+      <input
+        type="number"
+        min="5"
+        step="5"
+        [value]="d.durationMinutes"
+        (change)="set({ durationMinutes: +valueOf($event) })"
+      />
+    </label>
+    <label>
+      Ort
+      <input type="text" [value]="d.location" placeholder="z. B. Aula" (change)="set({ location: valueOf($event) })" />
+    </label>
+  </div>
+  <div class="teacher-choice">
+    <span class="choice-label">Lehrer</span>
+    @for (teacher of teachers(); track teacher.id) {
+      <label>
+        <input type="checkbox" [checked]="d.teacherIds.includes(teacher.id)" (change)="toggleTeacher(teacher.id)" />
+        {{ teacher.name }}
+      </label>
+    }
+  </div>
+  <app-recurrence-fields [date]="d.date" [repeat]="d.repeat" (repeatChange)="set({ repeat: $event })" />
+  <label class="weekly">
+    <input type="checkbox" [checked]="d.blocksPlanning" (change)="set({ blocksPlanning: checked($event) })" />
+    Blockiert die Lehrer für die automatische Planung
+  </label>
+  @if (d.id && d.repeat) {
+    <p class="muted small">Änderungen und Löschen gelten für alle Wiederholungen und alle beteiligten Lehrer.</p>
+  }
+  @if (error(); as text) {
+    <p class="message error">{{ text }}</p>
+  }
+  <div class="row actions">
+    <button (click)="save()">Speichern</button>
+    <button class="secondary" (click)="closed.emit()">Abbrechen</button>
+    <span class="grow"></span>
+    @if (d.id) {
+      <button class="danger" (click)="remove()">Löschen</button>
+    }
+  </div>
+</section>

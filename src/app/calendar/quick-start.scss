@@ -34,3 +34,16 @@ button {
 .action {
   font-weight: 600;
 }
+
+/* Gleiche Farben wie im Kalender: Stunde erfasst grün, Stunde ohne Termin blau */
+button[data-state='done'] {
+  border-color: var(--state-done);
+  background: var(--state-done-bg);
+  color: var(--state-done);
+}
+
+button[data-state='lessonOnly'] {
+  border-color: var(--state-lesson);
+  background: var(--state-lesson-bg);
+  color: var(--state-lesson);
+}

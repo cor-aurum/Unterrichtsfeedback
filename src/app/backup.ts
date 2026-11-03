@@ -33,6 +33,7 @@ export class BackupService {
     groups: this.groupsStore.groups(),
     appointments: this.calendarStore.appointments(),
     blockers: this.calendarStore.blockers(),
+    sharedAppointments: this.calendarStore.sharedAppointments(),
   }));
   readonly files = computed(() => toSyncFiles(this.data()));
 
@@ -64,13 +65,16 @@ export class BackupService {
     if (!backup || typeof backup !== 'object' || !('students' in backup)) {
       throw new Error('Die Datei ist keine Datensicherung. Eine Konfiguration bitte unter „Konfiguration“ importieren.');
     }
+    const config = parseConfig(backup.config);
     this.apply({
-      config: parseConfig(backup.config),
+      config,
       students: parseStudents(backup.students),
       groups: [],
       // Ältere Sicherungen ohne Termine lassen die vorhandenen Termine stehen.
-      appointments: 'appointments' in backup ? parseAppointments(backup.appointments) : this.calendarStore.appointments(),
+      appointments:
+        'appointments' in backup ? parseAppointments(backup.appointments, config.reportPeriods) : this.calendarStore.appointments(),
       blockers: this.calendarStore.blockers(),
+      sharedAppointments: this.calendarStore.sharedAppointments(),
     });
   }
 
@@ -81,6 +85,7 @@ export class BackupService {
     this.groupsStore.groups.set(data.groups);
     this.calendarStore.appointments.set(data.appointments);
     this.calendarStore.blockers.set(data.blockers);
+    this.calendarStore.sharedAppointments.set(data.sharedAppointments);
   }
 
   private apply(data: AppData): void {

@@ -11,33 +11,56 @@
   <div class="column">
   <section class="card">
     <h2>Personen</h2>
-    @if (teachers().length > 1) {
-      <select class="teacher-filter" aria-label="Nach Lehrer filtern" (change)="teacherFilter.set(valueOf($event))">
-        <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer</option>
-        @for (teacher of teachers(); track teacher.id) {
-          <option [value]="teacher.id" [selected]="teacher.id === teacherFilter.teacherId()">Nur {{ teacher.name }}</option>
+    <div class="person-filter">
+      <input
+        type="search"
+        placeholder="Personen suchen …"
+        aria-label="Personen suchen"
+        [value]="search()"
+        (input)="search.set(valueOf($event))"
+      />
+      <details [open]="extraFilterCount() > 0">
+        <summary>
+          Weitere Filter
+          @if (extraFilterCount() > 0) {
+            <span class="badge">{{ extraFilterCount() }}</span>
+          }
+        </summary>
+        @if (teachers().length > 1) {
+          <select aria-label="Nach Lehrer filtern" (change)="teacherFilter.set(valueOf($event))">
+            <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer</option>
+            @for (teacher of teachers(); track teacher.id) {
+              <option [value]="teacher.id" [selected]="teacher.id === teacherFilter.teacherId()">Nur {{ teacher.name }}</option>
+            }
+          </select>
         }
-      </select>
-    }
-    <div class="new-student">
-      <div class="row">
-        <input
-          #nameInput
-          type="text"
-          class="grow"
-          placeholder="Name der Person"
-          (keydown.enter)="addStudent(nameInput, instrumentSelect)"
-        />
-        <button (click)="addStudent(nameInput, instrumentSelect)" title="Person hinzufügen">+</button>
-      </div>
-      <select #instrumentSelect aria-label="Instrument der neuen Person">
-        @for (instrument of config().instruments; track instrument.id) {
-          <option [value]="instrument.id" [selected]="instrument.id === defaultInstrumentId()">
-            {{ instrument.name }}
+        <select aria-label="Nach Instrument filtern" (change)="instrumentFilter.set(valueOf($event))">
+          <option value="" [selected]="!instrumentFilter()">Alle Instrumente</option>
+          @for (instrument of config().instruments; track instrument.id) {
+            <option [value]="instrument.id" [selected]="instrument.id === instrumentFilter()">{{ instrument.name }}</option>
+          }
+        </select>
+        @if (groups.groups().length > 0) {
+          <select aria-label="Nach Gruppe filtern" (change)="groupFilter.set(valueOf($event))">
+            <option value="" [selected]="!groupFilter()">Alle Gruppen</option>
+            @for (group of groups.groups(); track group.id) {
+              <option [value]="group.id" [selected]="group.id === groupFilter()">Gruppe {{ groupName(group) }}</option>
+            }
+          </select>
+        }
+        <select aria-label="Nach Status filtern" (change)="statusFilter.set($any(valueOf($event)))">
+          <option value="" [selected]="!statusFilter()">Alle</option>
+          <option value="today" [selected]="statusFilter() === 'today'">mit Termin heute</option>
+          <option value="noWeekly" [selected]="statusFilter() === 'noWeekly'">ohne laufende Terminserie</option>
+          <option value="noLessonInPeriod" [selected]="statusFilter() === 'noLessonInPeriod'">
+            ohne Stunde im Berichtszeitraum
           </option>
-        }
-      </select>
-      <button class="secondary import-button" (click)="openImport()">Aus Excel-Datei importieren …</button>
+        </select>
+        <button class="secondary small-button" (click)="resetFilters()">Filter zurücksetzen</button>
+      </details>
+      @if (visibleStudents().length !== store.students().length) {
+        <p class="muted filter-count">{{ visibleStudents().length }} von {{ store.students().length }} Personen</p>
+      }
     </div>
     <ul class="list">
       @for (student of visibleStudents(); track student.id) {
@@ -53,6 +76,9 @@
                 · {{ teacherOf(student).name }}
               }
             </span>
+            @if (groupsLineOf(student); as line) {
+              <span class="instrument">{{ line }}</span>
+            }
           </span>
           @if (hasDoubleLessons(student)) {
             <span class="double-warning" title="Mindestens zwei Stunden am selben Tag">⚠</span>
@@ -61,10 +87,27 @@
         </li>
       } @empty {
         <li class="empty muted">
-          {{ store.students().length === 0 ? 'Noch keine Personen angelegt.' : 'Keine Personen bei diesem Lehrer.' }}
+          {{ store.students().length === 0 ? 'Noch keine Personen angelegt.' : 'Keine Personen passen zum Filter.' }}
         </li>
       }
     </ul>
+    <details class="add-people" [open]="store.students().length === 0">
+      <summary>+ Personen hinzufügen oder importieren</summary>
+      <div class="new-student">
+        <div class="row">
+          <input
+            #nameInput
+            type="text"
+            class="grow"
+            placeholder="Name der Person"
+            (keydown.enter)="addStudent(nameInput)"
+          />
+          <button (click)="addStudent(nameInput)" title="Person hinzufügen">+</button>
+        </div>
+        <app-instrument-select [(value)]="newStudentInstrumentId" label="Instrument der neuen Person" />
+        <button class="secondary import-button" (click)="openImport()">Aus Excel-Datei importieren …</button>
+      </div>
+    </details>
   </section>
   <app-group-list />
   </div>
@@ -74,7 +117,7 @@
   } @else if (store.selectedStudent(); as student) {
     <section class="card">
       <h2>Stunden</h2>
-      <button class="full" (click)="store.addLesson(student.id)">+ Neue Stunde</button>
+      <button class="full" (click)="startLesson(student)">+ Neue Stunde</button>
       <ul class="list">
         @for (lesson of lessonsOfSelected(); track lesson.id) {
           <li
@@ -106,13 +149,11 @@
           (change)="renameStudent(student, $event)"
         />
         <label class="muted" for="student-instrument">Instrument</label>
-        <select id="student-instrument" (change)="setInstrument(student, $event)">
-          @for (instrument of config().instruments; track instrument.id) {
-            <option [value]="instrument.id" [selected]="instrument.id === instrumentOf(student).id">
-              {{ instrument.name }}
-            </option>
-          }
-        </select>
+        <app-instrument-select
+          selectId="student-instrument"
+          [value]="instrumentOf(student).id"
+          (valueChange)="store.setInstrument(student.id, $event)"
+        />
         @if (teachers().length > 1) {
           <label class="muted" for="student-teacher">Lehrer</label>
           <select id="student-teacher" (change)="setTeacher(student, $event)">
@@ -120,6 +161,16 @@
               <option [value]="teacher.id" [selected]="teacher.id === teacherOf(student).id">{{ teacher.name }}</option>
             }
           </select>
+        }
+        <span class="muted">Gruppen</span>
+        @if (groups.groupsOf(student.id).length > 0) {
+          <div class="member-groups">
+            @for (group of groups.groupsOf(student.id); track group.id) {
+              <button class="secondary" (click)="groups.select(group.id)" title="Gruppe öffnen">{{ groupName(group) }}</button>
+            }
+          </div>
+        } @else {
+          <span class="muted small">in keiner Gruppe – Mitglieder legst du bei der Gruppe fest</span>
         }
         @if (slotMessage(); as text) {
           <p class="slot-message">{{ text }}</p>

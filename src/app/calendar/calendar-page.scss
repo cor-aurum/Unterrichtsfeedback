@@ -73,6 +73,45 @@
   }
 }
 
+/* Die Einträge eines Tages sortieren sich über `order` nach Uhrzeit; der Kopf bleibt oben. */
+.day-head {
+  order: -1;
+}
+
+.group-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+
+  .choice-label {
+    width: 100%;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  label {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.view-switch {
+  display: flex;
+  gap: 0.75rem;
+  margin-right: 0.5rem;
+  font-size: 0.9rem;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+  }
+}
+
 .day-head .icon {
   padding: 0.1rem 0.5rem;
 }
@@ -182,5 +221,133 @@
 
   .wide-field {
     grid-column: 1 / -1;
+  }
+}
+
+/* Allgemeine Termine: kräftiger Rahmen in Textfarbe, damit sie sich von Einzel- und Gruppenunterricht abheben */
+.shared {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--primary-text);
+  border-left: 3px double var(--primary-text);
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+  padding-block: 0.3rem;
+
+  /* Zeit und Bezeichnung in einer Zeile, damit allgemeine Termine wenig Platz brauchen */
+  .headline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.4rem;
+  }
+
+  .time {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--primary-text);
+  }
+
+  .name {
+    font-weight: 600;
+  }
+
+  .detail {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+}
+
+/* Zustände: geplant (Themenfarbe), Stunde erfasst (grün), Stunde ohne Termin (blau), vorbei ohne Stunde (grau) */
+.appointment[data-state='done'],
+.swatch[data-state='done'] {
+  border-left-color: var(--state-done);
+  background: var(--state-done-bg);
+}
+
+.appointment[data-state='lessonOnly'],
+.swatch[data-state='lessonOnly'] {
+  border-left-color: var(--state-lesson);
+  background: var(--state-lesson-bg);
+}
+
+.appointment[data-state='missed'],
+.swatch[data-state='missed'] {
+  border-left-color: var(--state-missed);
+  background: var(--state-missed-bg);
+}
+
+.appointment[data-state='done'] .time {
+  color: var(--state-done);
+}
+
+.appointment[data-state='lessonOnly'] .time {
+  color: var(--state-lesson);
+}
+
+.appointment[data-state='missed'] {
+  .time,
+  .name {
+    color: var(--state-missed);
+  }
+}
+
+.appointment .state {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.appointment[data-state='done'] .state {
+  color: var(--state-done);
+
+  &::before {
+    content: '✓ ';
+  }
+}
+
+.appointment[data-state='lessonOnly'] .state {
+  color: var(--state-lesson);
+}
+
+.appointment[data-state='missed'] .state {
+  color: var(--state-missed);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin: -0.25rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+
+  span {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.75rem;
+  border-left: 3px solid var(--primary);
+  background: var(--primary-light);
+
+  &.group {
+    border-left-style: dashed;
+  }
+
+  &.shared {
+    border: 1px solid var(--primary-text);
+    border-left: 3px double var(--primary-text);
+    background: var(--card);
   }
 }

@@ -2,17 +2,32 @@ import { Component, computed, inject, output, signal } from '@angular/core';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
-import { formatDate, Group, groupLabel, groupTeacherOf, Student, today } from '../model';
+import {
+  containsDate,
+  formatDate,
+  Group,
+  groupLabel,
+  groupTeacherOf,
+  Period,
+  reportPeriodEnd,
+  Student,
+  teachingWindowsOn,
+  today,
+} from '../model';
+import { ReportPeriod } from '../report-period';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
 import {
   addDays,
   daysBetween,
+  daysFrom,
   endTime,
   FreeSlot,
+  isRunningSeries,
   minutesOf,
   mondayOf,
   Occurrence,
+  occursOn,
   ownerOf,
   WEEKDAY_NAMES,
   weekday,
@@ -20,8 +35,6 @@ import {
 import { fillSlots, GroupPlacement, planSchedule } from './auto-schedule';
 import { CalendarStore } from './calendar.store';
 
-/** So viele Wochen ab Beginn werden wöchentliche Termine auf Überschneidungen mit Gruppenunterricht geprüft. */
-const CHECK_WEEKS = 12;
 /** Längster Zeitraum für einmalige Termine; länger wird die Berechnung spürbar langsam. */
 const MAX_PERIOD_DAYS = 31;
 
@@ -68,8 +81,13 @@ export class AutoSchedulePanel {
   protected readonly placement = storedSignal<GroupPlacement>('feedback.autoSchedulePlacement', () => 'close', (data) =>
     data === 'mixed' ? 'mixed' : 'close',
   );
-  protected readonly from = signal(addDays(mondayOf(today()), 7));
-  protected readonly to = signal(addDays(mondayOf(today()), 11));
+  private readonly reportPeriod = inject(ReportPeriod);
+  /**
+   * Beginn: der nächste Montag, wenn er im Berichtszeitraum liegt, sonst der erste Tag des Zeitraums. Der Zeitraum
+   * einmaliger Termine ist anfangs fünf Tage lang, höchstens bis zum Ende des Berichtszeitraums.
+   */
+  protected readonly from = signal(startInPeriod(this.reportPeriod.period()));
+  protected readonly to = signal(endInPeriod(this.from(), this.reportPeriod.period()));
   protected readonly periodError = computed(() => {
     if (this.mode() !== 'period') return null;
     if (this.from() > this.to()) return 'Der Zeitraum endet, bevor er beginnt.';
@@ -81,12 +99,17 @@ export class AutoSchedulePanel {
 
   private readonly ownerIds = computed(() => this.groupsStore.calendarOwnerIds(this.teacher()));
 
-  /** Wöchentlich: Personen des Lehrers ohne eigenen wöchentlichen Termin; im Zeitraum: alle seine Personen */
+  /** Wöchentlich: Personen des Lehrers ohne eigene laufende Terminserie; im Zeitraum: alle seine Personen */
   protected readonly candidates = computed(() => {
     const own = this.studentsStore.sortedStudents().filter((s) => this.ownerIds().has(s.id));
     if (this.mode() === 'period') return own;
-    const weekly = new Set(this.calendar.appointments().filter((a) => a.weekly && a.studentId).map(ownerOf));
-    return own.filter((s) => !weekly.has(s.id));
+    const running = new Set(
+      this.calendar
+        .appointments()
+        .filter((a) => a.studentId && isRunningSeries(a, this.from()))
+        .map(ownerOf),
+    );
+    return own.filter((s) => !running.has(s.id));
   });
   private readonly excluded = signal(new Set<string>());
   protected readonly selected = computed(() => this.candidates().filter((s) => !this.excluded().has(s.id)));
@@ -97,6 +120,17 @@ export class AutoSchedulePanel {
     if (this.mode() === 'weekly') return this.calendar.freeWeeklySlots(settings, this.teacher(), inCalendar, this.from());
     if (this.periodError()) return [];
     return this.calendar.freeSlotsInPeriod(settings, this.teacher(), inCalendar, this.from(), this.to());
+  });
+
+  /** Warum es keine freien Slots gibt, damit „0 freie Slots“ nicht rätselhaft bleibt */
+  protected readonly noSlotsReason = computed(() => {
+    if (this.periodError() || this.freeSlots().length > 0) return null;
+    const days = this.mode() === 'weekly' ? daysBetween(this.from(), addDays(this.from(), 6)) : daysBetween(this.from(), this.to());
+    const config = this.config();
+    if (days.every((date) => teachingWindowsOn(this.teacher(), config, date).length === 0)) {
+      return `${this.teacher().name} hat an diesen Tagen keine Unterrichtszeiten (Konfiguration → Lehrer, je Berichtszeitraum).`;
+    }
+    return 'Alle Unterrichtszeiten an diesen Tagen sind schon belegt oder blockiert.';
   });
 
   protected readonly proposals = signal<Proposal[] | null>(null);
@@ -130,9 +164,12 @@ export class AutoSchedulePanel {
     this.proposals.set(null);
   }
 
+  /** Ein neuer Beginn verschiebt das Ende mit, damit der Zeitraum gleich lang bleibt. */
   protected setDate(key: 'from' | 'to', event: Event): void {
     const value = (event.target as HTMLInputElement).value;
-    if (value) this[key].set(value);
+    if (!value) return;
+    if (key === 'from') this.to.set(addDays(value, daysFrom(this.from(), this.to())));
+    this[key].set(value);
     this.proposals.set(null);
   }
 
@@ -204,7 +241,7 @@ export class AutoSchedulePanel {
 
   protected slotLabel(slot: FreeSlot): string {
     const time = `${slot.start}–${endTime({ ...slot, id: '' })}`;
-    return slot.weekly ? `${WEEKDAY_NAMES[weekday(slot.date)]}, ${time}` : `${formatDate(slot.date)}, ${time}`;
+    return slot.repeat ? `${WEEKDAY_NAMES[weekday(slot.date)]}, ${time}` : `${formatDate(slot.date)}, ${time}`;
   }
 
   protected apply(): void {
@@ -227,20 +264,22 @@ export class AutoSchedulePanel {
     if (groups.length === 0) return [];
     const byId = new Map(groups.map((g) => [g.id, g]));
     const from = this.from();
-    const to = this.mode() === 'weekly' ? addDays(from, CHECK_WEEKS * 7 - 1) : this.to();
     return this.calendar
-      .occurrences(from, to, new Set(byId.keys()))
+      .occurrences(from, this.checkedUntil(), new Set(byId.keys()))
       .map((occurrence) => ({ occurrence, group: byId.get(occurrence.appointment.groupId!)! }));
   }
 
   /** Einzeltermine der Person, die nicht in diesem Kalender stehen (z. B. als Ausnahme bei einem anderen Lehrer) */
   private otherIndividualLessons(student: Student): { occurrence: Occurrence }[] {
     const inCalendar = this.groupsStore.calendarFilter(this.teacher());
-    const from = this.from();
-    const to = this.mode() === 'weekly' ? addDays(from, CHECK_WEEKS * 7 - 1) : this.to();
     return this.calendar
-      .occurrences(from, to, (a) => a.studentId === student.id && !inCalendar(a))
+      .occurrences(this.from(), this.checkedUntil(), (a) => a.studentId === student.id && !inCalendar(a))
       .map((occurrence) => ({ occurrence }));
+  }
+
+  /** Wöchentliche Serien laufen bis zum Ende des Berichtszeitraums; so weit wird auf Überschneidungen geprüft. */
+  private checkedUntil(): string {
+    return this.mode() === 'weekly' ? reportPeriodEnd(this.config().reportPeriods, addDays(this.from(), 6)) : this.to();
   }
 
   /** Vorhandene Termine je Person und Tag im Zeitraum, eigene und die ihrer Gruppen; Schlüssel „ID Datum“ */
@@ -261,22 +300,30 @@ export class AutoSchedulePanel {
   }
 }
 
+/** Der nächste Montag, wenn er im Berichtszeitraum liegt, sonst der erste Tag des Zeitraums */
+function startInPeriod(period: Period): string {
+  const nextMonday = addDays(mondayOf(today()), 7);
+  return containsDate(period, nextMonday) ? nextMonday : period.from;
+}
+
+/** Fünf Tage ab dem Beginn, höchstens bis zum Ende des Berichtszeitraums (sofern der Beginn noch darin liegt) */
+function endInPeriod(from: string, period: Period): string {
+  const end = addDays(from, 4);
+  return containsDate(period, from) && period.to < end ? period.to : end;
+}
+
 /** z. B. „1 wöchentlicher Termin“, „3 einmalige Termine“ */
 export function appointmentCount(count: number, weekly = true): string {
   const [one, many] = weekly ? ['wöchentlicher Termin', 'wöchentliche Termine'] : ['einmaliger Termin', 'einmalige Termine'];
   return `${count} ${count === 1 ? one : many}`;
 }
 
-/**
- * Gruppentermine, die den Slot überschneiden: bei wöchentlichen Slots jede Wiederholung ab `slot.date`,
- * sonst nur an diesem Tag.
- */
+/** Gruppentermine, die den Slot überschneiden: bei Serien an jedem ihrer Tage, sonst nur an diesem Tag. */
 function clashing<T extends { occurrence: Occurrence }>(busy: T[], slot: FreeSlot): T[] {
   const start = minutesOf(slot.start);
   const end = start + slot.durationMinutes;
   return busy.filter(({ occurrence: { date, appointment } }) => {
-    const sameDay = slot.weekly ? date >= slot.date && weekday(date) === weekday(slot.date) : date === slot.date;
-    if (!sameDay) return false;
+    if (!occursOn(slot, date)) return false;
     const otherStart = minutesOf(appointment.start);
     return start < otherStart + appointment.durationMinutes && otherStart < end;
   });

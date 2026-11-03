@@ -1,10 +1,12 @@
 import { Component, computed, inject } from '@angular/core';
 import { ActiveTeacher } from '../active-teacher';
 import { GroupsStore } from '../groups.store';
-import { groupLabel, lessonAt, today } from '../model';
+import { groupLabel, today } from '../model';
 import { StudentsStore } from '../students.store';
 import { Appointment, endTime, startMinutes } from './appointments';
+import { appointmentState } from './appointment-state';
 import { CalendarStore } from './calendar.store';
+import { LessonOpener } from './lesson-opener';
 import { Clock } from './clock';
 
 /** Ab so vielen Minuten vor Beginn gilt ein Termin als „jetzt“. */
@@ -24,6 +26,7 @@ export class QuickStart {
   private readonly clock = inject(Clock);
   private readonly activeTeacher = inject(ActiveTeacher);
   private readonly groups = inject(GroupsStore);
+  private readonly opener = inject(LessonOpener);
   protected readonly students = inject(StudentsStore);
 
   /** Nur Termine im Kalender des aktiven Lehrers. */
@@ -41,17 +44,13 @@ export class QuickStart {
         ...owner,
         time: `${appointment.start}–${endTime(appointment)}`,
         current: minutes >= start - LEAD_MINUTES,
+        state: appointmentState(appointment, date, owner.hasLesson, now),
       }];
     });
   });
 
   protected open(appointment: Appointment): void {
-    const time = { start: appointment.start, durationMinutes: appointment.durationMinutes };
-    if (appointment.groupId) {
-      this.groups.openLesson(appointment.groupId, today(), time);
-    } else if (appointment.studentId) {
-      this.students.openLesson(appointment.studentId, today(), time);
-    }
+    this.opener.open(appointment, today());
   }
 
   /** Anzeigename und ob es die Stunde (bei Gruppen: die Gruppenstunde) heute schon gibt */
@@ -60,9 +59,9 @@ export class QuickStart {
     if (appointment.groupId) {
       const group = this.groups.groups().find((g) => g.id === appointment.groupId);
       if (!group) return null;
-      return { name: `Gruppe ${groupLabel(group, students)}`, hasLesson: !!lessonAt(group, date, appointment.start) };
+      return { name: `Gruppe ${groupLabel(group, students)}`, hasLesson: !!this.opener.lessonFor(appointment, date) };
     }
     const student = students.find((s) => s.id === appointment.studentId);
-    return student ? { name: student.name, hasLesson: !!lessonAt(student, date, appointment.start) } : null;
+    return student ? { name: student.name, hasLesson: !!this.opener.lessonFor(appointment, date) } : null;
   }
 }

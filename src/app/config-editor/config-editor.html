@@ -66,6 +66,15 @@
             </button>
           </div>
 
+          <label class="show-title">
+            <input
+              type="checkbox"
+              [checked]="store.config().pdfLayout.grayscale"
+              (change)="store.setPdfLayout({ grayscale: $any($event.target).checked })"
+            />
+            PDFs in Schwarzweiß – spart Farbe beim Drucken (Grautöne, keine farbigen Flächen, Bilder in Graustufen)
+          </label>
+
           <p class="muted small">
             Platzhalter für alle Texte im PDF (Überschrift, Kopf- und Fußzeile, feste Texte, Textbausteine und
             Freitextfelder):
@@ -76,26 +85,75 @@
         </section>
 
         <section class="card">
-          <strong>Berichtszeitraum</strong>
-          <div class="period">
-            <input
-              type="date"
-              aria-label="Berichtszeitraum von"
-              [value]="reportPeriod.period().from"
-              (change)="setPeriod('from', $event)"
-            />
-            <span>bis</span>
-            <input
-              type="date"
-              aria-label="Berichtszeitraum bis"
-              [value]="reportPeriod.period().to"
-              (change)="setPeriod('to', $event)"
-            />
+          <strong>Berichtszeiträume</strong>
+          <ul class="periods">
+            @for (period of store.config().reportPeriods; track period.id) {
+              <li class="period" [class.active]="period.id === reportPeriod.period().id">
+                <input
+                  type="radio"
+                  name="active-period"
+                  title="Auf diesem Gerät verwenden"
+                  [attr.aria-label]="period.name + ' auf diesem Gerät verwenden'"
+                  [checked]="period.id === reportPeriod.period().id"
+                  (change)="reportPeriod.select(period.id)"
+                />
+                <input
+                  type="text"
+                  class="period-name"
+                  aria-label="Name des Berichtszeitraums"
+                  [value]="period.name"
+                  (change)="setPeriodName(period, $event)"
+                />
+                <span class="period-dates">
+                  <input
+                    type="date"
+                    aria-label="Berichtszeitraum von"
+                    [value]="period.from"
+                    (change)="setPeriodDate(period, 'from', $event)"
+                  />
+                  <span>bis</span>
+                  <input
+                    type="date"
+                    aria-label="Berichtszeitraum bis"
+                    [value]="period.to"
+                    (change)="setPeriodDate(period, 'to', $event)"
+                  />
+                </span>
+                <button
+                  class="icon"
+                  title="Löschen"
+                  [disabled]="store.config().reportPeriods.length <= 1"
+                  (click)="removePeriod(period)"
+                >
+                  ✕
+                </button>
+                @if (store.config().teachers.length > 1) {
+                  <div class="period-teachers">
+                    <span class="choice-label">Aktive Lehrer</span>
+                    @for (teacher of store.config().teachers; track teacher.id) {
+                      <label>
+                        <input
+                          type="checkbox"
+                          [checked]="period.teacherIds.includes(teacher.id)"
+                          (change)="store.toggleReportPeriodTeacher(period.id, teacher.id)"
+                        />
+                        {{ teacher.name }}
+                      </label>
+                    }
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+          <div>
+            <button class="secondary" (click)="store.addReportPeriod()">+ Berichtszeitraum</button>
           </div>
           <p class="muted small">
-            Im PDF stehen nur Personen mit mindestens einer Stunde in diesem Zeitraum und nur diese Stunden. Die
-            Textbausteine im allgemeinen Teil gelten beim Erfassen und im PDF für alle Stunden im Zeitraum.
-            Voreingestellt ist das aktuelle Schulhalbjahr. Der Zeitraum gilt nur auf diesem Gerät.
+            Der markierte Zeitraum gilt auf diesem Gerät: Im PDF stehen nur Personen mit mindestens einer Stunde in
+            diesem Zeitraum und nur diese Stunden, und die Textbausteine im allgemeinen Teil gelten für alle Stunden im
+            Zeitraum. Ohne eigene Wahl gilt der Zeitraum, in dem heute liegt. Unter „Feste Inhalte“ kann jeder Zeitraum
+            eigene Varianten bekommen; <code>{{ '{zeitraum}' }}</code> setzt seinen Namen ins PDF. Die aktiven Lehrer
+            sind bei allgemeinen Terminen im Kalender vorausgewählt und stehen im Tagesplan aller Lehrer.
           </p>
         </section>
       }
@@ -189,10 +247,54 @@
           </div>
           <div>
             <button class="secondary" [disabled]="isDefaultPdfLayout()" (click)="store.resetPdfLayout()">
-              Standard wiederherstellen
+              Texte auf Standard zurücksetzen
             </button>
           </div>
         </section>
+
+        @for (slot of logoSlots; track slot.key) {
+          <section class="card logo">
+            <h3>{{ slot.label }}</h3>
+            <p class="muted small">{{ slot.hint }}</p>
+            @if (store.config().pdfLayout[slot.key]; as logo) {
+              <div class="logo-row">
+                <img [src]="logo.dataUrl" [alt]="slot.label" [style.height.px]="logo.heightMm * 3" />
+                <div class="logo-settings">
+                  <label>
+                    Höhe im PDF (mm)
+                    <input
+                      type="number"
+                      [min]="slot.limits.min"
+                      [max]="slot.limits.max"
+                      [value]="logo.heightMm"
+                      (change)="setLogoHeight(slot, logo, $event)"
+                    />
+                  </label>
+                  <label>
+                    Ausrichtung
+                    <select [value]="logo.align" (change)="setLogoAlign(slot, logo, $event)">
+                      <option value="left">Links</option>
+                      <option value="center">Mittig</option>
+                      <option value="right">Rechts</option>
+                    </select>
+                  </label>
+                  <div class="row">
+                    <button class="secondary" (click)="logoInput.click()">Bild ersetzen</button>
+                    <button class="secondary" (click)="removeLogo(slot)">Entfernen</button>
+                  </div>
+                </div>
+              </div>
+            } @else {
+              <div class="row">
+                <button class="secondary" (click)="logoInput.click()">Bild auswählen</button>
+                @if (slot.key === 'headerLogo') {
+                  <button class="secondary" (click)="store.setPdfLayout({ headerLogo: appLogo })">App-Logo verwenden</button>
+                }
+              </div>
+            }
+            <input #logoInput type="file" accept="image/*" hidden (change)="chooseLogo(slot, logoInput)" />
+          </section>
+        }
       }
       @case ('instruments') {
         <h2 class="tab-title">Instrumente</h2>
@@ -252,6 +354,16 @@
           <code>{{ '{lehrer}' }}</code>, <code>{{ '{lehrerinstrument}' }}</code>, <code>{{ '{ort}' }}</code>.
         </p>
 
+        <label class="windows-period">
+          Unterrichtszeiten für
+          <select (change)="windowsPeriodId.set(valueOf($event) || null)">
+            @for (period of store.config().reportPeriods; track period.id) {
+              <option [value]="period.id" [selected]="period.id === windowsPeriodId()">{{ periodLabel(period) }}</option>
+            }
+            <option value="" [selected]="windowsPeriodId() === null">Tage außerhalb aller Berichtszeiträume</option>
+          </select>
+        </label>
+
         @for (teacher of store.config().teachers; track teacher.id; let first = $first, last = $last) {
           <section class="card teacher">
             <div class="row teacher-head">
@@ -266,6 +378,12 @@
               <button class="icon" [disabled]="last" (click)="store.moveTeacher(teacher.id, 1)" title="Nach unten">↓</button>
               <button
                 class="icon"
+                (click)="store.duplicateTeacher(teacher.id)"
+                title="Duplizieren: neuer Lehrer mit denselben Unterrichtszeiten"
+                aria-label="Lehrer duplizieren"
+              >⧉</button>
+              <button
+                class="icon"
                 [disabled]="first && last"
                 (click)="removeTeacher(teacher)"
                 [title]="first && last ? 'Mindestens ein Lehrer wird gebraucht' : 'Lehrer löschen'"
@@ -274,13 +392,10 @@
             <div class="teacher-fields">
               <label>
                 Instrument
-                <select (change)="store.updateTeacher(teacher.id, { instrumentId: valueOf($event) })">
-                  @for (instrument of store.config().instruments; track instrument.id) {
-                    <option [value]="instrument.id" [selected]="instrument.id === teacherInstrumentId(teacher)">
-                      {{ instrument.name }}
-                    </option>
-                  }
-                </select>
+                <app-instrument-select
+                  [value]="teacherInstrumentId(teacher)"
+                  (valueChange)="store.updateTeacher(teacher.id, { instrumentId: $event })"
+                />
               </label>
               <label>
                 Ort
@@ -293,7 +408,13 @@
               </label>
             </div>
 
-            <h3>Unterrichtszeiten</h3>
+            <h3>Unterrichtszeiten <span class="muted">· {{ windowsPeriodName() }}</span></h3>
+            @if (inheritsWindows(teacher)) {
+              <p class="muted small inherit-hint">
+                Noch keine eigenen Zeiten für diesen Zeitraum, es gelten die außerhalb der Berichtszeiträume. Eine
+                Änderung gilt nur für diesen Zeitraum.
+              </p>
+            }
             @for (day of weekdays; track day.index) {
               <div class="weekday-row">
                 <span class="weekday">{{ day.name }}</span>
@@ -303,7 +424,7 @@
                       <input type="time" [value]="window.from" (change)="setWindowTime(teacher, window, 'from', $event)" aria-label="Von" />
                       –
                       <input type="time" [value]="window.to" (change)="setWindowTime(teacher, window, 'to', $event)" aria-label="Bis" />
-                      <button class="icon" (click)="store.removeTeachingWindow(teacher.id, window.id)" title="Zeitfenster löschen">✕</button>
+                      <button class="icon" (click)="store.removeTeachingWindow(teacher.id, windowsPeriodId(), window.id)" title="Zeitfenster löschen">✕</button>
                     </span>
                   } @empty {
                     <span class="muted">kein Unterricht</span>
@@ -311,12 +432,12 @@
                 </div>
                 <button
                   class="icon"
-                  (click)="store.applyStandardWindows(teacher.id, day.index)"
+                  (click)="store.applyStandardWindows(teacher.id, windowsPeriodId(), day.index)"
                   title="Unterrichtszeiten dieses Tages durch die Standardunterrichtszeiten ersetzen"
                 >
                   Standard
                 </button>
-                <button class="icon" (click)="store.addTeachingWindow(teacher.id, day.index)" title="Zeitfenster hinzufügen">+</button>
+                <button class="icon" (click)="store.addTeachingWindow(teacher.id, windowsPeriodId(), day.index)" title="Zeitfenster hinzufügen">+</button>
               </div>
             }
           </section>
@@ -349,10 +470,10 @@
             <label class="show-title">
               <input
                 type="checkbox"
-                [checked]="store.config().calendar.weeklyByDefault"
-                (change)="store.setCalendarDefaults({ weeklyByDefault: $any($event.target).checked })"
+                [checked]="store.config().calendar.repeatByDefault"
+                (change)="store.setCalendarDefaults({ repeatByDefault: $any($event.target).checked })"
               />
-              „Jede Woche wiederholen“ bei neuen Terminen angehakt
+              „Wiederholen“ bei neuen Terminen angehakt (täglich bis zum Ende des Berichtszeitraums)
             </label>
           </div>
 
@@ -373,6 +494,28 @@
               <span class="muted">Keine Standardunterrichtszeiten</span>
             }
             <button class="icon" (click)="store.addStandardWindow()" title="Zeitfenster hinzufügen">+</button>
+          </div>
+        </section>
+
+        <section class="card layout">
+          <strong>Texte der Kalender-PDFs</strong>
+          <p class="muted small">
+            Für die Terminlisten, den Wochenplan und den Tagesplan. Ein leeres Feld blendet den Text aus.
+          </p>
+          @for (field of calendarPdfFields; track field.key) {
+            <label>
+              {{ field.label }}
+              <input
+                type="text"
+                [value]="store.config().calendarPdf[field.key]"
+                (change)="setCalendarPdfText(field.key, $event)"
+              />
+            </label>
+          }
+          <div>
+            <button class="secondary" [disabled]="isDefaultCalendarPdfTexts()" (click)="store.resetCalendarPdfTexts()">
+              Texte auf Standard zurücksetzen
+            </button>
           </div>
         </section>
       }
@@ -536,8 +679,21 @@
                 </label>
               }
             </div>
+            <div class="instrument-choice">
+              <span class="choice-label">Berichtszeiträume</span>
+              @for (period of store.config().reportPeriods; track period.id) {
+                <label>
+                  <input
+                    type="checkbox"
+                    [checked]="variant.periodIds.includes(period.id)"
+                    (change)="store.toggleVariantCondition(block.id, variant.id, 'periodIds', period.id)"
+                  />
+                  {{ period.name }}
+                </label>
+              }
+            </div>
             <p class="muted small variant-rule">
-              Nichts angehakt heißt „egal“. Sind Instrumente und Lehrer angehakt, müssen beide passen.
+              Nichts angehakt heißt „egal“. Ist in mehreren Zeilen etwas angehakt, muss alles passen.
             </p>
             <app-block-content-editor
               [type]="block.type"
@@ -550,7 +706,7 @@
         }
 
         <button class="secondary add-variant" (click)="store.addVariant(block.id)">
-          + Variante für bestimmte Instrumente oder Lehrer
+          + Variante für bestimmte Instrumente, Lehrer oder Zeiträume
         </button>
       </section>
     }

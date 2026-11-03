@@ -1,5 +1,6 @@
 import { Appointment, ownerOf as appointmentOwner, parseAppointments } from '../calendar/appointments';
 import { Blocker, parseBlockers } from '../calendar/blockers';
+import { parseSharedAppointments, SharedAppointment } from '../calendar/shared-appointments';
 import { parseConfig } from '../config.store';
 import { parseGroups } from '../groups.store';
 import { BlockVariant, FeedbackConfig, Group, groupTeacherOf, Student, Teacher, teacherOf } from '../model';
@@ -13,6 +14,7 @@ export interface AppData {
   groups: Group[];
   appointments: Appointment[];
   blockers: Blocker[];
+  sharedAppointments: SharedAppointment[];
 }
 
 /** Dateiname → JSON-Inhalt */
@@ -22,6 +24,8 @@ export type SyncFiles = Map<string, string>;
 export const GENERAL_FILE = 'konfiguration.json';
 /** Gruppen, auch über mehrere Lehrer hinweg; ihre Termine stehen in der Datei ihres Lehrers. */
 export const GROUPS_FILE = 'gruppen.json';
+/** Termine für mehrere Lehrer, z. B. Konferenzen */
+export const SHARED_FILE = 'allgemeine-termine.json';
 // Nur Zeichen, die `safeFileName` erzeugt; so zählen Konfliktkopien der Nextcloud wie
 // „lehrer-Anna (conflicted copy 2026-…).json“ nicht als Lehrerdatei.
 const TEACHER_FILE = /^lehrer-[\p{L}\p{N}_-]+\.json$/u;
@@ -56,6 +60,12 @@ interface GroupsFile {
   groups: Group[];
 }
 
+interface SharedFile {
+  format: 'unterricht-feedback/allgemeine-termine';
+  version: 1;
+  appointments: SharedAppointment[];
+}
+
 /** Variante eines festen Blocks; `index` ist ihre Stelle unter den Varianten, weil die erste passende gilt. */
 interface TeacherVariant {
   blockId: string;
@@ -64,7 +74,7 @@ interface TeacherVariant {
 }
 
 export function isSyncFile(name: string): boolean {
-  return name === GENERAL_FILE || name === GROUPS_FILE || TEACHER_FILE.test(name);
+  return name === GENERAL_FILE || name === GROUPS_FILE || name === SHARED_FILE || TEACHER_FILE.test(name);
 }
 
 export function isTeacherFile(name: string): boolean {
@@ -77,6 +87,8 @@ export function toSyncFiles(data: AppData): SyncFiles {
   files.set(GENERAL_FILE, json(generalFile(config)));
   const groupsFile: GroupsFile = { format: 'unterricht-feedback/gruppen', version: 1, groups: data.groups };
   files.set(GROUPS_FILE, json(groupsFile));
+  const sharedFile: SharedFile = { format: 'unterricht-feedback/allgemeine-termine', version: 1, appointments: data.sharedAppointments };
+  files.set(SHARED_FILE, json(sharedFile));
   const fileNames = teacherFileNames(config.teachers);
   config.teachers.forEach((teacher, position) =>
     files.set(fileNames.get(teacher.id)!, json(teacherFile(data, teacher, position))),
@@ -114,9 +126,20 @@ export function fromSyncFiles(files: SyncFiles): AppData {
     config,
     students: parseStudents(teacherFiles.flatMap((file) => file.students)),
     groups: parseGroupsFile(files.get(GROUPS_FILE)),
-    appointments: parseAppointments(teacherFiles.flatMap((file) => file.appointments)),
+    appointments: parseAppointments(teacherFiles.flatMap((file) => file.appointments), config.reportPeriods),
     blockers: parseBlockers(teacherFiles.flatMap((file) => file.blockers)),
+    sharedAppointments: parseSharedFile(files.get(SHARED_FILE), config),
   };
+}
+
+/** Ältere Sicherungen haben noch keine allgemeinen Termine. */
+function parseSharedFile(content: string | undefined, config: FeedbackConfig): SharedAppointment[] {
+  if (!content) return [];
+  const file = JSON.parse(content) as Partial<SharedFile>;
+  if (file?.format !== 'unterricht-feedback/allgemeine-termine') {
+    throw new Error(`„${SHARED_FILE}“ ist keine Termindatei dieser App.`);
+  }
+  return parseSharedAppointments(file.appointments, config.reportPeriods);
 }
 
 /** Ältere Sicherungen haben noch keine Gruppen. */

@@ -204,13 +204,16 @@ export interface FillResult {
 }
 
 /** Wertung beim Füllen; verglichen wird der Reihe nach (wichtigstes zuerst). */
-type FillScore = [empty: number, secondOnDay: number, conflicts: number, balance: number, groupCost: number];
+type FillScore = [empty: number, conflicts: number, balance: number, secondOnDay: number, groupCost: number];
 
 /**
  * Füllt alle freien Slots eines Zeitraums mit einmaligen Terminen; jede Person kann mehrere bekommen. Danach
- * zählt der Reihe nach: möglichst niemand zweimal am selben Tag (vorhandene Termine eingerechnet), möglichst
- * wenige Überschneidungen mit anderem Unterricht, möglichst gleich viele Termine je Person, zuletzt die
+ * zählt der Reihe nach: möglichst wenige Überschneidungen mit anderem Unterricht, möglichst gleich viele neue
+ * Termine je Person, möglichst niemand zweimal am selben Tag (vorhandene Termine eingerechnet), zuletzt die
  * Verteilung der Gruppenmitglieder (`placement`).
+ *
+ * Die gleichmäßige Verteilung geht dem „zweimal am Tag“ vor: Sonst bekämen die wenigen Personen ohne Termine in
+ * der Woche fast alle Slots, sobald die anderen schon (z. B. tägliche) Termine haben.
  */
 export function fillSlots(input: FillInput): FillResult {
   const { slots, studentIds } = input;
@@ -246,7 +249,7 @@ export function fillSlots(input: FillInput): FillResult {
       group += dayGroupCost(indices, owner, slots, groupsOf, input.placement);
     }
     const balance = [...counts.values()].reduce((sum, n) => sum + n * n, 0);
-    return [empty, secondOnDay, conflicts, balance, group];
+    return [empty, conflicts, balance, secondOnDay, group];
   };
 
   // Gierig: Slot für Slot die Person, mit der die Wertung am besten bleibt

@@ -53,17 +53,11 @@ export class StudentsStore {
     this.selectedLessonId.set(lessons.at(-1)?.id ?? null);
   }
 
-  addLesson(studentId: string): void {
-    const lesson: Lesson = { id: newId(), date: today(), checked: {}, texts: {} };
-    this.mutateStudent(studentId, (student) => student.lessons.push(lesson));
-    this.selectedLessonId.set(lesson.id);
-  }
-
   /**
    * Wählt die Person und ihre Stunde zu einem Termin aus; gibt es noch keine, wird sie mit Datum und
    * Uhrzeit des Termins angelegt. Einer vorhandenen Stunde ohne Uhrzeit wird die des Termins ergänzt.
    */
-  openLesson(studentId: string, date: string, time?: { start: string; durationMinutes: number }): void {
+  openLesson(studentId: string, date: string, time?: { start: string; durationMinutes?: number }): void {
     this.selectStudent(studentId);
     const student = this.selectedStudent();
     if (!student) return;

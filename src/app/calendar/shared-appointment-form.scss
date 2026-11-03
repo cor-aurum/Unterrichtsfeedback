@@ -1,0 +1,62 @@
+.form {
+  border-left: 4px solid var(--primary-text);
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+  }
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.wide-field {
+  grid-column: 1 / -1;
+}
+
+.form .weekly {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  cursor: pointer;
+}
+
+.small {
+  margin: 0.4rem 0 0.75rem;
+  font-size: 0.85rem;
+}
+
+.teacher-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+
+  .choice-label {
+    width: 100%;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  label {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.message {
+  margin-top: 0.75rem;
+}
+
+.actions {
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}

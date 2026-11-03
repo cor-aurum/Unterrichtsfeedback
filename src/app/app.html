@@ -35,6 +35,12 @@
   <router-outlet />
 </main>
 
+@defer (when setupPending()) {
+  @if (setupPending()) {
+    <app-welcome-dialog />
+  }
+}
+
 <footer class="hint">
   @if (folderSync.status() === 'ok') {
     Die Daten liegen {{ nativeApp ? 'in dieser App' : 'in diesem Browser' }} und werden bei jeder Änderung

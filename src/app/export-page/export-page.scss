@@ -78,3 +78,11 @@ h1 {
   margin: -0.5rem 0 0.75rem;
   font-size: 0.85rem;
 }
+
+.danger-zone {
+  border-left: 4px solid var(--danger);
+
+  h2 {
+    color: var(--danger);
+  }
+}

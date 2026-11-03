@@ -1,24 +1,33 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
 import { blocksOf, ConfigStore, sectionsOf } from '../config.store';
 import {
+  APP_LOGO,
+  CalendarPdfTexts,
+  DEFAULT_CALENDAR_PDF_TEXTS,
   ContentKind,
   DEFAULT_PDF_LAYOUT,
   defaultInstrument,
   FixedBlock,
   GROUP_PLACEHOLDERS,
+  ImageAlign,
   Instrument,
+  LOGO_HEIGHT_LIMITS,
+  PdfLogo,
   PLACEHOLDERS,
+  ReportPeriodEntry,
   Section,
   Teacher,
   teacherInstrument,
   TeachingWindow,
+  teachingWindowsFor,
   TimeWindow,
 } from '../model';
 import { WEEKDAY_NAMES } from '../calendar/appointments';
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
-import { ReportPeriod } from '../report-period';
+import { InstrumentSelect } from '../instrument-select';
+import { labelOf, ReportPeriod } from '../report-period';
 import { storedSignal } from '../stored-signal';
 import { DEFAULT_THEME_COLOR, isHexColor } from '../theme';
 
@@ -36,9 +45,28 @@ const CONFIG_TABS = [
 
 type ConfigTab = (typeof CONFIG_TABS)[number]['id'];
 
+const LOGO_SLOTS = [
+  {
+    key: 'headerLogo',
+    label: 'Logo in der Kopfzeile',
+    hint: 'Steht auf der ersten Seite neben der Überschrift (mittig: darüber), auf den Folgeseiten kleiner neben der Kopfzeile.',
+    limits: LOGO_HEIGHT_LIMITS.headerLogo,
+    defaultHeight: 15,
+  },
+  {
+    key: 'footerLogo',
+    label: 'Logo in der Fußzeile',
+    hint: 'Steht auf jeder Seite in der Fußzeile; ein Text an derselben Stelle rückt daneben.',
+    limits: LOGO_HEIGHT_LIMITS.footerLogo,
+    defaultHeight: 8,
+  },
+] as const;
+
+type LogoSlot = (typeof LOGO_SLOTS)[number];
+
 @Component({
   selector: 'app-config-editor',
-  imports: [BlockContentEditor, NgTemplateOutlet],
+  imports: [BlockContentEditor, NgTemplateOutlet, InstrumentSelect],
   templateUrl: './config-editor.html',
   styleUrl: './config-editor.scss',
 })
@@ -56,8 +84,23 @@ export class ConfigEditor {
   protected readonly defaultThemeColor = DEFAULT_THEME_COLOR;
   protected readonly weekdays = WEEKDAY_NAMES.map((name, index) => ({ name, index }));
   protected readonly isDefaultPdfLayout = computed(
-    () => JSON.stringify(this.store.config().pdfLayout) === JSON.stringify(DEFAULT_PDF_LAYOUT),
+    () =>
+      JSON.stringify({ ...this.store.config().pdfLayout, headerLogo: null, footerLogo: null, grayscale: false }) ===
+      JSON.stringify(DEFAULT_PDF_LAYOUT),
   );
+  protected readonly logoSlots = LOGO_SLOTS;
+  protected readonly calendarPdfFields: { key: keyof CalendarPdfTexts; label: string }[] = [
+    { key: 'listTitle', label: 'Überschrift der Liste' },
+    { key: 'eventListTitle', label: 'Überschrift der Liste ohne Einzelunterricht' },
+    { key: 'dayPlanTitle', label: 'Überschrift des Tagesplans' },
+    { key: 'footer', label: 'Fußzeile links (alle Kalender-PDFs)' },
+    { key: 'noAppointments', label: 'Hinweis, wenn der Zeitraum keine Termine hat' },
+    { key: 'blocked', label: 'Bezeichnung für Blocker (auch in der iCal-Datei)' },
+  ];
+  protected readonly isDefaultCalendarPdfTexts = computed(
+    () => JSON.stringify(this.store.config().calendarPdf) === JSON.stringify(DEFAULT_CALENDAR_PDF_TEXTS),
+  );
+  protected readonly appLogo = APP_LOGO;
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
   protected readonly defaultInstrumentId = computed(() => defaultInstrument(this.store.config()).id);
 
@@ -65,8 +108,25 @@ export class ConfigEditor {
     return (event.target as HTMLInputElement).value;
   }
 
+  /** Berichtszeitraum, dessen Unterrichtszeiten bearbeitet werden; `null`: Tage außerhalb aller Zeiträume */
+  // Über ein `computed`: Der Zeitraum ist nach jeder Änderung der Konfiguration ein neues Objekt, die ID bleibt.
+  private readonly activePeriodId = computed(() => this.reportPeriod.period().id);
+  protected readonly windowsPeriodId = linkedSignal<string | null>(() => this.activePeriodId());
+  protected readonly windowsPeriodName = computed(
+    () => this.store.config().reportPeriods.find((p) => p.id === this.windowsPeriodId())?.name ?? 'außerhalb der Berichtszeiträume',
+  );
+  protected readonly periodLabel = labelOf;
+
   protected windowsOf(teacher: Teacher, weekday: number): TeachingWindow[] {
-    return teacher.teachingWindows.filter((w) => w.weekday === weekday).sort((a, b) => a.from.localeCompare(b.from));
+    return teachingWindowsFor(teacher, this.windowsPeriodId())
+      .filter((w) => w.weekday === weekday)
+      .sort((a, b) => a.from.localeCompare(b.from));
+  }
+
+  /** Der gewählte Zeitraum hat beim Lehrer noch keine eigenen Zeiten. */
+  protected inheritsWindows(teacher: Teacher): boolean {
+    const periodId = this.windowsPeriodId();
+    return !!periodId && !teacher.periodWindows[periodId];
   }
 
   protected teacherInstrumentId(teacher: Teacher): string {
@@ -127,18 +187,39 @@ export class ConfigEditor {
 
   protected setWindowTime(teacher: Teacher, window: TeachingWindow, key: 'from' | 'to', event: Event): void {
     if (this.isValidWindowChange(window, key, event)) {
-      this.store.updateTeachingWindow(teacher.id, window.id, { [key]: this.valueOf(event) });
+      this.store.updateTeachingWindow(teacher.id, this.windowsPeriodId(), window.id, { [key]: this.valueOf(event) });
     }
   }
 
-  protected setPeriod(key: 'from' | 'to', event: Event): void {
+  protected setCalendarPdfText(key: keyof CalendarPdfTexts, event: Event): void {
+    this.store.setCalendarPdfTexts({ [key]: this.valueOf(event) });
+  }
+
+  protected setPeriodName(period: ReportPeriodEntry, event: Event): void {
     const input = event.target as HTMLInputElement;
-    const period = { ...this.reportPeriod.period(), [key]: input.value };
-    if (input.value && period.from <= period.to) {
-      this.reportPeriod.set(period);
+    const name = input.value.trim();
+    if (name) {
+      this.store.updateReportPeriod(period.id, { name });
     } else {
-      input.value = this.reportPeriod.period()[key];
+      input.value = period.name;
+      this.showError('Ein Berichtszeitraum braucht einen Namen.');
+    }
+  }
+
+  protected setPeriodDate(period: ReportPeriodEntry, key: 'from' | 'to', event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const changed = { ...period, [key]: input.value };
+    if (input.value && changed.from <= changed.to) {
+      this.store.updateReportPeriod(period.id, { [key]: input.value });
+    } else {
+      input.value = period[key];
       this.showError('Der Berichtszeitraum darf nicht enden, bevor er beginnt.');
+    }
+  }
+
+  protected removePeriod(period: ReportPeriodEntry): void {
+    if (confirm(`Berichtszeitraum „${period.name}“ löschen? Varianten der festen Inhalte gelten danach nicht mehr für ihn.`)) {
+      this.store.removeReportPeriod(period.id);
     }
   }
 
@@ -202,6 +283,40 @@ export class ConfigEditor {
     }
   }
 
+  protected async chooseLogo(slot: LogoSlot, input: HTMLInputElement): Promise<void> {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      const { dataUrl, widthPx, heightPx } = await readImageFile(file);
+      const current = this.store.config().pdfLayout[slot.key];
+      this.store.setPdfLayout({
+        [slot.key]: { dataUrl, widthPx, heightPx, heightMm: current?.heightMm ?? slot.defaultHeight, align: current?.align ?? 'right' },
+      });
+    } catch (e) {
+      this.showError(`Bild konnte nicht geladen werden: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  protected setLogoHeight(slot: LogoSlot, logo: PdfLogo, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const height = Number(input.value);
+    if (height >= slot.limits.min && height <= slot.limits.max) {
+      this.store.setPdfLayout({ [slot.key]: { ...logo, heightMm: height } });
+    } else {
+      input.value = String(logo.heightMm);
+      this.showError(`Die Höhe muss zwischen ${slot.limits.min} und ${slot.limits.max} mm liegen.`);
+    }
+  }
+
+  protected setLogoAlign(slot: LogoSlot, logo: PdfLogo, event: Event): void {
+    this.store.setPdfLayout({ [slot.key]: { ...logo, align: this.valueOf(event) as ImageAlign } });
+  }
+
+  protected removeLogo(slot: LogoSlot): void {
+    if (confirm(`${slot.label} entfernen?`)) this.store.setPdfLayout({ [slot.key]: null });
+  }
+
   protected removeBlock(block: FixedBlock): void {
     const what = block.type === 'image' ? 'das Bild' : 'den Text';
     if (confirm(`Möchtest du ${what} mit allen Varianten wirklich löschen?`)) this.store.removeBlock(block.id);
@@ -221,7 +336,7 @@ export class ConfigEditor {
   }
 
   protected reset(): void {
-    if (confirm('Konfiguration auf die Beispielvorlage zurücksetzen?')) {
+    if (confirm('Texte, Abschnitte und Gestaltung auf die Beispielvorlage zurücksetzen? Lehrer, Instrumente und Berichtszeiträume bleiben erhalten.')) {
       this.store.resetToDefault();
       this.message.set(null);
     }

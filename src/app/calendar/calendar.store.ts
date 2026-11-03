@@ -1,6 +1,6 @@
 import { effect, inject, Injectable } from '@angular/core';
 import { ConfigStore } from '../config.store';
-import { CalendarSettings, newId, Teacher, today } from '../model';
+import { CalendarSettings, newId, Teacher, teachingWindowsOn, today } from '../model';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
 import {
@@ -9,30 +9,42 @@ import {
   AppointmentFilter,
   daysBetween,
   FreeSlot,
+  lastDate,
   minutesOf,
   Occurrence,
+  occurrenceDates,
   matchesFilter,
   occursOn,
   ownerOf,
   parseAppointments,
+  Recurrence,
+  recurrenceUntilPeriodEnd,
   startMinutes,
   timeOf,
   weekday,
   withLessonAppointments,
 } from './appointments';
 import { Blocker, blocks, parseBlockers } from './blockers';
+import { parseSharedAppointments, SharedAppointment, SharedOccurrence, sharedOverlaps } from './shared-appointments';
 
 /** So weit im Voraus sucht `nextFreeSlot` einen freien Slot. */
 const SLOT_SEARCH_DAYS = 8 * 7;
-/** In so vielen Wochen muss ein Slot frei sein, damit dort ein wöchentlicher Termin beginnen kann. */
-const WEEKLY_CHECK_WEEKS = 12;
+/** Neue Serien wiederholen sich so oft wie in der Begrüßung gewünscht: täglich, bis der Berichtszeitraum endet. */
+const DEFAULT_REPEAT_DAYS = 1;
 
 @Injectable({ providedIn: 'root' })
 export class CalendarStore {
-  readonly appointments = storedSignal<Appointment[]>('feedback.appointments', () => [], parseAppointments);
-  readonly blockers = storedSignal<Blocker[]>('feedback.blockers', () => [], parseBlockers);
-  private readonly students = inject(StudentsStore).students;
+  // Vor den Terminen: Frühere wöchentliche Termine bekommen beim Laden das Ende ihres Berichtszeitraums.
   private readonly config = inject(ConfigStore).config;
+  private readonly students = inject(StudentsStore).students;
+  readonly appointments = storedSignal<Appointment[]>('feedback.appointments', () => [], (data) =>
+    parseAppointments(data, this.config().reportPeriods),
+  );
+  readonly blockers = storedSignal<Blocker[]>('feedback.blockers', () => [], parseBlockers);
+  /** Termine für mehrere Lehrer, z. B. Konferenzen */
+  readonly sharedAppointments = storedSignal<SharedAppointment[]>('feedback.sharedAppointments', () => [], (data) =>
+    parseSharedAppointments(data, this.config().reportPeriods),
+  );
 
   constructor() {
     // Erfasste Stunden mit Uhrzeit stehen immer im Kalender, auch nachträglich angelegte (Gruppen: GroupsStore).
@@ -47,7 +59,7 @@ export class CalendarStore {
     this.appointments.update((list) => [...list, { ...appointment, id: newId() }]);
   }
 
-  /** Bei wöchentlichen Terminen gilt die Änderung für alle Wiederholungen. */
+  /** Bei Terminserien gilt die Änderung für alle Wiederholungen. */
   update(id: string, change: Omit<Appointment, 'id'>): void {
     this.appointments.update((list) => list.map((a) => (a.id === id ? { ...change, id } : a)));
   }
@@ -66,6 +78,29 @@ export class CalendarStore {
 
   removeBlocker(id: string): void {
     this.blockers.update((list) => list.filter((b) => b.id !== id));
+  }
+
+  addShared(appointment: Omit<SharedAppointment, 'id'>): void {
+    this.sharedAppointments.update((list) => [...list, { ...appointment, id: newId() }]);
+  }
+
+  /** Bei Terminserien gilt die Änderung für alle Wiederholungen. */
+  updateShared(id: string, change: Omit<SharedAppointment, 'id'>): void {
+    this.sharedAppointments.update((list) => list.map((a) => (a.id === id ? { ...change, id } : a)));
+  }
+
+  removeShared(id: string): void {
+    this.sharedAppointments.update((list) => list.filter((a) => a.id !== id));
+  }
+
+  /** Allgemeine Termine im Zeitraum (Tage einschließlich), mit `teacherId` nur die dieses Lehrers */
+  sharedOccurrences(from: string, to: string, teacherId?: string): SharedOccurrence[] {
+    const appointments = this.sharedAppointments()
+      .filter((appointment) => !teacherId || appointment.teacherIds.includes(teacherId))
+      .sort((a, b) => a.start.localeCompare(b.start));
+    return daysBetween(from, to).flatMap((date) =>
+      appointments.filter((appointment) => occursOn(appointment, date)).map((appointment) => ({ date, appointment })),
+    );
   }
 
   /** Blocker des Lehrers, die den Zeitraum (Tage einschließlich) berühren, nach Beginn sortiert */
@@ -95,15 +130,14 @@ export class CalendarStore {
 
   /**
    * Einzeltermine der Person, die sich mit dem geplanten Termin überschneiden – egal bei welchem Lehrer. Bei
-   * wöchentlichen Terminen werden `WEEKLY_CHECK_WEEKS` Wochen geprüft. `excludeId`: der Termin, der gerade
-   * bearbeitet wird. Gruppentermine zählen hier nicht.
+   * Terminserien zählt jede Wiederholung. `excludeId`: der Termin, der gerade bearbeitet wird. Gruppentermine
+   * zählen hier nicht.
    */
   studentClashes(studentId: string, planned: Omit<Appointment, 'id'>, excludeId?: string | null): Occurrence[] {
-    const to = addDays(planned.date, planned.weekly ? WEEKLY_CHECK_WEEKS * 7 - 1 : 0);
     const start = minutesOf(planned.start);
-    return this.occurrences(planned.date, to, (a) => a.studentId === studentId && a.id !== excludeId).filter(
+    return this.occurrences(planned.date, lastDate(planned), (a) => a.studentId === studentId && a.id !== excludeId).filter(
       ({ date, appointment }) =>
-        occursOn({ ...planned, id: '' }, date) &&
+        occursOn(planned, date) &&
         start < startMinutes(appointment) + appointment.durationMinutes &&
         startMinutes(appointment) < start + planned.durationMinutes,
     );
@@ -111,9 +145,9 @@ export class CalendarStore {
 
   /**
    * Erster freier Slot ab jetzt. Die Unterrichtszeiten werden ab ihrem Beginn in Slots der Standardlänge
-   * geteilt. Ein Slot ist frei, wenn sich kein Termin mit ihm überschneidet – bei wöchentlicher
-   * Wiederholung auch in den folgenden Wochen. Es zählen nur die Unterrichtszeiten des Lehrers, seine Blocker
-   * und die Termine in seinem Kalender (`filter`).
+   * geteilt. Ein Slot ist frei, wenn sich kein Termin mit ihm überschneidet – bei einer Serie (wenn neue Termine
+   * standardmäßig wiederholt werden) an jedem Termintag. Es zählen nur die Unterrichtszeiten des Lehrers, seine
+   * Blocker und die Termine in seinem Kalender (`filter`).
    */
   nextFreeSlot(
     settings: CalendarSettings,
@@ -122,19 +156,17 @@ export class CalendarStore {
     now = new Date(),
   ): FreeSlot | null {
     const duration = settings.defaultDurationMinutes;
-    const weeks = settings.weeklyByDefault ? WEEKLY_CHECK_WEEKS : 1;
     const firstDay = today();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     for (let offset = 0; offset < SLOT_SEARCH_DAYS; offset++) {
       const date = addDays(firstDay, offset);
-      const windows = teacher.teachingWindows
-        .filter((w) => w.weekday === weekday(date))
-        .sort((a, b) => a.from.localeCompare(b.from));
+      const windows = teachingWindowsOn(teacher, this.config(), date);
       for (const window of windows) {
         for (let start = minutesOf(window.from); start + duration <= minutesOf(window.to); start += duration) {
           if (offset === 0 && start <= nowMinutes) continue;
-          if (this.isFree(teacher, date, start, duration, weeks, filter, true)) {
-            return { date, start: timeOf(start), durationMinutes: duration, weekly: settings.weeklyByDefault };
+          const repeat = settings.repeatByDefault ? this.untilPeriodEnd(date, DEFAULT_REPEAT_DAYS) : undefined;
+          if (this.isFree(teacher, date, start, duration, repeat, filter, true)) {
+            return { date, start: timeOf(start), durationMinutes: duration, ...(repeat ? { repeat } : {}) };
           }
         }
       }
@@ -144,27 +176,17 @@ export class CalendarStore {
 
   /**
    * Alle freien wöchentlichen Slots der ersten Woche ab `from` (einschließlich), wie bei `nextFreeSlot`: die
-   * Unterrichtszeiten in Slots der Standardlänge geteilt, frei über `WEEKLY_CHECK_WEEKS` Wochen. Blocker zählen
-   * hier nicht (siehe `isFree`).
+   * Unterrichtszeiten in Slots der Standardlänge geteilt, frei in jeder Woche bis zum Ende des Berichtszeitraums.
+   * Blocker zählen hier nicht (siehe `isFree`).
    */
   freeWeeklySlots(settings: CalendarSettings, teacher: Teacher, filter: AppointmentFilter, from: string): FreeSlot[] {
     const days = Array.from({ length: 7 }, (_, offset) => addDays(from, offset));
     return this.freeSlots(settings, teacher, filter, days, true);
   }
 
-  /** Alle freien einmaligen Slots zwischen `from` und `to` (einschließlich); bereits vergangene zählen nicht. */
-  freeSlotsInPeriod(
-    settings: CalendarSettings,
-    teacher: Teacher,
-    filter: AppointmentFilter,
-    from: string,
-    to: string,
-    now = new Date(),
-  ): FreeSlot[] {
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    return this.freeSlots(settings, teacher, filter, daysBetween(from, to), false).filter(
-      (slot) => slot.date > today() || (slot.date === today() && minutesOf(slot.start) > nowMinutes),
-    );
+  /** Alle freien einmaligen Slots zwischen `from` und `to` (einschließlich), auch an vergangenen Tagen */
+  freeSlotsInPeriod(settings: CalendarSettings, teacher: Teacher, filter: AppointmentFilter, from: string, to: string): FreeSlot[] {
+    return this.freeSlots(settings, teacher, filter, daysBetween(from, to), false);
   }
 
   private freeSlots(
@@ -175,16 +197,14 @@ export class CalendarStore {
     weekly: boolean,
   ): FreeSlot[] {
     const duration = settings.defaultDurationMinutes;
-    const weeks = weekly ? WEEKLY_CHECK_WEEKS : 1;
     const slots: FreeSlot[] = [];
     for (const date of days) {
-      const windows = teacher.teachingWindows
-        .filter((w) => w.weekday === weekday(date))
-        .sort((a, b) => a.from.localeCompare(b.from));
+      const windows = teachingWindowsOn(teacher, this.config(), date);
       for (const window of windows) {
         for (let start = minutesOf(window.from); start + duration <= minutesOf(window.to); start += duration) {
-          if (this.isFree(teacher, date, start, duration, weeks, filter, !weekly)) {
-            slots.push({ date, start: timeOf(start), durationMinutes: duration, weekly });
+          const repeat = weekly ? this.untilPeriodEnd(date, 7) : undefined;
+          if (this.isFree(teacher, date, start, duration, repeat, filter, !weekly)) {
+            slots.push({ date, start: timeOf(start), durationMinutes: duration, ...(repeat ? { repeat } : {}) });
           }
         }
       }
@@ -193,29 +213,43 @@ export class CalendarStore {
   }
 
   /**
-   * Mit `respectBlockers` darf der Slot an seinem Tag nicht blockiert sein. Beim wöchentlichen Verteilen bleibt
-   * das aus: Eine einmalige Abwesenheit soll keinen Wochentermin für immer verhindern.
+   * Frei an jedem Tag der geplanten Serie (`repeat`). Mit `respectBlockers` darf der Slot an seinem ersten Tag
+   * nicht blockiert sein. Beim wöchentlichen Verteilen bleibt das aus: Eine einmalige Abwesenheit soll keinen
+   * Wochentermin verhindern. Allgemeine Termine, die die Planung blockieren, zählen genauso: einmalige wie
+   * Blocker, Serien an jedem ihrer Tage.
    */
   private isFree(
     teacher: Teacher,
     date: string,
     start: number,
     duration: number,
-    weeks: number,
+    repeat: Recurrence | undefined,
     filter: AppointmentFilter,
     respectBlockers: boolean,
   ): boolean {
     if (respectBlockers && this.blockersOf(teacher.id, date, date).some((b) => blocks(b, date, start, duration))) {
       return false;
     }
-    for (let week = 0; week < weeks; week++) {
-      const day = addDays(date, week * 7);
+    for (const day of occurrenceDates({ date, repeat })) {
       const overlaps = this.occurrences(day, day, filter).some(({ appointment }) => {
         const otherStart = startMinutes(appointment);
         return start < otherStart + appointment.durationMinutes && otherStart < start + duration;
       });
-      if (overlaps) return false;
+      if (overlaps || this.sharedBlocks(teacher, day, start, duration, respectBlockers)) return false;
     }
     return true;
+  }
+
+  private untilPeriodEnd(date: string, everyDays: number): Recurrence {
+    return recurrenceUntilPeriodEnd(this.config().reportPeriods, date, everyDays);
+  }
+
+  private sharedBlocks(teacher: Teacher, date: string, start: number, duration: number, includeOneOff: boolean): boolean {
+    return this.sharedOccurrences(date, date, teacher.id).some(
+      ({ appointment }) =>
+        appointment.blocksPlanning &&
+        (!!appointment.repeat || includeOneOff) &&
+        sharedOverlaps(appointment, start, duration),
+    );
   }
 }

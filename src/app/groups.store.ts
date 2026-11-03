@@ -2,7 +2,7 @@ import { computed, effect, inject, Injectable } from '@angular/core';
 import { Appointment, ownerOf, withLessonAppointments } from './calendar/appointments';
 import { CalendarStore } from './calendar/calendar.store';
 import { ConfigStore } from './config.store';
-import { Group, groupTeacherOf, Lesson, lessonAt, newId, Teacher, teacherOf, today } from './model';
+import { Group, groupLabel, groupTeacherOf, Lesson, lessonAt, newId, Teacher, teacherOf, today } from './model';
 import { storedSignal } from './stored-signal';
 import { isRecord, parseLesson, sortedLessons, StudentsStore } from './students.store';
 
@@ -44,6 +44,30 @@ export class GroupsStore {
   calendarFilter(teacher: Teacher): (appointment: Appointment) => boolean {
     const owners = this.calendarOwnerIds(teacher);
     return (appointment) => (appointment.teacherId ? appointment.teacherId === teacher.id : owners.has(ownerOf(appointment)));
+  }
+
+  /** Anzeigename je Termin-Besitzer: der Name der Person oder „Gruppe …“ */
+  readonly ownerNames = computed(() => {
+    const students = this.studentsStore.students();
+    return new Map([
+      ...students.map((student) => [student.id, student.name] as const),
+      ...this.groups().map((group) => [group.id, `Gruppe ${groupLabel(group, students)}`] as const),
+    ]);
+  });
+
+  /** Gruppen jeder Person, nach Namen sortiert; Personen ohne Gruppe fehlen in der Map. */
+  readonly groupsByStudent = computed(() => {
+    const students = this.studentsStore.students();
+    const sorted = [...this.groups()].sort((a, b) => groupLabel(a, students).localeCompare(groupLabel(b, students), 'de'));
+    const byStudent = new Map<string, Group[]>();
+    for (const group of sorted) {
+      for (const id of group.memberIds) byStudent.set(id, [...(byStudent.get(id) ?? []), group]);
+    }
+    return byStudent;
+  });
+
+  groupsOf(studentId: string): Group[] {
+    return this.groupsByStudent().get(studentId) ?? [];
   }
 
   /** IDs der Personen und Gruppen des Lehrers */
@@ -95,7 +119,7 @@ export class GroupsStore {
   }
 
   /** Wählt die Gruppenstunde zum Termin aus; gibt es noch keine, wird sie mit Datum und Uhrzeit angelegt. */
-  openLesson(groupId: string, date: string, time?: { start: string; durationMinutes: number }): void {
+  openLesson(groupId: string, date: string, time?: { start: string; durationMinutes?: number }): void {
     const group = this.groups().find((g) => g.id === groupId);
     if (!group) return;
     let lesson = lessonAt(group, date, time?.start);
@@ -109,12 +133,6 @@ export class GroupsStore {
     this.selectedGroupId.set(groupId);
     this.selectedLessonId.set(lesson.id);
     this.studentsStore.selectStudent(null);
-  }
-
-  addLesson(groupId: string): void {
-    const lesson: Lesson = { id: newId(), date: today(), checked: {}, texts: {} };
-    this.mutate(groupId, (group) => group.lessons.push(lesson));
-    this.selectedLessonId.set(lesson.id);
   }
 
   removeLesson(groupId: string, lessonId: string): void {

@@ -74,3 +74,12 @@ function toRgb(hex: string): Rgb {
 function toHex(color: Rgb): string {
   return '#' + color.map((channel) => channel.toString(16).padStart(2, '0')).join('');
 }
+
+/** Für Schwarzweiß-PDFs: Grautöne statt der Themenfarbe */
+export const GRAYSCALE_THEME: Theme = {
+  primary: '#a6a6a6',
+  onPrimary: '#000000',
+  primaryText: '#333333',
+  primaryLight: '#f0f0f0',
+  rail: '#c4c4c4',
+};

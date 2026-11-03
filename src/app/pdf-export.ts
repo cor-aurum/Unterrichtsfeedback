@@ -1,9 +1,12 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import type { jsPDF } from 'jspdf';
 import {
+  BlockContent,
   BlockImage,
   BlockPosition,
+  ImageAlign,
   FeedbackConfig,
+  FixedBlock,
   contentFor,
   fillPlaceholders,
   formatLongDate,
@@ -13,14 +16,19 @@ import {
   memberNames,
   teacherOf,
   Lesson,
+  logoSize,
+  PdfLayout,
+  PdfLogo,
+  ReportPeriodEntry,
   Section,
   Student,
   TeachingWindow,
   today,
 } from './model';
+import { ReportPeriod } from './report-period';
 import { openFile, safeFileName, saveFile } from './save-file';
 import { sortedLessons } from './students.store';
-import { Theme, themeFrom } from './theme';
+import { GRAYSCALE_THEME, Theme, themeFrom } from './theme';
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
@@ -35,6 +43,8 @@ const LESSON_INDENT = 8;
 const MIN_SHRUNK_IMAGE_HEIGHT = 15;
 
 interface PdfColors {
+  /** Schwarzweiß: statt des farbigen Bands oben nur eine dünne Linie */
+  inkSaving: boolean;
   accent: string;
   accentText: string;
   rail: string;
@@ -42,8 +52,14 @@ interface PdfColors {
   muted: string;
 }
 
+/** Farben des PDFs aus der Themenfarbe, im Schwarzweißmodus Grautöne */
+export function pdfTheme(config: FeedbackConfig): Theme {
+  return config.pdfLayout.grayscale ? GRAYSCALE_THEME : themeFrom(config.themeColor);
+}
+
 function pdfColors(theme: Theme): PdfColors {
   return {
+    inkSaving: theme === GRAYSCALE_THEME,
     accent: theme.primary,
     accentText: theme.primaryText,
     rail: theme.rail,
@@ -54,23 +70,33 @@ function pdfColors(theme: Theme): PdfColors {
 
 @Injectable({ providedIn: 'root' })
 export class PdfExport {
-  /** `open` öffnet das PDF in der Android-App direkt; im Browser wird es in beiden Fällen heruntergeladen. */
-  export(config: FeedbackConfig, students: Student[], fileName: string, action: 'open' | 'share' = 'share'): Promise<void> {
-    return this.exportRecipients(config, students.map((student) => ({ config, student })), fileName, action);
+  private readonly reportPeriod = inject(ReportPeriod);
+
+  /**
+   * `open` öffnet das PDF in der Android-App direkt; im Browser wird es in beiden Fällen heruntergeladen.
+   * Varianten und {zeitraum} richten sich nach dem Berichtszeitraum dieses Geräts.
+   */
+  async export(config: FeedbackConfig, students: Student[], fileName: string, action: 'open' | 'share' = 'share'): Promise<void> {
+    const prepared = await forPrint(config);
+    const period = this.reportPeriod.period();
+    return this.exportRecipients(prepared, students.map((student) => recipient(prepared, student, period)), fileName, action);
   }
 
   /**
    * Gruppen-PDF: je Gruppe ein Abschnitt mit den Gruppen-Abschnitten und festen Gruppen-Inhalten. Die Gruppe
    * wird dafür wie eine Person geschrieben (siehe `groupRecipient`).
    */
-  exportGroups(
+  async exportGroups(
     config: FeedbackConfig,
     groups: Group[],
     students: Student[],
     fileName: string,
     action: 'open' | 'share' = 'share',
   ): Promise<void> {
-    return this.exportRecipients(config, groups.map((group) => groupRecipient(group, students, config)), fileName, action);
+    const prepared = await forPrint(config);
+    const period = this.reportPeriod.period();
+    const recipients = groups.map((group) => groupRecipient(group, students, prepared, period));
+    return this.exportRecipients(prepared, recipients, fileName, action);
   }
 
   private async exportRecipients(
@@ -81,10 +107,10 @@ export class PdfExport {
   ): Promise<void> {
     // jsPDF ist groß und wird deshalb erst beim ersten Export geladen.
     const { jsPDF } = await import('jspdf');
-    const colors = pdfColors(themeFrom(config.themeColor));
+    const colors = pdfColors(pdfTheme(config));
     const render = (pageCounts?: number[]) => {
-      const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), colors, pageCounts);
-      recipients.forEach(({ config, student }) => writeStudent(writer, config, student));
+      const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), colors, config.pdfLayout, pageCounts);
+      recipients.forEach((recipient) => writeStudent(writer, recipient));
       writer.addFooters();
       return writer;
     };
@@ -101,18 +127,33 @@ export class PdfExport {
     range: SchedulePeriod,
     action: 'open' | 'share',
   ): Promise<void> {
-    const period = range.label;
-    const { jsPDF } = await import('jspdf');
-    const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), pdfColors(themeFrom(config.themeColor)));
-    writer.beginSection(`Unterrichtsplan · ${period}`, { left: 'Unterrichtsplan', center: '', right: 'Seite {seite} von {seiten}' });
-    writer.text('Unterrichtsplan', { size: 22, bold: true });
-    writer.text(period, { size: 14, color: writer.colors.accentText, gapAfter: 0 });
-    writer.gap(10, false);
-    for (const teacher of teachers) {
-      writeScheduleTeacher(writer, teacher);
-    }
-    writer.addFooters();
-    await deliver(`Unterrichtsplan_${range.from}_${range.to}.pdf`, writer.toBlob(), action);
+    const list = await listDocument(config, config.calendarPdf.listTitle, range);
+    teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0));
+    list.writer.addFooters();
+    await deliver(`Unterrichtsplan_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
+  }
+
+  /**
+   * Terminliste ohne Einzelunterricht: Gruppentermine und allgemeine Termine aller Lehrer, Tag für Tag. Jeder
+   * Eintrag nennt seinen Raum (siehe `ScheduleEntry.name`).
+   */
+  async exportAppointmentList(config: FeedbackConfig, days: ScheduleDay[], range: SchedulePeriod, action: 'open' | 'share'): Promise<void> {
+    const list = await listDocument(config, config.calendarPdf.eventListTitle, range);
+    writeScheduleDays(list, days, () => undefined);
+    list.writer.addFooters();
+    await deliver(`Termine_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
+  }
+
+  /** Tagesplan im Querformat: je Tag eine Seite mit allen Lehrern als Spalten (siehe `schedule-grid-pdf.ts`). */
+  async exportDayGrid(config: FeedbackConfig, days: DayPlan[], range: SchedulePeriod, action: 'open' | 'share'): Promise<void> {
+    const [{ jsPDF }, { writeDayGrid }, prepared] = await Promise.all([
+      import('jspdf'),
+      import('./calendar/schedule-grid-pdf'),
+      forPrint(config),
+    ]);
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+    writeDayGrid(doc, pdfTheme(config), prepared.pdfLayout.headerLogo, config.calendarPdf, days, range);
+    await deliver(`Tagesplan_${range.from}_${range.to}.pdf`, doc.output('blob'), action);
   }
 
   /** Wochenplan als Tabelle im Querformat, je Lehrer und Woche eine Seite (siehe `schedule-grid-pdf.ts`). */
@@ -122,43 +163,91 @@ export class PdfExport {
     range: SchedulePeriod,
     action: 'open' | 'share',
   ): Promise<void> {
-    const [{ jsPDF }, { writeScheduleGrid }] = await Promise.all([
+    const [{ jsPDF }, { writeScheduleGrid }, prepared] = await Promise.all([
       import('jspdf'),
       import('./calendar/schedule-grid-pdf'),
+      forPrint(config),
     ]);
     const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-    writeScheduleGrid(doc, themeFrom(config.themeColor), teachers, range);
+    writeScheduleGrid(doc, pdfTheme(config), prepared.pdfLayout.headerLogo, config.calendarPdf, teachers, range);
     await deliver(`Wochenplan_${range.from}_${range.to}.pdf`, doc.output('blob'), action);
   }
 }
 
-function writeScheduleTeacher(writer: PdfWriter, teacher: ScheduleTeacher): void {
-  writer.keepTogether(30);
-  writer.text(teacher.name, { size: 15, bold: true, gapAfter: 0.5 });
-  if (teacher.location.trim()) {
-    writer.text(teacher.location, { size: 11, color: writer.colors.muted, gapAfter: 0 });
+/** Terminliste im Hochformat; `newPage` beginnt eine Seite mit derselben großen Überschrift wie die erste. */
+interface ListDocument {
+  writer: PdfWriter;
+  newPage(): void;
+  noAppointments: string;
+}
+
+async function listDocument(config: FeedbackConfig, title: string, range: SchedulePeriod): Promise<ListDocument> {
+  const [{ jsPDF }, prepared] = await Promise.all([import('jspdf'), forPrint(config)]);
+  const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), pdfColors(pdfTheme(config)), prepared.pdfLayout);
+  const heading = [title, range.label].filter((part) => part.trim()).join(' · ');
+  writer.beginSection(heading, { left: config.calendarPdf.footer, center: '', right: 'Seite {seite} von {seiten}' });
+  const writeTitle = () => {
+    if (title.trim()) writer.text(title, { size: 22, bold: true });
+    writer.text(range.label, { size: 14, color: writer.colors.accentText, gapAfter: 0 });
+    writer.endTitleArea();
+    writer.gap(10, false);
+  };
+  writeTitle();
+  return {
+    writer,
+    noAppointments: config.calendarPdf.noAppointments,
+    newPage: () => {
+      writer.titlePage();
+      writeTitle();
+    },
+  };
+}
+
+/**
+ * Jeder Tag eines Lehrers steht auf einer eigenen Seite, mit Name und Raum darüber. Der erste Lehrer beginnt direkt
+ * unter der Überschrift der Liste.
+ */
+function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, first: boolean): void {
+  const { writer } = list;
+  if (!first) list.newPage();
+  const heading = () => {
+    writer.text(teacher.name, { size: 15, bold: true, gapAfter: 0.5 });
+    if (teacher.location.trim()) {
+      writer.text(teacher.location, { size: 11, color: writer.colors.muted, gapAfter: 0 });
+    }
+    writer.gap(4, false);
+  };
+  heading();
+  writeScheduleDays(list, teacher.days, heading);
+}
+
+/**
+ * Je Tag das Datum und darunter die Termine mit Uhrzeit; jeder Tag nach dem ersten beginnt auf einer neuen Seite,
+ * unter dem Kopf, den `heading` dort schreibt.
+ */
+function writeScheduleDays(list: ListDocument, days: ScheduleDay[], heading: () => void): void {
+  const { writer } = list;
+  if (days.length === 0) {
+    writer.text(list.noAppointments, { size: 11, italic: true, color: writer.colors.muted });
   }
-  writer.gap(4, false);
-  if (teacher.days.length === 0) {
-    writer.text('In diesem Zeitraum sind keine Termine geplant.', { size: 11, italic: true, color: writer.colors.muted });
-  }
-  for (const day of teacher.days) {
-    writer.keepTogether(16);
+  days.forEach((day, index) => {
+    if (index > 0) {
+      list.newPage();
+      heading();
+    }
     writer.text(formatLongDate(day.date), { size: 12, bold: true, color: writer.colors.accentText, gapAfter: 1.5 });
     for (const entry of day.entries) {
       writer.text(`${entry.time}    ${entry.name}`, { size: 11, lineHeight: 0.53, indent: 4, gapAfter: 0.5 });
     }
-    writer.gap(4, false);
-  }
-  writer.gap(6, false);
+  });
 }
 
 /** Ein Lehrer in der Terminliste mit seinen Terminen im Zeitraum. */
 export interface ScheduleTeacher {
   name: string;
   location: string;
-  /** Für den Wochenplan: Unterrichtszeiten werden hinterlegt. */
-  teachingWindows: TeachingWindow[];
+  /** Für den Wochenplan: Unterrichtszeiten je Tag im Zeitraum, sie werden hinterlegt. */
+  windowsByDate: Record<string, { from: string; to: string }[]>;
   days: ScheduleDay[];
 }
 
@@ -182,55 +271,162 @@ export interface ScheduleEntry {
   durationMinutes: number;
   /** Blocker des Lehrers statt eines Termins */
   blocked?: boolean;
+  /** Allgemeiner Termin mehrerer Lehrer, z. B. eine Konferenz */
+  shared?: boolean;
+}
+
+/** Ein Tag im Tagesplan aller Lehrer: je Lehrer eine Spalte, allgemeine Termine über die Spalten ihrer Lehrer */
+export interface DayPlan {
+  date: string;
+  columns: DayColumn[];
+  shared: SharedSpan[];
+}
+
+export interface DayColumn {
+  name: string;
+  /** Raum oder Ort des Lehrers; steht im Tagesplan unter dem Namen */
+  location: string;
+  /** Unterrichtszeiten an diesem Tag */
+  teachingWindows: { from: string; to: string }[];
+  /** Einzel- und Gruppenunterricht sowie Blocker */
+  entries: ScheduleEntry[];
+}
+
+/** Allgemeiner Termin mit den Spalten (Indizes in `DayPlan.columns`) der beteiligten Lehrer */
+export interface SharedSpan {
+  entry: ScheduleEntry;
+  columns: number[];
 }
 
 /** Empfänger eines Abschnitts im PDF: eine Person mit ihrer Konfiguration oder eine Gruppe (siehe `groupRecipient`) */
 interface Recipient {
   config: FeedbackConfig;
   student: Student;
+  /** Wählt die Varianten der festen Inhalte */
+  period: ReportPeriodEntry;
+}
+
+/**
+ * Platzhalter, die für alle Texte eines Empfängers gleich sind, werden vorab in Konfiguration und Notizen
+ * ersetzt: {zeitraum} und, was `fill` zusätzlich ersetzt. Die übrigen übernimmt `fillPlaceholders`.
+ */
+function recipient(
+  config: FeedbackConfig,
+  student: Student,
+  period: ReportPeriodEntry,
+  fill: (text: string) => string = (text) => text,
+): Recipient {
+  const fillAll = (text: string) => fill(text).replace(/\{zeitraum\}/gi, period.name);
+  return { config: withConfigTexts(config, fillAll), student: withStudentTexts(student, fillAll), period };
+}
+
+function withConfigTexts(config: FeedbackConfig, fill: (text: string) => string): FeedbackConfig {
+  const fillContent = <T extends { text: string }>(content: T): T => ({ ...content, text: fill(content.text) });
+  const layout = config.pdfLayout;
+  return {
+    ...config,
+    title: fill(config.title),
+    pdfLayout: {
+      ...layout,
+      runningHeader: fill(layout.runningHeader),
+      subtitle: fill(layout.subtitle),
+      footerLeft: fill(layout.footerLeft),
+      footerCenter: fill(layout.footerCenter),
+      footerRight: fill(layout.footerRight),
+    },
+    blocks: config.blocks.map((block) => ({ ...fillContent(block), variants: block.variants.map(fillContent) })),
+    sections: config.sections.map((section) => ({ ...section, title: fill(section.title), items: section.items.map(fillContent) })),
+  };
+}
+
+function withStudentTexts(student: Student, fill: (text: string) => string): Student {
+  const fillTexts = (texts: Record<string, string>) =>
+    Object.fromEntries(Object.entries(texts).map(([key, text]) => [key, fill(text)]));
+  return {
+    ...student,
+    generalTexts: fillTexts(student.generalTexts),
+    lessons: student.lessons.map((lesson) => ({ ...lesson, texts: fillTexts(lesson.texts) })),
+  };
 }
 
 /**
  * Schreibt eine Gruppe wie eine Person: Name ist der Gruppenname, Stunden sind die Gruppenstunden, Abschnitte und
- * feste Inhalte die der Gruppen. {gruppe} und {mitglieder} werden vorab in allen Texten ersetzt; die übrigen
- * Platzhalter übernimmt `fillPlaceholders` ({name}/{vorname} ergeben dabei den Gruppennamen).
+ * feste Inhalte die der Gruppen. {gruppe} und {mitglieder} werden vorab in allen Texten ersetzt;
+ * {name}/{vorname} ergeben den Gruppennamen.
  */
-function groupRecipient(group: Group, students: Student[], config: FeedbackConfig): Recipient {
+function groupRecipient(group: Group, students: Student[], config: FeedbackConfig, period: ReportPeriodEntry): Recipient {
   const label = groupLabel(group, students);
   const members = memberNames(group, students);
-  const fill = (text: string) => text.replace(/\{gruppe\}/gi, label).replace(/\{mitglieder\}/gi, members || label);
-  const fillContent = <T extends { text: string }>(content: T): T => ({ ...content, text: fill(content.text) });
-  const fillTexts = (texts: Record<string, string>) =>
-    Object.fromEntries(Object.entries(texts).map(([key, text]) => [key, fill(text)]));
-  const layout = config.pdfLayout;
-  return {
-    config: {
-      ...config,
-      title: fill(config.title),
-      pdfLayout: {
-        ...layout,
-        runningHeader: fill(layout.runningHeader),
-        subtitle: fill(layout.subtitle),
-        footerLeft: fill(layout.footerLeft),
-        footerCenter: fill(layout.footerCenter),
-        footerRight: fill(layout.footerRight),
-      },
-      blocks: config.groupBlocks.map((block) => ({ ...fillContent(block), variants: block.variants.map(fillContent) })),
-      sections: config.groupSections.map((section) => ({
-        ...section,
-        title: fill(section.title),
-        items: section.items.map(fillContent),
-      })),
-    },
-    student: {
-      id: group.id,
-      name: label,
-      instrumentId: null,
-      teacherId: group.teacherId,
-      generalTexts: fillTexts(group.generalTexts),
-      lessons: group.lessons.map((lesson) => ({ ...lesson, texts: fillTexts(lesson.texts) })),
-    },
+  const groupConfig = { ...config, blocks: config.groupBlocks, sections: config.groupSections };
+  const asStudent: Student = {
+    id: group.id,
+    name: label,
+    instrumentId: null,
+    teacherId: group.teacherId,
+    generalTexts: group.generalTexts,
+    lessons: group.lessons,
   };
+  return recipient(groupConfig, asStudent, period, (text) =>
+    text.replace(/\{gruppe\}/gi, label).replace(/\{mitglieder\}/gi, members || label),
+  );
+}
+
+/**
+ * Bereitet die Bilder für jsPDF vor: Das App-Logo wird als Data-URL eingebettet, im Schwarzweißmodus werden die
+ * Bilder der festen Inhalte und die Logos in Graustufen umgerechnet.
+ */
+async function forPrint(config: FeedbackConfig): Promise<FeedbackConfig> {
+  const grayscale = config.pdfLayout.grayscale;
+  const printableLogo = async (logo: PdfLogo | null) =>
+    logo && (grayscale || !logo.dataUrl.startsWith('data:'))
+      ? { ...logo, dataUrl: await printableDataUrl(logo.dataUrl, grayscale) }
+      : logo;
+  const pdfLayout = {
+    ...config.pdfLayout,
+    headerLogo: await printableLogo(config.pdfLayout.headerLogo),
+    footerLogo: await printableLogo(config.pdfLayout.footerLogo),
+  };
+  if (!grayscale) return { ...config, pdfLayout };
+  const gray = async <T extends BlockContent>(content: T): Promise<T> =>
+    content.image ? { ...content, image: { ...content.image, dataUrl: await printableDataUrl(content.image.dataUrl, true) } } : content;
+  const blocks = (list: FixedBlock[]) =>
+    Promise.all(list.map(async (block) => ({ ...(await gray(block)), variants: await Promise.all(block.variants.map(gray)) })));
+  return {
+    ...config,
+    blocks: await blocks(config.blocks),
+    groupBlocks: await blocks(config.groupBlocks),
+    pdfLayout,
+  };
+}
+
+/** Lädt ein Bild (Data-URL oder Datei der App) und liefert es als Data-URL, auf Wunsch in Graustufen. */
+function printableDataUrl(source: string, grayscale: boolean): Promise<string> {
+  const png = source.startsWith('data:image/png') || source.endsWith('.png');
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(image, 0, 0);
+      if (grayscale) toGrayscale(context, canvas.width, canvas.height);
+      resolve(canvas.toDataURL(png ? 'image/png' : 'image/jpeg', 0.9));
+    };
+    image.onerror = () => reject(new Error('Bild konnte nicht geladen werden.'));
+    image.src = source;
+  });
+}
+
+function toGrayscale(context: CanvasRenderingContext2D, width: number, height: number): void {
+  // Pixelweise statt mit `context.filter`, das ältere Safari-Versionen nicht kennen
+  const pixels = context.getImageData(0, 0, width, height);
+  const data = pixels.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    data[i] = data[i + 1] = data[i + 2] = gray;
+  }
+  context.putImageData(pixels, 0, 0);
 }
 
 function deliver(fileName: string, pdf: Blob, action: 'open' | 'share'): Promise<void> {
@@ -242,10 +438,11 @@ function deliver(fileName: string, pdf: Blob, action: 'open' | 'share'): Promise
  * Zeitleiste und das Datum steht im Kopf. Hat keine Stunde eigene Notizen, entfällt der Teil mit den
  * Stunden ganz.
  */
-function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Student): void {
+function writeStudent(writer: PdfWriter, recipient: Recipient): void {
+  const { config, student } = recipient;
   const lessons = sortedLessons(student);
   writeHeader(writer, config, student, lessons);
-  writeFixedBlocks(writer, config, 'start', student);
+  writeFixedBlocks(writer, recipient, 'start');
   writeGeneralPart(writer, config, lessons, student);
 
   if (lessons.length === 0) {
@@ -259,12 +456,13 @@ function writeStudent(writer: PdfWriter, config: FeedbackConfig, student: Studen
     lessons.forEach((lesson) => writeTimelineEntry(writer, config, lesson, student));
   }
 
-  writeFixedBlocks(writer, config, 'end', student);
+  writeFixedBlocks(writer, recipient, 'end');
 }
 
-function writeFixedBlocks(writer: PdfWriter, config: FeedbackConfig, position: BlockPosition, student: Student): void {
+function writeFixedBlocks(writer: PdfWriter, { config, student, period }: Recipient, position: BlockPosition): void {
+  const context = { instrument: instrumentOf(student, config), teacher: teacherOf(student, config), periodId: period.id };
   for (const block of config.blocks.filter((b) => b.position === position)) {
-    const content = contentFor(block, instrumentOf(student, config), teacherOf(student, config));
+    const content = contentFor(block, context);
     const text = fillPlaceholders(content.text, student, config).trim();
     if (block.type === 'image' && content.image) {
       // Am Ende soll ein Bild nicht allein auf eine neue Seite rutschen.
@@ -323,6 +521,7 @@ function writeHeader(writer: PdfWriter, config: FeedbackConfig, student: Student
   const subtitle = fill(layout.subtitle);
   if (subtitle) writer.text(subtitle, { size: 14, color: writer.colors.accentText, gapAfter: 1.5 });
   if (layout.showInfoLine) writer.text(infoLine(lessons), { size: 10, color: writer.colors.muted, gapAfter: 0 });
+  writer.endTitleArea();
   writer.gap(10, false);
 }
 
@@ -405,6 +604,11 @@ function replacePagePlaceholders(text: string, page: number, pageCount: number):
   return text.replace(/\{seite\}/gi, String(page)).replace(/\{seiten\}/gi, String(pageCount));
 }
 
+/** Linker Rand eines `width` mm breiten Elements bei der gewählten Ausrichtung im Satzspiegel */
+function alignedX(align: ImageAlign, width: number): number {
+  return { left: MARGIN, center: MARGIN + (CONTENT_WIDTH - width) / 2, right: MARGIN + CONTENT_WIDTH - width }[align];
+}
+
 interface FooterTexts {
   left: string;
   center: string;
@@ -422,11 +626,14 @@ interface FooterTexts {
 class PdfWriter {
   private y = MARGIN;
   private runningHeader = '';
+  /** Neben der Überschrift belegt das Kopflogo diesen Rand, bis `endTitleArea` aufgerufen wird. */
+  private logoArea: { side: 'left' | 'right'; width: number; untilY: number } | null = null;
   private readonly students: { footer: FooterTexts; firstPage: number }[] = [];
 
   constructor(
     private readonly doc: jsPDF,
     readonly colors: PdfColors,
+    private readonly logos: Pick<PdfLayout, 'headerLogo' | 'footerLogo'>,
     private readonly knownPageCounts?: number[],
   ) {}
 
@@ -443,14 +650,42 @@ class PdfWriter {
     this.runningHeader = runningHeader;
     this.accentBand(8);
     this.y = MARGIN + 8;
+    this.firstPageLogo();
+  }
+
+  /** Inhalt beginnt unterhalb des Kopflogos, auch wenn die Überschrift daneben kürzer war. */
+  endTitleArea(): void {
+    if (this.logoArea) this.y = Math.max(this.y, this.logoArea.untilY);
+    this.logoArea = null;
+  }
+
+  /** Mittig steht das Logo über der Überschrift, sonst daneben; dann rückt der Titeltext zur Seite. */
+  private firstPageLogo(): void {
+    const logo = this.logos.headerLogo;
+    if (!logo) return;
+    const center = logo.align === 'center';
+    const { width, height } = logoSize(logo, logo.heightMm, center ? CONTENT_WIDTH : CONTENT_WIDTH / 2);
+    this.drawLogo(logo, alignedX(logo.align, width), this.y, width, height);
+    if (center) {
+      this.y += height + 4;
+    } else {
+      this.logoArea = { side: logo.align === 'left' ? 'left' : 'right', width: width + 5, untilY: this.y + height + 2 };
+    }
+  }
+
+  private drawLogo(logo: PdfLogo, x: number, y: number, width: number, height: number): void {
+    const format = logo.dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+    this.doc.addImage(logo.dataUrl, format, x, y, width, height);
   }
 
   text(text: string, style: TextStyle): void {
     this.y += style.gapBefore ?? 0;
-    const indent = style.indent ?? 0;
+    const area = this.logoArea && this.y < this.logoArea.untilY ? this.logoArea : null;
+    const indent = (style.indent ?? 0) + (area?.side === 'left' ? area.width : 0);
+    const width = CONTENT_WIDTH - indent - (area?.side === 'right' ? area.width : 0);
     const lineHeight = style.size * (style.lineHeight ?? 0.45);
     this.applyStyle(style);
-    for (const line of this.doc.splitTextToSize(text, CONTENT_WIDTH - indent) as string[]) {
+    for (const line of this.doc.splitTextToSize(text, width) as string[]) {
       if (this.keepTogether(lineHeight)) this.applyStyle(style);
       if (style.rail) this.railSegment(lineHeight);
       this.doc.text(this.fillPagePlaceholders(line), MARGIN + indent, this.y, { baseline: 'top' });
@@ -517,12 +752,27 @@ class PdfWriter {
     return this.doc.output('blob');
   }
 
+  /** Neue Seite im selben Abschnitt, aufgemacht wie dessen erste: breites Band und Logo neben der Überschrift */
+  titlePage(): void {
+    this.doc.addPage();
+    this.accentBand(8);
+    this.y = MARGIN + 8;
+    this.firstPageLogo();
+  }
+
   private newPage(): void {
     this.doc.addPage();
     this.accentBand(3);
+    let headerX = MARGIN;
+    const logo = this.logos.headerLogo;
+    if (logo) {
+      const { width, height } = logoSize(logo, Math.min(logo.heightMm, 7), CONTENT_WIDTH / 3);
+      this.drawLogo(logo, alignedX(logo.align, width), 7.5, width, height);
+      if (logo.align === 'left') headerX += width + 4;
+    }
     if (this.runningHeader) {
       this.applyStyle({ size: 9, color: this.colors.muted });
-      this.doc.text(this.fillPagePlaceholders(this.runningHeader), MARGIN, 10, { baseline: 'top' });
+      this.doc.text(this.fillPagePlaceholders(this.runningHeader), headerX, 10, { baseline: 'top' });
     }
     this.y = MARGIN + 2;
   }
@@ -534,22 +784,38 @@ class PdfWriter {
     return replacePagePlaceholders(text, page, this.knownPageCounts?.[index] ?? 99);
   }
 
-  /** Ohne Text entfällt auch die Trennlinie. */
+  /** Ohne Text und Logo entfällt auch die Trennlinie. Ein Text an der Stelle des Logos rückt daneben. */
   private footer(texts: FooterTexts): void {
-    if (!texts.left && !texts.center && !texts.right) return;
+    const logo = this.logos.footerLogo;
+    if (!logo && !texts.left && !texts.center && !texts.right) return;
     const y = PAGE_HEIGHT - 14;
     this.doc.setDrawColor(this.colors.rail);
     this.doc.setLineWidth(0.3);
     this.doc.line(MARGIN, y - 3, MARGIN + CONTENT_WIDTH, y - 3);
     this.applyStyle({ size: 9, color: this.colors.muted });
-    if (texts.left) this.doc.text(texts.left, MARGIN, y, { baseline: 'top' });
-    if (texts.center) this.doc.text(texts.center, PAGE_WIDTH / 2, y, { baseline: 'top', align: 'center' });
-    if (texts.right) this.doc.text(texts.right, MARGIN + CONTENT_WIDTH, y, { baseline: 'top', align: 'right' });
+    let leftX = MARGIN;
+    let rightX = MARGIN + CONTENT_WIDTH;
+    let centerX: number | null = null;
+    if (logo) {
+      const { width, height } = logoSize(logo, logo.heightMm, CONTENT_WIDTH / 3);
+      const centerTextWidth = texts.center ? this.doc.getTextWidth(texts.center) + 3 : 0;
+      const x = logo.align === 'center' ? (PAGE_WIDTH - width - centerTextWidth) / 2 : alignedX(logo.align, width);
+      this.drawLogo(logo, x, y - 1, width, height);
+      if (logo.align === 'left') leftX += width + 3;
+      if (logo.align === 'right') rightX -= width + 3;
+      if (logo.align === 'center') centerX = x + width + 3;
+    }
+    if (texts.left) this.doc.text(texts.left, leftX, y, { baseline: 'top' });
+    if (texts.center) {
+      if (centerX === null) this.doc.text(texts.center, PAGE_WIDTH / 2, y, { baseline: 'top', align: 'center' });
+      else this.doc.text(texts.center, centerX, y, { baseline: 'top' });
+    }
+    if (texts.right) this.doc.text(texts.right, rightX, y, { baseline: 'top', align: 'right' });
   }
 
   private accentBand(height: number): void {
     this.doc.setFillColor(this.colors.accent);
-    this.doc.rect(0, 0, PAGE_WIDTH, height, 'F');
+    this.doc.rect(0, 0, PAGE_WIDTH, this.colors.inkSaving ? 0.8 : height, 'F');
   }
 
   private railSegment(lineHeight: number): void {

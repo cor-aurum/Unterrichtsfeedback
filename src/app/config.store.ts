@@ -6,26 +6,47 @@ import {
   BlockVariant,
   CalendarSettings,
   ContentKind,
+  CalendarPdfTexts,
+  DEFAULT_CALENDAR_PDF_TEXTS,
   DEFAULT_PDF_LAYOUT,
   defaultCalendarSettings,
   defaultTeachingWindows,
   defaultInstrument,
   FeedbackConfig,
   FixedBlock,
+  APP_LOGO_PATH,
+  LEGACY_APP_LOGO_PATH,
   Instrument,
+  LOGO_HEIGHT_LIMITS,
   PdfLayout,
+  PdfLogo,
+  Period,
+  ReportPeriodEntry,
+  schoolHalfYear,
+  today,
   newId,
   Section,
   SectionScope,
   SectionType,
   Teacher,
   TeachingWindow,
+  teachingWindowsFor,
   TimeWindow,
   standardWindowsFor,
 } from './model';
+import { addDays, daysBetween } from './calendar/appointments';
 import { saveFile } from './save-file';
 import { storedSignal } from './stored-signal';
 import { DEFAULT_THEME_COLOR, isHexColor, themeFrom } from './theme';
+
+/** Angaben aus der Begrüßung beim ersten Start */
+export interface TeacherSetup {
+  name: string;
+  instrument: string;
+  teachingWindows: TeachingWindow[];
+  themeColor: string;
+  reportPeriod: Pick<ReportPeriodEntry, 'name' | 'from' | 'to'>;
+}
 
 /** Standardinhalt (`variantId` = null) oder eine Variante eines festen Blocks */
 export interface ContentTarget {
@@ -35,6 +56,15 @@ export interface ContentTarget {
 
 @Injectable({ providedIn: 'root' })
 export class ConfigStore {
+  /**
+   * Erster Start: Bis die Begrüßung abgeschlossen ist, steht in der Konfiguration nur ein vorläufiger Lehrer.
+   * Muss vor `config` stehen, denn nur vor deren erstem Speichern ist erkennbar, ob schon Daten da waren.
+   */
+  readonly setupPending = storedSignal<boolean>(
+    'feedback.setupPending',
+    () => localStorage.getItem('feedback.config') === null,
+    (data) => data === true,
+  );
   readonly config = storedSignal<FeedbackConfig>('feedback.config', defaultConfig, parseConfig);
 
   readonly theme = computed(() => themeFrom(this.config().themeColor));
@@ -48,7 +78,16 @@ export class ConfigStore {
   }
 
   resetPdfLayout(): void {
-    this.mutate((config) => (config.pdfLayout = { ...DEFAULT_PDF_LAYOUT }));
+    // Nur die Texte: Logos entfernt man einzeln, und der Schwarzweißmodus gehört nicht zu Kopf- und Fußzeile.
+    this.mutate(
+      (config) =>
+        (config.pdfLayout = {
+          ...DEFAULT_PDF_LAYOUT,
+          headerLogo: config.pdfLayout.headerLogo,
+          footerLogo: config.pdfLayout.footerLogo,
+          grayscale: config.pdfLayout.grayscale,
+        }),
+    );
   }
 
   setThemeColor(color: string): void {
@@ -59,16 +98,28 @@ export class ConfigStore {
     this.mutate((config) => Object.assign(config.calendar, change));
   }
 
+  setCalendarPdfTexts(change: Partial<CalendarPdfTexts>): void {
+    this.mutate((config) => Object.assign(config.calendarPdf, change));
+  }
+
+  resetCalendarPdfTexts(): void {
+    this.mutate((config) => (config.calendarPdf = { ...DEFAULT_CALENDAR_PDF_TEXTS }));
+  }
+
+  /** Ein neuer Lehrer ist in allen laufenden und künftigen Berichtszeiträumen aktiv. */
   addTeacher(name: string): void {
-    this.mutate((config) =>
+    this.mutate((config) => {
+      const id = newId();
       config.teachers.push({
-        id: newId(),
+        id,
         name,
         instrumentId: config.defaultInstrumentId,
         location: '',
         teachingWindows: defaultTeachingWindows(config.calendar),
-      }),
-    );
+        periodWindows: {},
+      });
+      config.reportPeriods.filter((period) => period.to >= today()).forEach((period) => period.teacherIds.push(id));
+    });
   }
 
   updateTeacher(teacherId: string, change: Partial<Pick<Teacher, 'name' | 'instrumentId' | 'location'>>): void {
@@ -83,45 +134,78 @@ export class ConfigStore {
     this.mutate((config) => {
       if (config.teachers.length <= 1) return;
       config.teachers = config.teachers.filter((t) => t.id !== teacherId);
+      config.reportPeriods.forEach((period) => (period.teacherIds = period.teacherIds.filter((id) => id !== teacherId)));
       [...config.blocks, ...config.groupBlocks]
         .flatMap((block) => block.variants)
         .forEach((variant) => (variant.teacherIds = variant.teacherIds.filter((id) => id !== teacherId)));
     });
   }
 
+  /**
+   * Kopie direkt hinter dem Lehrer: Instrument, Ort und Unterrichtszeiten gleich, aktiv in denselben
+   * Berichtszeiträumen. Personen, Termine und Textvarianten bleiben beim Original. Liefert die ID der Kopie.
+   */
+  duplicateTeacher(teacherId: string): string | null {
+    const original = this.config().teachers.find((t) => t.id === teacherId);
+    if (!original) return null;
+    const id = newId();
+    this.mutate((config) => {
+      const copy: Teacher = {
+        ...original,
+        id,
+        name: `${original.name} (Kopie)`,
+        teachingWindows: copyWindows(original.teachingWindows),
+        periodWindows: Object.fromEntries(
+          Object.entries(original.periodWindows).map(([periodId, windows]) => [periodId, copyWindows(windows)]),
+        ),
+      };
+      config.teachers.splice(config.teachers.findIndex((t) => t.id === teacherId) + 1, 0, copy);
+      config.reportPeriods.filter((period) => period.teacherIds.includes(teacherId)).forEach((period) => period.teacherIds.push(id));
+    });
+    return id;
+  }
+
   moveTeacher(teacherId: string, offset: -1 | 1): void {
     this.mutate((config) => move(config.teachers, teacherId, offset));
   }
 
-  addTeachingWindow(teacherId: string, weekday: number): void {
-    this.mutateTeacher(teacherId, (teacher) =>
-      teacher.teachingWindows.push({ id: newId(), weekday, from: '14:00', to: '18:00' }),
-    );
+  /*
+   * Unterrichtszeiten ändern sich je Berichtszeitraum (`periodId`) oder, mit `null`, außerhalb aller Zeiträume.
+   * Hat der Zeitraum noch keine eigenen, bekommt er dabei eine Kopie der allgemeinen.
+   */
+
+  addTeachingWindow(teacherId: string, periodId: string | null, weekday: number): void {
+    this.mutateWindows(teacherId, periodId, (windows) => [...windows, { id: newId(), weekday, from: '14:00', to: '18:00' }]);
   }
 
-  updateTeachingWindow(teacherId: string, windowId: string, change: Partial<Pick<TeachingWindow, 'from' | 'to'>>): void {
-    this.mutateTeacher(teacherId, (teacher) => {
-      const window = teacher.teachingWindows.find((w) => w.id === windowId);
-      if (window) Object.assign(window, change);
-    });
+  updateTeachingWindow(
+    teacherId: string,
+    periodId: string | null,
+    windowId: string,
+    change: Partial<Pick<TeachingWindow, 'from' | 'to'>>,
+  ): void {
+    this.mutateWindows(teacherId, periodId, (windows) => windows.map((w) => (w.id === windowId ? { ...w, ...change } : w)));
   }
 
-  removeTeachingWindow(teacherId: string, windowId: string): void {
-    this.mutateTeacher(
-      teacherId,
-      (teacher) => (teacher.teachingWindows = teacher.teachingWindows.filter((w) => w.id !== windowId)),
-    );
+  removeTeachingWindow(teacherId: string, periodId: string | null, windowId: string): void {
+    this.mutateWindows(teacherId, periodId, (windows) => windows.filter((w) => w.id !== windowId));
   }
 
   /** Ersetzt die Unterrichtszeiten des Lehrers an diesem Wochentag durch die Standardunterrichtszeiten. */
-  applyStandardWindows(teacherId: string, weekday: number): void {
-    this.mutate((config) => {
-      const teacher = config.teachers.find((t) => t.id === teacherId);
-      if (!teacher) return;
-      teacher.teachingWindows = [
-        ...teacher.teachingWindows.filter((w) => w.weekday !== weekday),
-        ...standardWindowsFor(config.calendar, weekday),
-      ];
+  applyStandardWindows(teacherId: string, periodId: string | null, weekday: number): void {
+    const standard = standardWindowsFor(this.config().calendar, weekday);
+    this.mutateWindows(teacherId, periodId, (windows) => [...windows.filter((w) => w.weekday !== weekday), ...standard]);
+  }
+
+  private mutateWindows(
+    teacherId: string,
+    periodId: string | null,
+    change: (windows: TeachingWindow[]) => TeachingWindow[],
+  ): void {
+    this.mutateTeacher(teacherId, (teacher) => {
+      const next = change(teachingWindowsFor(teacher, periodId));
+      if (periodId) teacher.periodWindows[periodId] = next;
+      else teacher.teachingWindows = next;
     });
   }
 
@@ -220,8 +304,85 @@ export class ConfigStore {
     this.config.set(parseConfig(JSON.parse(json)));
   }
 
+  /** Macht aus dem vorläufigen Lehrer den eigenen; sein Instrument wird zum Standardinstrument. */
+  completeSetup(setup: TeacherSetup): void {
+    this.mutate((config) => {
+      // Die Vorlage hat nur das vorläufige Instrument; es wird zum eigenen.
+      const instrument = { id: config.defaultInstrumentId, name: setup.instrument.trim() };
+      config.instruments = [instrument];
+      config.defaultInstrumentId = instrument.id;
+      Object.assign(config.teachers[0], {
+        name: setup.name.trim(),
+        instrumentId: instrument.id,
+        teachingWindows: setup.teachingWindows,
+        periodWindows: {},
+      });
+      if (isHexColor(setup.themeColor)) config.themeColor = setup.themeColor.toLowerCase();
+      config.reportPeriods = [
+        { id: newId(), ...setup.reportPeriod, name: setup.reportPeriod.name.trim(), teacherIds: [config.teachers[0].id] },
+      ];
+    });
+    this.setupPending.set(false);
+  }
+
+  /**
+   * Legt einen Zeitraum an und liefert seine ID. Ohne Angabe folgt er direkt auf den spätesten: als nächstes
+   * Schulhalbjahr, wenn der späteste mit einem Halbjahr endet, sonst gleich lang.
+   */
+  addReportPeriod(period: Omit<ReportPeriodEntry, 'id'> = this.followingPeriod()): string {
+    const id = newId();
+    this.mutate((config) => {
+      // Die Lehrer behalten ihre Unterrichtszeiten aus dem spätesten Zeitraum; ändern lassen sie sich danach je Zeitraum.
+      const latest = [...config.reportPeriods].sort((a, b) => a.to.localeCompare(b.to)).at(-1);
+      config.teachers.forEach((teacher) => (teacher.periodWindows[id] = copyWindows(teachingWindowsFor(teacher, latest?.id ?? null))));
+      config.reportPeriods.push({ id, ...period });
+    });
+    return id;
+  }
+
+  private followingPeriod(): Omit<ReportPeriodEntry, 'id'> {
+    const latest = [...this.config().reportPeriods].sort((a, b) => a.to.localeCompare(b.to)).at(-1)!;
+    const start = addDays(latest.to, 1);
+    const halfYear = schoolHalfYear(start);
+    // Wer zuletzt unterrichtet hat, ist meist auch im nächsten Zeitraum dabei.
+    const teacherIds = [...latest.teacherIds];
+    if (halfYear.from === start) return { name: halfYear.name, from: halfYear.from, to: halfYear.to, teacherIds };
+    return { name: 'Neuer Zeitraum', from: start, to: addDays(start, daysBetween(latest.from, latest.to).length - 1), teacherIds };
+  }
+
+  updateReportPeriod(periodId: string, change: Partial<Omit<ReportPeriodEntry, 'id'>>): void {
+    this.mutate((config) => {
+      const period = config.reportPeriods.find((p) => p.id === periodId);
+      if (period) Object.assign(period, change);
+    });
+  }
+
+  toggleReportPeriodTeacher(periodId: string, teacherId: string): void {
+    this.mutate((config) => {
+      const period = config.reportPeriods.find((p) => p.id === periodId);
+      if (!period) return;
+      period.teacherIds = period.teacherIds.includes(teacherId)
+        ? period.teacherIds.filter((id) => id !== teacherId)
+        : [...period.teacherIds, teacherId];
+    });
+  }
+
+  /** Entfernt den Zeitraum auch aus allen Varianten. Der letzte Zeitraum bleibt immer erhalten. */
+  removeReportPeriod(periodId: string): void {
+    this.mutate((config) => {
+      if (config.reportPeriods.length <= 1) return;
+      config.reportPeriods = config.reportPeriods.filter((p) => p.id !== periodId);
+      config.teachers.forEach((teacher) => delete teacher.periodWindows[periodId]);
+      [...config.blocks, ...config.groupBlocks]
+        .flatMap((block) => block.variants)
+        .forEach((variant) => (variant.periodIds = variant.periodIds.filter((id) => id !== periodId)));
+    });
+  }
+
+  /** Setzt Texte, Abschnitte und Gestaltung auf die Vorlage zurück; Lehrer, Instrumente und Zeiträume bleiben. */
   resetToDefault(): void {
-    this.config.set(defaultConfig());
+    const { teachers, instruments, defaultInstrumentId, reportPeriods } = this.config();
+    this.config.set({ ...defaultConfig(), teachers, instruments, defaultInstrumentId, reportPeriods });
   }
 
   addInstrument(name: string): void {
@@ -306,7 +467,7 @@ export class ConfigStore {
 
   addVariant(blockId: string): void {
     this.mutateBlock(blockId, (block) =>
-      block.variants.push({ id: newId(), instrumentIds: [], teacherIds: [], text: '' }),
+      block.variants.push({ id: newId(), instrumentIds: [], teacherIds: [], periodIds: [], text: '' }),
     );
   }
 
@@ -314,8 +475,13 @@ export class ConfigStore {
     this.mutateBlock(blockId, (block) => (block.variants = block.variants.filter((v) => v.id !== variantId)));
   }
 
-  /** Hakt ein Instrument (`instrumentIds`) oder einen Lehrer (`teacherIds`) einer Variante an oder ab. */
-  toggleVariantCondition(blockId: string, variantId: string, list: 'instrumentIds' | 'teacherIds', id: string): void {
+  /** Hakt ein Instrument, einen Lehrer oder einen Berichtszeitraum einer Variante an oder ab. */
+  toggleVariantCondition(
+    blockId: string,
+    variantId: string,
+    list: 'instrumentIds' | 'teacherIds' | 'periodIds',
+    id: string,
+  ): void {
     this.mutateBlock(blockId, (block) => {
       const variant = block.variants.find((v) => v.id === variantId);
       if (!variant) return;
@@ -384,6 +550,7 @@ export function parseConfig(data: unknown): FeedbackConfig {
   // Ältere Konfigurationen haben noch keine Instrumente; es muss aber immer eins geben.
   const instruments = Array.isArray(config.instruments) ? config.instruments.map(parseInstrument) : [];
   if (instruments.length === 0) instruments.push({ id: newId(), name: 'Instrument' });
+  const teachers = parseTeachers(config);
   const defaultInstrumentId = instruments.some((i) => i.id === config.defaultInstrumentId)
     ? config.defaultInstrumentId!
     : instruments[0].id;
@@ -393,7 +560,7 @@ export function parseConfig(data: unknown): FeedbackConfig {
     themeColor: isHexColor(config.themeColor) ? config.themeColor : DEFAULT_THEME_COLOR,
     pdfLayout: parsePdfLayout(config.pdfLayout),
     calendar: parseCalendarSettings(config.calendar),
-    teachers: parseTeachers(config),
+    teachers,
     instruments,
     defaultInstrumentId,
     // Ältere Konfigurationen haben noch keine festen Blöcke.
@@ -402,15 +569,54 @@ export function parseConfig(data: unknown): FeedbackConfig {
     // … und noch keine Inhalte für Gruppen; dann gilt die Vorlage.
     groupBlocks: Array.isArray(config.groupBlocks) ? config.groupBlocks.map(parseBlock) : defaultGroupBlocks(),
     groupSections: Array.isArray(config.groupSections) ? config.groupSections.map(parseSection) : defaultGroupSections(),
+    reportPeriods: parseReportPeriods(config.reportPeriods, teachers.map((t) => t.id)),
+    calendarPdf: parseCalendarPdfTexts(config.calendarPdf),
   };
+}
+
+/**
+ * Ältere Konfigurationen haben noch keine Berichtszeiträume; dann gilt das aktuelle Schulhalbjahr. Zeiträume ohne
+ * Lehrerliste (ebenfalls älter) gelten für alle Lehrer.
+ */
+function parseReportPeriods(data: unknown, allTeacherIds: string[]): ReportPeriodEntry[] {
+  const periods = (Array.isArray(data) ? (data as Partial<ReportPeriodEntry>[]) : [])
+    .filter((p) => typeof p?.id === 'string' && typeof p.name === 'string' && isPeriod(p))
+    .map((p) => ({
+      id: p.id!,
+      name: p.name!,
+      from: p.from!,
+      to: p.to!,
+      teacherIds: Array.isArray(p.teacherIds) ? p.teacherIds.filter((id) => typeof id === 'string') : [...allTeacherIds],
+    }));
+  return periods.length > 0 ? periods : [{ ...schoolHalfYear(today()), teacherIds: [...allTeacherIds] }];
+}
+
+export function isPeriod(data: Partial<Period> | null | undefined): data is Period {
+  const isDate = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return isDate(data?.from) && isDate(data?.to) && data!.from! <= data!.to!;
+}
+
+
+/** Ältere Konfigurationen haben noch keine Texte für die Kalender-PDFs; fehlende kommen vom Standard. */
+function parseCalendarPdfTexts(data: Partial<CalendarPdfTexts> | undefined): CalendarPdfTexts {
+  const texts = { ...DEFAULT_CALENDAR_PDF_TEXTS };
+  for (const key of Object.keys(texts) as (keyof CalendarPdfTexts)[]) {
+    if (typeof data?.[key] === 'string') texts[key] = data[key];
+  }
+  return texts;
 }
 
 /** Ältere Konfigurationen haben noch keine Kalender-Einstellungen; dann gilt der Standard. */
 function parseCalendarSettings(data: Partial<CalendarSettings> | undefined): CalendarSettings {
-  if (!data || typeof data !== 'object') return defaultCalendarSettings();
+  const defaults = defaultCalendarSettings();
+  if (!data || typeof data !== 'object') return defaults;
   return {
-    defaultDurationMinutes: Number(data.defaultDurationMinutes) > 0 ? Number(data.defaultDurationMinutes) : 45,
-    weeklyByDefault: data.weeklyByDefault !== false,
+    defaultDurationMinutes:
+      Number(data.defaultDurationMinutes) > 0 ? Number(data.defaultDurationMinutes) : defaults.defaultDurationMinutes,
+    // Früher hieß die Einstellung „Jede Woche wiederholen“ (`weeklyByDefault`).
+    repeatByDefault: [data.repeatByDefault, (data as { weeklyByDefault?: unknown }).weeklyByDefault].find(
+      (value): value is boolean => typeof value === 'boolean',
+    ) ?? defaults.repeatByDefault,
     // Ältere Konfigurationen haben noch keine Standardunterrichtszeiten.
     defaultWindows: Array.isArray(data.defaultWindows)
       ? parseTimeWindows(data.defaultWindows)
@@ -431,6 +637,8 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       instrumentId: typeof t.instrumentId === 'string' ? t.instrumentId : null,
       location: typeof t.location === 'string' ? t.location : '',
       teachingWindows: parseTeachingWindows(t.teachingWindows),
+      // Ältere Lehrer haben noch keine Zeiten je Berichtszeitraum; dort gelten die allgemeinen.
+      periodWindows: parsePeriodWindows(t.periodWindows),
     }));
   }
   const legacyWindows = (config.calendar as { teachingWindows?: unknown } | undefined)?.teachingWindows;
@@ -440,7 +648,18 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
     instrumentId: null,
     location: '',
     teachingWindows: legacyWindows === undefined ? defaultTeachingWindows() : parseTeachingWindows(legacyWindows),
+    periodWindows: {},
   }];
+}
+
+function parsePeriodWindows(data: unknown): Record<string, TeachingWindow[]> {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+  return Object.fromEntries(Object.entries(data).map(([periodId, windows]) => [periodId, parseTeachingWindows(windows)]));
+}
+
+/** Gleiche Zeiten mit neuen IDs, damit sich Kopie und Original unabhängig ändern lassen */
+function copyWindows(windows: TeachingWindow[]): TeachingWindow[] {
+  return windows.map((window) => ({ ...window, id: newId() }));
 }
 
 function parseTeachingWindows(data: unknown): TeachingWindow[] {
@@ -458,7 +677,7 @@ function parseTimeWindows(data: unknown[]): TimeWindow[] {
 
 /** Ältere Konfigurationen haben noch keine Kopf- und Fußzeile; fehlende Werte kommen vom Standard. */
 function parsePdfLayout(data: Partial<PdfLayout> | undefined): PdfLayout {
-  const text = (key: Exclude<keyof PdfLayout, 'showInfoLine'>) =>
+  const text = (key: 'subtitle' | 'runningHeader' | 'footerLeft' | 'footerCenter' | 'footerRight') =>
     typeof data?.[key] === 'string' ? data[key] : DEFAULT_PDF_LAYOUT[key];
   return {
     subtitle: text('subtitle'),
@@ -467,6 +686,31 @@ function parsePdfLayout(data: Partial<PdfLayout> | undefined): PdfLayout {
     footerLeft: text('footerLeft'),
     footerCenter: text('footerCenter'),
     footerRight: text('footerRight'),
+    // Fehlt das Feld (ältere Konfiguration), gilt das App-Logo; `null` heißt: bewusst entfernt.
+    headerLogo:
+      data?.headerLogo === undefined ? DEFAULT_PDF_LAYOUT.headerLogo : parseLogo(data.headerLogo, LOGO_HEIGHT_LIMITS.headerLogo),
+    footerLogo: parseLogo(data?.footerLogo, LOGO_HEIGHT_LIMITS.footerLogo),
+    grayscale: data?.grayscale === true,
+  };
+}
+
+/** Nur eingebettete Bilder oder das App-Logo, keine fremden Adressen aus einer synchronisierten Datei */
+function isLogoSource(source: unknown): source is string {
+  return (
+    typeof source === 'string' &&
+    (source.startsWith('data:image/') || source === APP_LOGO_PATH || source === LEGACY_APP_LOGO_PATH)
+  );
+}
+
+function parseLogo(data: Partial<PdfLogo> | null | undefined, limits: { min: number; max: number }): PdfLogo | null {
+  if (!data || !isLogoSource(data.dataUrl) || !(Number(data.widthPx) > 0) || !(Number(data.heightPx) > 0)) return null;
+  const height = Number(data.heightMm);
+  return {
+    dataUrl: data.dataUrl === LEGACY_APP_LOGO_PATH ? APP_LOGO_PATH : data.dataUrl,
+    widthPx: Number(data.widthPx),
+    heightPx: Number(data.heightPx),
+    heightMm: Math.min(limits.max, Math.max(limits.min, Number.isFinite(height) ? height : limits.min)),
+    align: data.align === 'left' || data.align === 'center' ? data.align : 'right',
   };
 }
 
@@ -494,8 +738,9 @@ function parseVariant(data: Partial<BlockVariant>): BlockVariant {
   return {
     id: typeof data?.id === 'string' ? data.id : newId(),
     instrumentIds: Array.isArray(data?.instrumentIds) ? data.instrumentIds.filter((id) => typeof id === 'string') : [],
-    // Ältere Varianten kennen nur Instrumente.
+    // Ältere Varianten kennen nur Instrumente, dann auch Lehrer, aber noch keine Zeiträume.
     teacherIds: Array.isArray(data?.teacherIds) ? data.teacherIds.filter((id) => typeof id === 'string') : [],
+    periodIds: Array.isArray(data?.periodIds) ? data.periodIds.filter((id) => typeof id === 'string') : [],
     ...parseContent(data),
   };
 }
@@ -569,10 +814,13 @@ function defaultGroupBlocks(): FixedBlock[] {
   ];
 }
 
+/**
+ * Vorlage beim ersten Start. Lehrer und Instrument sind vorläufig, bis die Begrüßung sie ersetzt
+ * (`completeSetup`); es muss aber immer mindestens eins von beiden geben.
+ */
 function defaultConfig(): FeedbackConfig {
-  const piano = { id: newId(), name: 'Klavier' };
-  const guitar = { id: newId(), name: 'Gitarre' };
-  const violin = { id: newId(), name: 'Violine' };
+  const instrument = { id: newId(), name: 'Instrument' };
+  const teacherId = newId();
 
   return {
     version: 1,
@@ -581,10 +829,17 @@ function defaultConfig(): FeedbackConfig {
     pdfLayout: { ...DEFAULT_PDF_LAYOUT },
     calendar: defaultCalendarSettings(),
     teachers: [
-      { id: newId(), name: 'Lehrkraft', instrumentId: piano.id, location: '', teachingWindows: defaultTeachingWindows() },
+      {
+        id: teacherId,
+        name: 'Lehrkraft',
+        instrumentId: instrument.id,
+        location: '',
+        teachingWindows: defaultTeachingWindows(),
+        periodWindows: {},
+      },
     ],
-    instruments: [piano, guitar, violin],
-    defaultInstrumentId: piano.id,
+    instruments: [instrument],
+    defaultInstrumentId: instrument.id,
     blocks: [
       {
         id: newId(),
@@ -598,14 +853,7 @@ function defaultConfig(): FeedbackConfig {
         type: 'text',
         position: 'end',
         text: 'Viel Spaß beim Üben und bis zur nächsten Stunde!',
-        variants: [
-          {
-            id: newId(),
-            instrumentIds: [guitar.id, violin.id],
-            teacherIds: [],
-            text: 'Viel Spaß beim Üben und bis zur nächsten Stunde! Denk daran, deine {instrument} vor dem Spielen zu stimmen.',
-          },
-        ],
+        variants: [],
       },
     ],
     sections: [
@@ -640,5 +888,7 @@ function defaultConfig(): FeedbackConfig {
     ],
     groupBlocks: defaultGroupBlocks(),
     groupSections: defaultGroupSections(),
+    reportPeriods: [{ ...schoolHalfYear(today()), teacherIds: [teacherId] }],
+    calendarPdf: { ...DEFAULT_CALENDAR_PDF_TEXTS },
   };
 }

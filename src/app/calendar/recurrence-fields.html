@@ -1,0 +1,21 @@
+<label class="check">
+  <input type="checkbox" [checked]="!!repeat()" (change)="toggle($event)" />
+  Wiederholen
+</label>
+@if (repeat(); as r) {
+  <div class="recurrence">
+    <label>
+      alle
+      <input type="number" min="1" step="1" aria-label="Abstand in Tagen" [value]="r.everyDays" (change)="setEveryDays($event)" />
+      {{ r.everyDays === 1 ? 'Tag' : 'Tage' }},
+    </label>
+    <label>
+      <input type="number" min="2" step="1" aria-label="Anzahl der Termine" [value]="r.count" (change)="setCount($event)" />
+      -mal
+    </label>
+    <span class="muted">letzter Termin: {{ last() }}</span>
+  </div>
+  <p class="muted hint">
+    Voreingestellt bis zum Ende des Berichtszeitraums; änderst du den Abstand, passt sich die Anzahl daran an.
+  </p>
+}

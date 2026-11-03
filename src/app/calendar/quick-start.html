@@ -6,6 +6,7 @@
         <button
           [class.secondary]="!entry.current"
           [class.current]="entry.current"
+          [attr.data-state]="entry.state"
           (click)="open(entry.appointment)"
         >
           <span class="time">
@@ -14,7 +15,9 @@
               · jetzt
             }
           </span>
-          <span class="action">{{ entry.hasLesson ? 'Stunde öffnen' : '+ Neue Stunde' }}: {{ entry.name }}</span>
+          <span class="action">
+            {{ entry.hasLesson ? '✓ Stunde öffnen' : '+ Neue Stunde' }}: {{ entry.name }}
+          </span>
         </button>
       }
     </div>

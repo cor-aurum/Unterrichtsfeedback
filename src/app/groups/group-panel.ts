@@ -1,5 +1,8 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { CalendarStore } from '../calendar/calendar.store';
+import { Clock } from '../calendar/clock';
+import { lessonStartAt } from '../calendar/lesson-start';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
 import {
@@ -14,6 +17,7 @@ import {
   Section,
   Student,
   teacherOf,
+  today,
 } from '../model';
 import { sortedLessons, StudentsStore } from '../students.store';
 
@@ -33,6 +37,8 @@ export class GroupPanel {
   protected readonly store = inject(GroupsStore);
   private readonly studentsStore = inject(StudentsStore);
   private readonly configStore = inject(ConfigStore);
+  private readonly calendar = inject(CalendarStore);
+  private readonly clock = inject(Clock);
   protected readonly config = this.configStore.config;
   protected readonly formatDate = formatDate;
   protected readonly lessonTime = lessonTime;
@@ -57,6 +63,16 @@ export class GroupPanel {
     return (event.target as HTMLInputElement).value;
   }
 
+  /** Weitere Gruppen der Person, z. B. „(auch in Chor)“ bei Mitgliedern, sonst „(in Chor)“ */
+  protected otherGroupsText(student: Student): string {
+    const names = this.store
+      .groupsOf(student.id)
+      .filter((group) => group.id !== this.group().id)
+      .map((group) => groupLabel(group, this.studentsStore.students()));
+    if (names.length === 0) return '';
+    return `(${this.isMember(student) ? 'auch ' : ''}in ${names.join(', ')})`;
+  }
+
   protected isMember(student: Student): boolean {
     return this.group().memberIds.includes(student.id);
   }
@@ -64,6 +80,19 @@ export class GroupPanel {
   protected entryCount(lesson: Lesson): number {
     const checked = Object.values(lesson.checked).reduce((sum, ids) => sum + ids.length, 0);
     return checked + Object.values(lesson.texts).filter((text) => text.trim()).length;
+  }
+
+  /** „+ Neue Gruppenstunde“: Stunde des gerade laufenden Gruppentermins öffnen oder anlegen, sonst gerundete Uhrzeit */
+  protected startLesson(): void {
+    const date = today();
+    const groupId = this.group().id;
+    const occurrences = this.calendar.occurrences(date, date, (a) => a.groupId === groupId);
+    const next = lessonStartAt(this.group(), date, occurrences, this.clock.now());
+    if ('open' in next) {
+      this.store.selectedLessonId.set(next.open.id);
+    } else {
+      this.store.openLesson(groupId, date, next.create);
+    }
   }
 
   protected removeGroup(): void {
