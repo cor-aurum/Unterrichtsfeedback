@@ -82,7 +82,7 @@
       @for (student of candidates(); track student.id) {
         <label>
           <input type="checkbox" [checked]="isSelected(student)" (change)="toggle(student)" />
-          {{ student.name }}
+          {{ student | studentLabel }}
         </label>
       }
     </div>

@@ -1,6 +1,8 @@
 import { Component, computed, inject, input, linkedSignal, output } from '@angular/core';
 import { ConfigStore } from '../config.store';
-import { activeTeachersOn } from '../model';
+import { GroupsStore } from '../groups.store';
+import { activeTeachersOn, Group, groupLabel, groupTeacherOf } from '../model';
+import { StudentsStore } from '../students.store';
 import { CalendarStore } from './calendar.store';
 import { RecurrenceFields } from './recurrence-fields';
 import { SharedAppointment } from './shared-appointments';
@@ -32,14 +34,56 @@ export function newSharedDraft(config: ConfigStore['config'], date: string): Sha
 })
 export class SharedAppointmentForm {
   private readonly calendar = inject(CalendarStore);
+  private readonly groupsStore = inject(GroupsStore);
+  private readonly studentsStore = inject(StudentsStore);
   protected readonly config = inject(ConfigStore).config;
 
   readonly initial = input.required<SharedDraft>();
-  readonly closed = output<void>();
+  /** Mit Text, wenn der Termin umgewandelt wurde; die Seite zeigt ihn als Hinweis. */
+  readonly closed = output<string | void>();
 
   protected readonly draft = linkedSignal(() => this.initial());
   protected readonly error = linkedSignal<SharedDraft, string | null>({ source: this.initial, computation: () => null });
   protected readonly teachers = computed(() => this.config().teachers);
+  protected readonly groups = computed(() =>
+    [...this.groupsStore.groups()].sort((a, b) => this.groupName(a).localeCompare(this.groupName(b), 'de')),
+  );
+  /** Gruppen, die beim Umwandeln einen Gruppentermin bekommen; `null`, solange nicht umgewandelt wird */
+  protected readonly convertGroupIds = linkedSignal<SharedDraft, string[] | null>({ source: this.initial, computation: () => null });
+
+  protected groupName(group: Group): string {
+    return groupLabel(group, this.studentsStore.students());
+  }
+
+  protected groupTeacherName(group: Group): string {
+    return groupTeacherOf(group, this.config()).name;
+  }
+
+  /** Vorausgewählt: die Gruppen der Lehrer, die am allgemeinen Termin teilnehmen */
+  protected startConverting(): void {
+    const teacherIds = this.draft().teacherIds;
+    this.convertGroupIds.set(
+      this.groups().filter((group) => teacherIds.includes(groupTeacherOf(group, this.config()).id)).map((g) => g.id),
+    );
+  }
+
+  protected toggleConvertGroup(groupId: string): void {
+    this.convertGroupIds.update((ids) =>
+      ids && (ids.includes(groupId) ? ids.filter((id) => id !== groupId) : [...ids, groupId]),
+    );
+  }
+
+  /** Legt je Gruppe einen Gruppentermin mit Zeit und Wiederholung des Formulars an und löscht den allgemeinen Termin. */
+  protected convert(): void {
+    const { id, date, start, durationMinutes, repeat } = this.draft();
+    const groupIds = this.convertGroupIds() ?? [];
+    if (!id || groupIds.length === 0) return;
+    groupIds.forEach((groupId) => this.calendar.add({ groupId, date, start, durationMinutes, ...(repeat ? { repeat } : {}) }));
+    this.calendar.removeShared(id);
+    this.closed.emit(
+      `${groupIds.length === 1 ? '1 Gruppentermin' : `${groupIds.length} Gruppentermine`} angelegt, der allgemeine Termin ist gelöscht.`,
+    );
+  }
 
   protected valueOf(event: Event): string {
     return (event.target as HTMLInputElement).value;

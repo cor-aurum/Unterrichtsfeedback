@@ -2,6 +2,7 @@ import { Component, computed, effect, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ActiveTeacher } from './active-teacher';
 import { ConfigStore } from './config.store';
+import { ReportPeriod } from './report-period';
 import { FolderSync } from './sync/folder-sync';
 import { isNativeApp } from './save-file';
 import { WelcomeDialog } from './welcome/welcome-dialog';
@@ -19,6 +20,11 @@ export class App {
   /** Erster Start: Die Begrüßung legt den eigenen Lehrer an oder spielt eine Sicherung ein. */
   protected readonly setupPending = this.configStore.setupPending;
   protected readonly activeTeacher = inject(ActiveTeacher);
+  protected readonly reportPeriod = inject(ReportPeriod);
+  /** Nach Beginn sortiert */
+  protected readonly periods = computed(() =>
+    [...this.reportPeriod.periods()].sort((a, b) => a.from.localeCompare(b.from)),
+  );
   /** Startet die Ordner-Synchronisation, falls ein Ordner gewählt ist */
   protected readonly folderSync = inject(FolderSync);
   protected readonly syncNeedsAttention = computed(() =>

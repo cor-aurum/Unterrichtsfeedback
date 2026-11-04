@@ -99,6 +99,11 @@ export interface ReportPeriodEntry extends Period {
   name: string;
   /** Lehrer, die in diesem Zeitraum unterrichten */
   teacherIds: string[];
+  /**
+   * Gemeinsame Unterrichtszeiten für alle Lehrer im Zeitraum. Fehlen sie, hat jeder Lehrer eigene
+   * (`Teacher.periodWindows`).
+   */
+  sharedWindows?: TeachingWindow[];
 }
 
 /**
@@ -123,6 +128,13 @@ export function activeTeachersOn(config: FeedbackConfig, date: string): Teacher[
 export function containsDate(period: Period, date: string): boolean {
   return date >= period.from && date <= period.to;
 }
+
+/** Unterricht gibt es nur an Tagen in einem Berichtszeitraum. */
+export function isTeachingDay(config: FeedbackConfig, date: string): boolean {
+  return config.reportPeriods.some((period) => containsDate(period, date));
+}
+
+export const NO_TEACHING_TEXT = 'liegt in keinem Berichtszeitraum; außerhalb der Berichtszeiträume gibt es keinen Unterricht.';
 
 /** Schulhalbjahr um ein Datum: 1. August bis 31. Januar oder 1. Februar bis 31. Juli */
 export function schoolHalfYear(date: string): Omit<ReportPeriodEntry, 'teacherIds'> {
@@ -258,11 +270,17 @@ export interface Teacher {
   instrumentId: string | null;
   /** Freitext, z. B. „Raum 3, Musikschule Mitte“ */
   location: string;
-  /** Unterrichtszeiten außerhalb aller Berichtszeiträume und in Zeiträumen ohne eigene (`periodWindows`) */
+  /** Standard-Unterrichtszeiten für Berichtszeiträume ohne eigene (`periodWindows`) */
   teachingWindows: TeachingWindow[];
   /** Eigene Unterrichtszeiten je Berichtszeitraum (Schlüssel: ID des Zeitraums) */
   periodWindows: Record<string, TeachingWindow[]>;
 }
+
+/**
+ * Wessen Unterrichtszeiten bearbeitet werden: die eines Lehrers in einem Berichtszeitraum (`periodId` null: seine
+ * Standardzeiten) oder die gemeinsamen eines Zeitraums.
+ */
+export type WindowsOwner = { teacherId: string; periodId: string | null } | { sharedPeriodId: string };
 
 /** Unterrichtszeiten eines Lehrers im Berichtszeitraum; `null` oder ohne eigene: die allgemeinen */
 export function teachingWindowsFor(teacher: Teacher, periodId: string | null): TeachingWindow[] {
@@ -271,13 +289,15 @@ export function teachingWindowsFor(teacher: Teacher, periodId: string | null): T
 
 /**
  * Unterrichtszeiten des Lehrers an einem Tag, nach Beginn sortiert: die des Berichtszeitraums, in dem der Tag
- * liegt (bei mehreren der, in dem der Lehrer aktiv ist), sonst die allgemeinen.
+ * liegt (bei mehreren der, in dem der Lehrer aktiv ist) – die gemeinsamen des Zeitraums oder, ohne sie, die eigenen
+ * des Lehrers. Außerhalb der Berichtszeiträume gibt es keinen Unterricht.
  */
 export function teachingWindowsOn(teacher: Teacher, config: FeedbackConfig, date: string): TeachingWindow[] {
   const periods = config.reportPeriods.filter((period) => containsDate(period, date));
   const period = periods.find((p) => p.teacherIds.includes(teacher.id)) ?? periods[0];
+  if (!period) return [];
   const day = (new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7;
-  return teachingWindowsFor(teacher, period?.id ?? null)
+  return (period.sharedWindows ?? teachingWindowsFor(teacher, period.id))
     .filter((window) => window.weekday === day)
     .sort((a, b) => a.from.localeCompare(b.from));
 }
@@ -286,9 +306,20 @@ export function teacherInstrument(teacher: Teacher, config: FeedbackConfig): Ins
   return config.instruments.find((i) => i.id === teacher.instrumentId) ?? defaultInstrument(config);
 }
 
-/** Lehrer der Person; fehlt er (ältere Daten, gelöschter Lehrer), gilt der erste Lehrer. */
-export function teacherOf(student: Student, config: FeedbackConfig): Teacher {
-  return config.teachers.find((t) => t.id === student.teacherId) ?? config.teachers[0];
+/**
+ * Lehrer der Person im Berichtszeitraum. Ist sie dort nicht aktiv, gilt ihr Lehrer aus einem anderen Zeitraum;
+ * fehlt er (gelöschter Lehrer), der erste Lehrer.
+ */
+export function teacherOf(student: Student, config: FeedbackConfig, periodId: string): Teacher {
+  const id = isActiveIn(student, periodId)
+    ? student.periods[periodId]
+    : Object.values(student.periods).find((teacherId) => teacherId !== null);
+  return config.teachers.find((t) => t.id === id) ?? config.teachers[0];
+}
+
+/** In Zeiträumen, in denen sie nicht eingetragen ist, ist die Person inaktiv. */
+export function isActiveIn(student: Student, periodId: string): boolean {
+  return Object.hasOwn(student.periods, periodId);
 }
 
 export interface FeedbackConfig {
@@ -317,6 +348,7 @@ export interface FeedbackConfig {
 export interface CalendarPdfTexts {
   listTitle: string;
   eventListTitle: string;
+  individualListTitle: string;
   dayPlanTitle: string;
   /** Links in der Fußzeile jeder Seite */
   footer: string;
@@ -329,6 +361,7 @@ export interface CalendarPdfTexts {
 export const DEFAULT_CALENDAR_PDF_TEXTS: CalendarPdfTexts = {
   listTitle: 'Unterrichtsplan',
   eventListTitle: 'Termine ohne Einzelunterricht',
+  individualListTitle: 'Einzelunterricht',
   dayPlanTitle: 'Tagesplan aller Lehrer',
   footer: 'Unterrichtsplan',
   noAppointments: 'In diesem Zeitraum sind keine Termine geplant.',
@@ -381,9 +414,14 @@ export const GROUP_PLACEHOLDERS = [
  *
  * `lesson` ist die Stunde, zu der der Text gehört; ohne sie gilt für {uhrzeit} die letzte Stunde mit Uhrzeit.
  */
-export function fillPlaceholders(text: string, student: Student, config: FeedbackConfig, lesson?: Lesson): string {
+export function fillPlaceholders(
+  text: string,
+  student: Student,
+  teacher: Teacher,
+  config: FeedbackConfig,
+  lesson?: Lesson,
+): string {
   const timedLesson = lesson ?? latestLessonWithTime(student);
-  const teacher = teacherOf(student, config);
   return (
     text
       // {titel} zuerst, weil die Überschrift selbst Platzhalter enthalten kann.
@@ -414,6 +452,8 @@ export interface Group {
   memberIds: string[];
   /** Immer über `groupTeacherOf` auswerten. */
   teacherId: string | null;
+  /** Gruppen gelten für einen Berichtszeitraum; im nächsten werden sie neu angelegt. */
+  periodId: string;
   lessons: Lesson[];
   /** Freitexte der allgemeinen Gruppen-Abschnitte (Abschnitts-ID → Text) */
   generalTexts: Record<string, string>;
@@ -492,13 +532,20 @@ export function doubleLessonDates(student: Student): Set<string> {
 export interface Student {
   id: string;
   name: string;
+  /** ISO-Datum; freiwillig, um Personen gleichen Namens zu unterscheiden */
+  birthDate?: string;
   /** ID eines Instruments aus `FeedbackConfig.instruments`; immer über `instrumentOf` auswerten. */
   instrumentId: string | null;
-  /** ID eines Lehrers aus `FeedbackConfig.teachers`; immer über `teacherOf` auswerten. */
-  teacherId: string | null;
+  /**
+   * Berichtszeiträume, in denen die Person Unterricht hat, mit ihrem Lehrer dort (Zeitraum-ID → Lehrer-ID, `null`
+   * für den ersten Lehrer). In anderen Zeiträumen ist sie inaktiv. Den Lehrer immer über `teacherOf` auswerten.
+   */
+  periods: Record<string, string | null>;
   /** Freitext der allgemeinen Abschnitte, gilt für alle Stunden (Abschnitts-ID → Text) */
   generalTexts: Record<string, string>;
   lessons: Lesson[];
+  /** Lehrer aus Daten vor den Zeiträumen je Person; nur bis zur Umstellung (siehe `withPeriodMembership`) */
+  legacyTeacherId?: string | null;
 }
 
 export function newId(): string {
@@ -518,6 +565,11 @@ export function formatLongDate(isoDate: string): string {
     month: 'long',
     year: 'numeric',
   });
+}
+
+/** „03.05.2015“, ohne Wochentag */
+export function formatShortDate(isoDate: string): string {
+  return isoDate.split('-').reverse().join('.');
 }
 
 export function formatDate(isoDate: string): string {

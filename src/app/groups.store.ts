@@ -1,22 +1,29 @@
-import { computed, effect, inject, Injectable } from '@angular/core';
+import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { Appointment, ownerOf, withLessonAppointments } from './calendar/appointments';
 import { CalendarStore } from './calendar/calendar.store';
 import { ConfigStore } from './config.store';
+import { withPeriodMembership } from './period-membership';
+import { ReportPeriod } from './report-period';
 import { Group, groupLabel, groupTeacherOf, Lesson, lessonAt, newId, Teacher, teacherOf, today } from './model';
 import { storedSignal } from './stored-signal';
 import { isRecord, parseLesson, sortedLessons, StudentsStore } from './students.store';
 
 /**
  * Gruppen und ihre Gruppenstunden. Gruppenstunden gehören der Gruppe, nutzen die Gruppen-Abschnitte der
- * Konfiguration und erscheinen im Gruppen-PDF, nicht in den PDFs der Mitglieder.
+ * Konfiguration und erscheinen im Gruppen-PDF, nicht in den PDFs der Mitglieder. Jede Gruppe gilt für einen
+ * Berichtszeitraum; `groups` sind die des gewählten.
  */
 @Injectable({ providedIn: 'root' })
 export class GroupsStore {
   private readonly studentsStore = inject(StudentsStore);
   private readonly calendar = inject(CalendarStore);
   private readonly config = inject(ConfigStore).config;
+  private readonly reportPeriod = inject(ReportPeriod);
+  private readonly periodId = computed(() => this.reportPeriod.period().id);
 
-  readonly groups = storedSignal<Group[]>('feedback.groups', () => [], parseGroups);
+  /** Gruppen aller Zeiträume, z. B. für Sicherung und Synchronisation */
+  readonly allGroups = storedSignal<Group[]>('feedback.groups', () => [], parseGroups);
+  readonly groups = computed(() => this.allGroups().filter((group) => group.periodId === this.periodId()));
   readonly selectedGroupId = storedSignal<string | null>('feedback.selectedGroup', () => null);
   readonly selectedLessonId = storedSignal<string | null>('feedback.selectedGroupLesson', () => null, (data) =>
     typeof data === 'string' ? data : null,
@@ -32,8 +39,19 @@ export class GroupsStore {
     // Gruppenstunden mit Uhrzeit stehen im Kalender des Lehrers der Gruppe.
     effect(() => {
       const appointments = this.calendar.appointments();
-      const next = withLessonAppointments(appointments, this.groups(), 'group', this.config().calendar.defaultDurationMinutes);
+      const next = withLessonAppointments(appointments, this.allGroups(), 'group', this.config().calendar.defaultDurationMinutes);
       if (next !== appointments) this.calendar.appointments.set(next);
+    });
+    // Ältere Daten, auch aus einer Sicherung oder der Synchronisation, bekommen ihre Berichtszeiträume.
+    effect(() => {
+      const data = { students: this.studentsStore.allStudents(), groups: this.allGroups() };
+      const periods = this.config().reportPeriods;
+      const migrated = untracked(() =>
+        withPeriodMembership({ ...data, appointments: this.calendar.appointments() }, periods, today()),
+      );
+      if (!migrated) return;
+      this.studentsStore.allStudents.set(migrated.students);
+      this.allGroups.set(migrated.groups);
     });
   }
 
@@ -46,12 +64,28 @@ export class GroupsStore {
     return (appointment) => (appointment.teacherId ? appointment.teacherId === teacher.id : owners.has(ownerOf(appointment)));
   }
 
-  /** Anzeigename je Termin-Besitzer: der Name der Person oder „Gruppe …“ */
+  /**
+   * In wessen Kalender der Termin steht: bei Ausnahmen der eingetragene Lehrer, sonst der der Person oder Gruppe;
+   * ohne beide der erste Lehrer.
+   */
+  calendarTeacherOf(appointment: Appointment): Teacher {
+    const config = this.config();
+    const exception = config.teachers.find((t) => t.id === appointment.teacherId);
+    if (exception) return exception;
+    const group = appointment.groupId ? this.allGroups().find((g) => g.id === appointment.groupId) : undefined;
+    if (group) return groupTeacherOf(group, config);
+    const student = appointment.studentId
+      ? this.studentsStore.allStudents().find((s) => s.id === appointment.studentId)
+      : undefined;
+    return student ? teacherOf(student, config, this.periodId()) : config.teachers[0];
+  }
+
+  /** Anzeigename je Termin-Besitzer: der Name der Person oder „Gruppe …“, auch aus anderen Zeiträumen */
   readonly ownerNames = computed(() => {
-    const students = this.studentsStore.students();
+    const students = this.studentsStore.allStudents();
     return new Map([
       ...students.map((student) => [student.id, student.name] as const),
-      ...this.groups().map((group) => [group.id, `Gruppe ${groupLabel(group, students)}`] as const),
+      ...this.allGroups().map((group) => [group.id, `Gruppe ${groupLabel(group, students)}`] as const),
     ]);
   });
 
@@ -70,19 +104,60 @@ export class GroupsStore {
     return this.groupsByStudent().get(studentId) ?? [];
   }
 
-  /** IDs der Personen und Gruppen des Lehrers */
+  /** IDs der Personen und Gruppen des Lehrers im gewählten Berichtszeitraum */
   calendarOwnerIds(teacher: Teacher): Set<string> {
     const config = this.config();
+    const periodId = this.periodId();
     return new Set([
-      ...this.studentsStore.students().filter((s) => teacherOf(s, config).id === teacher.id).map((s) => s.id),
+      ...this.studentsStore.students().filter((s) => teacherOf(s, config, periodId).id === teacher.id).map((s) => s.id),
       ...this.groups().filter((g) => groupTeacherOf(g, config).id === teacher.id).map((g) => g.id),
     ]);
   }
 
+  /** Neue Gruppen gelten im gewählten Berichtszeitraum. */
   add(teacherId: string | null): void {
-    const group: Group = { id: newId(), name: '', memberIds: [], teacherId, lessons: [], generalTexts: {} };
-    this.groups.update((groups) => [...groups, group]);
+    const group = this.newGroup('', teacherId);
+    this.allGroups.update((groups) => [...groups, group]);
     this.select(group.id);
+  }
+
+  /**
+   * Legt Gruppen mit diesen Namen im gewählten Zeitraum an, ohne Mitglieder; Namen, die es dort schon gibt,
+   * entfallen. Gibt die Zahl der neuen Gruppen zurück.
+   */
+  addNamed(entries: { name: string; teacherId: string | null }[]): number {
+    const known = new Set(this.groups().map((group) => group.name.trim().toLowerCase()));
+    const added: Group[] = [];
+    for (const { name, teacherId } of entries) {
+      const key = name.trim().toLowerCase();
+      if (!key || known.has(key)) continue;
+      known.add(key);
+      added.push(this.newGroup(name.trim(), teacherId));
+    }
+    if (added.length > 0) this.allGroups.update((groups) => [...groups, ...added]);
+    return added.length;
+  }
+
+  /**
+   * Legt Gruppen mit Namen und Mitgliedern im gewählten Zeitraum an, z. B. aus der Gruppenplanung; die Auswahl
+   * bleibt unverändert. Gibt die IDs der neuen Gruppen zurück.
+   */
+  createGroups(entries: { name: string; teacherId: string | null; memberIds: string[] }[]): string[] {
+    const created = entries.map(({ name, teacherId, memberIds }) => ({
+      ...this.newGroup(name.trim(), teacherId),
+      memberIds: [...new Set(memberIds)],
+    }));
+    this.allGroups.update((groups) => [...groups, ...created]);
+    return created.map((group) => group.id);
+  }
+
+  /** Nimmt Personen in die Gruppe auf; wer schon Mitglied ist, bleibt es. */
+  addMembers(groupId: string, studentIds: string[]): void {
+    this.mutate(groupId, (group) => (group.memberIds = [...new Set([...group.memberIds, ...studentIds])]));
+  }
+
+  private newGroup(name: string, teacherId: string | null): Group {
+    return { id: newId(), name, memberIds: [], teacherId, periodId: this.periodId(), lessons: [], generalTexts: {} };
   }
 
   update(groupId: string, change: Partial<Pick<Group, 'name' | 'teacherId'>>): void {
@@ -99,14 +174,27 @@ export class GroupsStore {
 
   /** Mit der Gruppe entfallen ihre Gruppenstunden und Termine. */
   remove(groupId: string): void {
-    this.groups.update((groups) => groups.filter((g) => g.id !== groupId));
+    this.allGroups.update((groups) => groups.filter((g) => g.id !== groupId));
     this.calendar.removeForOwner(groupId);
     if (this.selectedGroupId() === groupId) this.select(null);
   }
 
+  /** Die Person ist im gewählten Zeitraum inaktiv und damit auch in keiner seiner Gruppen mehr. */
+  leavePeriod(studentId: string): void {
+    const periodId = this.periodId();
+    this.allGroups.update((groups) =>
+      groups.map((g) =>
+        g.periodId === periodId && g.memberIds.includes(studentId)
+          ? { ...g, memberIds: g.memberIds.filter((id) => id !== studentId) }
+          : g,
+      ),
+    );
+    this.studentsStore.removeFromPeriod(studentId);
+  }
+
   /** Nach dem Löschen einer Person: Sie ist in keiner Gruppe mehr. */
   removeMember(studentId: string): void {
-    this.groups.update((groups) =>
+    this.allGroups.update((groups) =>
       groups.map((g) => (g.memberIds.includes(studentId) ? { ...g, memberIds: g.memberIds.filter((id) => id !== studentId) } : g)),
     );
   }
@@ -118,14 +206,18 @@ export class GroupsStore {
     if (groupId) this.studentsStore.selectStudent(null);
   }
 
-  /** Wählt die Gruppenstunde zum Termin aus; gibt es noch keine, wird sie mit Datum und Uhrzeit angelegt. */
-  openLesson(groupId: string, date: string, time?: { start: string; durationMinutes?: number }): void {
+  /**
+   * Wählt die Gruppenstunde zum Termin aus; gibt es noch keine, wird sie mit Datum und Uhrzeit angelegt – nur im
+   * gewählten Berichtszeitraum, sonst `false`.
+   */
+  openLesson(groupId: string, date: string, time?: { start: string; durationMinutes?: number }): boolean {
     const group = this.groups().find((g) => g.id === groupId);
-    if (!group) return;
+    if (!group) return false;
     let lesson = lessonAt(group, date, time?.start);
     if (lesson) {
       if (time && !lesson.start) this.mutateLesson(groupId, lesson.id, (l) => Object.assign(l, time));
     } else {
+      if (!this.reportPeriod.contains(date)) return false;
       lesson = { id: newId(), date, ...time, checked: {}, texts: {} };
       const created = lesson;
       this.mutate(groupId, (g) => g.lessons.push(created));
@@ -133,6 +225,7 @@ export class GroupsStore {
     this.selectedGroupId.set(groupId);
     this.selectedLessonId.set(lesson.id);
     this.studentsStore.selectStudent(null);
+    return true;
   }
 
   removeLesson(groupId: string, lessonId: string): void {
@@ -140,8 +233,11 @@ export class GroupsStore {
     if (this.selectedLessonId() === lessonId) this.selectedLessonId.set(null);
   }
 
-  setLessonDate(groupId: string, lessonId: string, date: string): void {
+  /** Nur innerhalb des gewählten Berichtszeitraums, dem der Gruppe; sonst `false` */
+  setLessonDate(groupId: string, lessonId: string, date: string): boolean {
+    if (!this.reportPeriod.contains(date)) return false;
     this.mutateLesson(groupId, lessonId, (lesson) => (lesson.date = date));
+    return true;
   }
 
   /** Ohne `start` hat die Stunde keine Uhrzeit mehr; die Länge gilt nur zusammen mit dem Beginn. */
@@ -157,10 +253,12 @@ export class GroupsStore {
   }
 
   /** Aus dem Kalender: Datum, Beginn und Dauer der Gruppenstunde ändern sich mit ihrem Termin. */
-  setLessonTime(groupId: string, lessonId: string, time: { date: string; start: string; durationMinutes: number }): void {
+  setLessonTime(groupId: string, lessonId: string, time: { date: string; start: string; durationMinutes: number }): boolean {
+    if (!this.reportPeriod.contains(time.date)) return false;
     this.mutateLesson(groupId, lessonId, (lesson) =>
       Object.assign(lesson, { date: time.date, start: time.start, durationMinutes: time.durationMinutes }),
     );
+    return true;
   }
 
   toggleItem(groupId: string, lessonId: string, sectionId: string, itemId: string): void {
@@ -186,7 +284,7 @@ export class GroupsStore {
   }
 
   private mutate(groupId: string, change: (group: Group) => void): void {
-    this.groups.update((groups) =>
+    this.allGroups.update((groups) =>
       groups.map((group) => {
         if (group.id !== groupId) return group;
         const copy = structuredClone(group);
@@ -206,6 +304,8 @@ export function parseGroups(data: unknown): Group[] {
       name: typeof g.name === 'string' ? g.name : '',
       memberIds: Array.isArray(g.memberIds) ? g.memberIds.filter((id) => typeof id === 'string') : [],
       teacherId: typeof g.teacherId === 'string' ? g.teacherId : null,
+      // Ältere Gruppen haben noch keinen Zeitraum; ihn ergänzt `withPeriodMembership`.
+      periodId: typeof g.periodId === 'string' ? g.periodId : '',
       // Ältere Gruppen haben noch keine eigenen Stunden.
       lessons: Array.isArray(g.lessons) ? g.lessons.map(parseLesson) : [],
       generalTexts: isRecord(g.generalTexts) ? g.generalTexts : {},

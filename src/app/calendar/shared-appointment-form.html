@@ -55,7 +55,39 @@
     <button class="secondary" (click)="closed.emit()">Abbrechen</button>
     <span class="grow"></span>
     @if (d.id) {
+      <button class="secondary" (click)="startConverting()">In Gruppentermine umwandeln …</button>
       <button class="danger" (click)="remove()">Löschen</button>
     }
   </div>
+  @if (convertGroupIds(); as selected) {
+    <div class="convert">
+      <strong>In Gruppentermine umwandeln</strong>
+      @if (groups().length === 0) {
+        <p class="muted small">Es gibt noch keine Gruppen; du legst sie unter „Stunden erfassen“ an.</p>
+      } @else {
+        <p class="muted small">
+          Jede angehakte Gruppe bekommt einen Gruppentermin zur selben Zeit{{ d.repeat ? ' mit derselben Wiederholung' : '' }},
+          jeweils im Kalender ihres Lehrers. Der allgemeine Termin wird danach gelöscht; Bezeichnung und Ort gehen dabei
+          verloren. Vorausgewählt sind die Gruppen der beteiligten Lehrer.
+        </p>
+        <div class="teacher-choice">
+          @for (group of groups(); track group.id) {
+            <label>
+              <input type="checkbox" [checked]="selected.includes(group.id)" (change)="toggleConvertGroup(group.id)" />
+              Gruppe {{ groupName(group) }}
+              @if (teachers().length > 1) {
+                <span class="muted">({{ groupTeacherName(group) }})</span>
+              }
+            </label>
+          }
+        </div>
+      }
+      <div class="row actions">
+        <button [disabled]="selected.length === 0" (click)="convert()">
+          {{ selected.length === 1 ? '1 Gruppentermin' : selected.length + ' Gruppentermine' }} anlegen
+        </button>
+        <button class="secondary" (click)="convertGroupIds.set(null)">Abbrechen</button>
+      </div>
+    </div>
+  }
 </section>

@@ -1,0 +1,251 @@
+<h1>Gruppenplanung</h1>
+<p class="muted intro">
+  Gruppen in „{{ reportPeriod.period().name }}“. Gruppenstunden erfasst du unter
+  <a routerLink="/stunden">Stunden erfassen</a>; dort stellst du auch ein, in wessen Kalender die Gruppentermine stehen.
+</p>
+
+@if (teacherFilter.options().length > 1) {
+  <label class="teacher-filter">
+    Lehrer
+    <select (change)="teacherFilter.set(valueOf($event))">
+      <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer</option>
+      @for (teacher of teacherFilter.options(); track teacher.id) {
+        <option [value]="teacher.id" [selected]="teacher.id === teacherFilter.teacherId()">Nur {{ teacher.name }}</option>
+      }
+    </select>
+  </label>
+}
+
+@if (message(); as text) {
+  <p class="message">{{ text }}</p>
+}
+
+<div class="planning">
+  <section class="card unassigned">
+    <h2>
+      Ohne Gruppe
+      <span class="badge" [class.done]="unassigned().length === 0">{{ unassigned().length }}</span>
+    </h2>
+    @if (unassigned().length === 0) {
+      <p class="muted">
+        @if (students().length === 0) {
+          Noch keine Personen in diesem Zeitraum. <a routerLink="/personen">Personen anlegen</a>
+        } @else {
+          Alle {{ students().length }} Personen sind in einer Gruppe.
+        }
+      </p>
+    } @else {
+      <label class="check select-all">
+        <input type="checkbox" [checked]="allSelected()" (change)="selectAll($any($event.target).checked)" />
+        Alle auswählen
+      </label>
+      <ul class="people">
+        @for (student of unassigned(); track student.id) {
+          <li>
+            <label class="check">
+              <input type="checkbox" [checked]="selected().has(student.id)" (change)="toggle(student.id)" />
+              <span class="grow">{{ student | studentLabel }}</span>
+              <span class="muted small">{{ ageText(student) }}</span>
+            </label>
+          </li>
+        }
+      </ul>
+      <div class="assign">
+        <select aria-label="Zielgruppe" (change)="target.set(valueOf($event))">
+          <option value="new" [selected]="target() === 'new'">Neue Gruppe …</option>
+          @for (group of groups(); track group.id) {
+            <option [value]="group.id" [selected]="target() === group.id">{{ label(group) }}</option>
+          }
+        </select>
+        @if (target() === 'new') {
+          <input
+            type="text"
+            placeholder="Name der neuen Gruppe"
+            aria-label="Name der neuen Gruppe"
+            [value]="newGroupName()"
+            (input)="newGroupName.set(valueOf($event))"
+          />
+        }
+        <button [disabled]="selected().size === 0" (click)="assign()">
+          {{ selected().size === 1 ? '1 Person' : selected().size + ' Personen' }} zuordnen
+        </button>
+      </div>
+    }
+  </section>
+
+  <div class="groups-area">
+    <div class="row groups-head">
+      <h2 class="grow">Gruppen <span class="badge">{{ groups().length }}</span></h2>
+      <input #newName type="text" placeholder="Name der Gruppe" aria-label="Name der neuen Gruppe" (keydown.enter)="addEmptyGroup(newName)" />
+      <button class="secondary" (click)="addEmptyGroup(newName)">+ Gruppe</button>
+    </div>
+    <div class="group-grid">
+      @for (group of groups(); track group.id) {
+        <div class="card group-card">
+          <div class="row">
+            <input
+              type="text"
+              class="grow title"
+              [value]="group.name"
+              [placeholder]="label(group)"
+              aria-label="Name der Gruppe"
+              (change)="rename(group, $event)"
+            />
+            <button class="icon" (click)="deleteGroup(group)" title="Gruppe löschen" aria-label="Gruppe löschen">✕</button>
+          </div>
+          <p class="muted small stats">{{ statsText(members(group)) }}</p>
+          @if (members(group).length > 0) {
+            <p class="muted small stats">{{ instrumentText(members(group)) }}</p>
+          }
+          @if (showTeachers()) {
+            <label class="group-teacher">
+              <span class="muted small">Termine im Kalender von</span>
+              <select [attr.aria-label]="'Lehrer von ' + label(group)" (change)="setTeacher(group, $event)">
+                @for (teacher of teachersFor(group); track teacher.id) {
+                  <option [value]="teacher.id" [selected]="teacher.id === teacherId(group)">{{ teacher.name }}</option>
+                }
+              </select>
+            </label>
+          }
+          <ul class="members">
+            @for (member of members(group); track member.id) {
+              <li>
+                <span class="grow">{{ member | studentLabel }}</span>
+                <span class="muted small">{{ ageText(member) }}</span>
+                <button
+                  class="icon remove"
+                  (click)="removeMember(group, member)"
+                  title="Aus der Gruppe nehmen"
+                  [attr.aria-label]="member.name + ' aus der Gruppe nehmen'"
+                >✕</button>
+              </li>
+            } @empty {
+              <li class="muted small">Noch keine Mitglieder</li>
+            }
+          </ul>
+        </div>
+      } @empty {
+        <p class="muted">Noch keine Gruppen in diesem Zeitraum.</p>
+      }
+    </div>
+    @if (groups().length > 0) {
+      <section class="card">
+        <h3>Altersverteilung der Gruppen</h3>
+        <app-age-chart [groups]="existingChart()" [date]="today" />
+      </section>
+    }
+  </div>
+</div>
+
+<section class="card auto">
+  <h2>Automatisch einteilen</h2>
+  <p class="muted">
+    Teilt Personen in 2 bis 8 gleich große Gruppen (höchstens eine Person Unterschied). Du siehst den Vorschlag zuerst
+    und speicherst ihn dann als neue Gruppen.
+  </p>
+  <div class="modes" role="radiogroup" aria-label="Art der Einteilung">
+    <label class="check">
+      <input type="radio" name="plan-mode" [checked]="mode() === 'mixed'" (change)="mode.set('mixed')" />
+      <span><strong>Gemischt:</strong> ähnliches Altersgefüge in jeder Gruppe (Durchschnitt und Spanne)</span>
+    </label>
+    <label class="check">
+      <input type="radio" name="plan-mode" [checked]="mode() === 'byAge'" (change)="mode.set('byAge')" />
+      <span><strong>Nach Alter:</strong> die jüngsten in die erste Gruppe, die ältesten in die letzte</span>
+    </label>
+  </div>
+  <div class="row options">
+    <label>
+      Personen
+      <select (change)="poolKind.set($any(valueOf($event)))">
+        <option value="unassigned" [selected]="poolKind() === 'unassigned'">Ohne Gruppe ({{ unassigned().length }})</option>
+        <option value="all" [selected]="poolKind() === 'all'">Alle im Zeitraum ({{ students().length }})</option>
+      </select>
+    </label>
+    <label>
+      Anzahl Gruppen
+      <select (change)="groupCount.set(+valueOf($event))">
+        @for (count of groupCounts; track count) {
+          <option [value]="count" [selected]="count === groupCount()">{{ count }}</option>
+        }
+      </select>
+    </label>
+    @if (showTeachers()) {
+      <label>
+        Lehrer der neuen Gruppen
+        <select (change)="planTeacherId.set(valueOf($event))">
+          @for (teacher of reportPeriod.teachers(); track teacher.id) {
+            <option [value]="teacher.id" [selected]="teacher.id === planTeacherId()">{{ teacher.name }}</option>
+          }
+        </select>
+      </label>
+    }
+    <label class="check balance" [class.disabled]="mode() === 'byAge'">
+      <input
+        type="checkbox"
+        [checked]="balanceInstruments() && mode() !== 'byAge'"
+        [disabled]="mode() === 'byAge'"
+        (change)="balanceInstruments.set($any($event.target).checked)"
+      />
+      Instrumente möglichst gleich verteilen
+    </label>
+    <button (click)="plan()">Vorschlag berechnen</button>
+  </div>
+  @if (mode() === 'byAge') {
+    <p class="muted small">Bei der Einteilung nach Alter bestimmt allein das Alter die Gruppe; die Instrumente zählen dabei nicht.</p>
+  }
+  @if (poolWithoutBirthDate() > 0) {
+    <p class="muted small">
+      {{ poolWithoutBirthDate() === 1 ? '1 Person hat' : poolWithoutBirthDate() + ' Personen haben' }} kein
+      Geburtsdatum und
+      @if (mode() === 'byAge') {
+        {{ poolWithoutBirthDate() === 1 ? 'bleibt' : 'bleiben' }} bei der Einteilung nach Alter außen vor.
+      } @else {
+        {{ poolWithoutBirthDate() === 1 ? 'wird' : 'werden' }} nur so verteilt, dass die Gruppen gleich groß sind.
+      }
+      Das Geburtsdatum trägst du unter <a routerLink="/personen">Personen</a> ein.
+    </p>
+  }
+  @if (poolKind() === 'all') {
+    <p class="muted small">Personen, die schon in einer Gruppe sind, kommen zusätzlich in eine der neuen Gruppen.</p>
+  }
+  @if (planMessage(); as text) {
+    <p class="message">{{ text }}</p>
+  }
+
+  @if (proposal(); as planned) {
+    <h3>Vorschlag</h3>
+    @if (leftOut().length > 0) {
+      <p class="message warning">
+        Ohne Geburtsdatum nicht eingeteilt: {{ leftNames() }}. Nach dem Speichern ordnest du sie oben von Hand zu.
+      </p>
+    }
+    <app-age-chart [groups]="planned" [date]="today" />
+    <div class="group-grid proposal">
+      @for (group of planned; track $index; let i = $index) {
+        <div class="card group-card">
+          <input
+            type="text"
+            class="title"
+            [value]="group.name"
+            aria-label="Name der vorgeschlagenen Gruppe"
+            (change)="renameProposal(i, $event)"
+          />
+          <p class="muted small stats">{{ statsText(group.members) }}</p>
+          <p class="muted small stats">{{ instrumentText(group.members) }}</p>
+          <ul class="members">
+            @for (member of group.members; track member.id) {
+              <li>
+                <span class="grow">{{ member | studentLabel }}</span>
+                <span class="muted small">{{ ageText(member) }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+    <div class="row actions">
+      <button (click)="saveProposal()">Als {{ planned.length }} neue Gruppen speichern</button>
+      <button class="secondary" (click)="proposal.set(null)">Verwerfen</button>
+    </div>
+  }
+</section>

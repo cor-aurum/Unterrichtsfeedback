@@ -1,15 +1,29 @@
 <header class="topbar">
-  <a class="brand" routerLink="/stunden">
+  <a class="brand" routerLink="/kalender">
     <img class="logo" src="logo.png" alt="" />
     Unterrichtsfeedback
   </a>
   <nav>
     <a routerLink="/stunden" routerLinkActive="active">Stunden erfassen</a>
+    <a routerLink="/personen" routerLinkActive="active">Personen</a>
+    <a routerLink="/gruppen" routerLinkActive="active">Gruppenplanung</a>
     <a routerLink="/kalender" routerLinkActive="active">Kalender</a>
     <a routerLink="/konfiguration" routerLinkActive="active">Konfiguration</a>
     <a routerLink="/export" routerLinkActive="active">Export &amp; Sicherung</a>
   </nav>
   <div class="tools">
+    @if (reportPeriod.periods().length > 1) {
+      <select
+        class="teacher-select"
+        (change)="reportPeriod.select(valueOf($event))"
+        aria-label="Berichtszeitraum"
+        title="Berichtszeitraum: bestimmt, welche Personen und Gruppen aktiv sind"
+      >
+        @for (period of periods(); track period.id) {
+          <option [value]="period.id" [selected]="period.id === reportPeriod.period().id">{{ period.name }}</option>
+        }
+      </select>
+    }
     @if (teachers().length > 1) {
       <select
         class="teacher-select"

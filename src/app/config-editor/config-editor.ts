@@ -19,14 +19,12 @@ import {
   Section,
   Teacher,
   teacherInstrument,
-  TeachingWindow,
-  teachingWindowsFor,
   TimeWindow,
 } from '../model';
-import { WEEKDAY_NAMES } from '../calendar/appointments';
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
 import { InstrumentSelect } from '../instrument-select';
+import { TeachingWindowsEditor } from './teaching-windows-editor';
 import { labelOf, ReportPeriod } from '../report-period';
 import { storedSignal } from '../stored-signal';
 import { DEFAULT_THEME_COLOR, isHexColor } from '../theme';
@@ -66,7 +64,7 @@ type LogoSlot = (typeof LOGO_SLOTS)[number];
 
 @Component({
   selector: 'app-config-editor',
-  imports: [BlockContentEditor, NgTemplateOutlet, InstrumentSelect],
+  imports: [BlockContentEditor, NgTemplateOutlet, InstrumentSelect, TeachingWindowsEditor],
   templateUrl: './config-editor.html',
   styleUrl: './config-editor.scss',
 })
@@ -82,7 +80,6 @@ export class ConfigEditor {
   protected readonly groupPlaceholderHint =
     'Platzhalter: ' + GROUP_PLACEHOLDERS.map((p) => p.key).join(', ') + '; {name} und {vorname} stehen für den Gruppennamen.';
   protected readonly defaultThemeColor = DEFAULT_THEME_COLOR;
-  protected readonly weekdays = WEEKDAY_NAMES.map((name, index) => ({ name, index }));
   protected readonly isDefaultPdfLayout = computed(
     () =>
       JSON.stringify({ ...this.store.config().pdfLayout, headerLogo: null, footerLogo: null, grayscale: false }) ===
@@ -92,6 +89,7 @@ export class ConfigEditor {
   protected readonly calendarPdfFields: { key: keyof CalendarPdfTexts; label: string }[] = [
     { key: 'listTitle', label: 'Überschrift der Liste' },
     { key: 'eventListTitle', label: 'Überschrift der Liste ohne Einzelunterricht' },
+    { key: 'individualListTitle', label: 'Überschrift der Liste nur mit Einzelunterricht' },
     { key: 'dayPlanTitle', label: 'Überschrift des Tagesplans' },
     { key: 'footer', label: 'Fußzeile links (alle Kalender-PDFs)' },
     { key: 'noAppointments', label: 'Hinweis, wenn der Zeitraum keine Termine hat' },
@@ -108,25 +106,38 @@ export class ConfigEditor {
     return (event.target as HTMLInputElement).value;
   }
 
-  /** Berichtszeitraum, dessen Unterrichtszeiten bearbeitet werden; `null`: Tage außerhalb aller Zeiträume */
+  /** Berichtszeitraum, dessen Unterrichtszeiten bearbeitet werden; außerhalb der Zeiträume gibt es keinen Unterricht. */
   // Über ein `computed`: Der Zeitraum ist nach jeder Änderung der Konfiguration ein neues Objekt, die ID bleibt.
   private readonly activePeriodId = computed(() => this.reportPeriod.period().id);
-  protected readonly windowsPeriodId = linkedSignal<string | null>(() => this.activePeriodId());
+  protected readonly windowsPeriodId = linkedSignal<string>(() => this.activePeriodId());
   protected readonly windowsPeriodName = computed(
-    () => this.store.config().reportPeriods.find((p) => p.id === this.windowsPeriodId())?.name ?? 'außerhalb der Berichtszeiträume',
+    () => this.store.config().reportPeriods.find((p) => p.id === this.windowsPeriodId())?.name ?? '',
   );
   protected readonly periodLabel = labelOf;
 
-  protected windowsOf(teacher: Teacher, weekday: number): TeachingWindow[] {
-    return teachingWindowsFor(teacher, this.windowsPeriodId())
-      .filter((w) => w.weekday === weekday)
-      .sort((a, b) => a.from.localeCompare(b.from));
+  /** Im gewählten Zeitraum gelten gemeinsame Unterrichtszeiten für alle Lehrer. */
+  protected readonly windowsPeriodShared = computed(
+    () => !!this.store.config().reportPeriods.find((p) => p.id === this.windowsPeriodId())?.sharedWindows,
+  );
+
+  /** Beim Zurückschalten auf eigene Zeiten gehen die gemeinsamen verloren; deshalb wird nachgefragt. */
+  protected setSharedWindows(period: ReportPeriodEntry, event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const shared = select.value === 'shared';
+    const text =
+      `Die gemeinsamen Unterrichtszeiten von „${period.name}“ verwerfen? Danach gelten wieder die Zeiten der ` +
+      'einzelnen Lehrer.';
+    if (!shared && period.sharedWindows && !confirm(text)) {
+      select.value = 'shared';
+      return;
+    }
+    this.store.setSharedWindows(period.id, shared);
   }
 
   /** Der gewählte Zeitraum hat beim Lehrer noch keine eigenen Zeiten. */
   protected inheritsWindows(teacher: Teacher): boolean {
     const periodId = this.windowsPeriodId();
-    return !!periodId && !teacher.periodWindows[periodId];
+    return !teacher.periodWindows[periodId];
   }
 
   protected teacherInstrumentId(teacher: Teacher): string {
@@ -183,12 +194,6 @@ export class ConfigEditor {
     (event.target as HTMLInputElement).value = window[key];
     this.showError('Ein Zeitfenster muss später enden, als es beginnt.');
     return false;
-  }
-
-  protected setWindowTime(teacher: Teacher, window: TeachingWindow, key: 'from' | 'to', event: Event): void {
-    if (this.isValidWindowChange(window, key, event)) {
-      this.store.updateTeachingWindow(teacher.id, this.windowsPeriodId(), window.id, { [key]: this.valueOf(event) });
-    }
   }
 
   protected setCalendarPdfText(key: keyof CalendarPdfTexts, event: Event): void {

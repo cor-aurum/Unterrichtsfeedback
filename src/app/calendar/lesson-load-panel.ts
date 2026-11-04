@@ -1,8 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { StudentLabelPipe } from '../student-label.pipe';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
-import { formatDate, teacherOf, today } from '../model';
+import { formatDate, today } from '../model';
 import { ReportPeriod } from '../report-period';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
@@ -18,6 +19,7 @@ type Preset = 'week' | 'month' | 'report';
  */
 @Component({
   selector: 'app-lesson-load-panel',
+  imports: [StudentLabelPipe],
   templateUrl: './lesson-load-panel.html',
   styleUrl: './lesson-load-panel.scss',
 })
@@ -80,7 +82,7 @@ export class LessonLoadPanel {
   }
 
   protected teacherName(load: LessonLoad): string {
-    return teacherOf(load.student, this.config()).name;
+    return this.studentsStore.teacherOf(load.student).name;
   }
 
   /** z. B. „12 Termine (3 in Gruppen)“ */

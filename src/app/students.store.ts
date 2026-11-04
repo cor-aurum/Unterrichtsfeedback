@@ -1,41 +1,135 @@
-import { computed, Injectable } from '@angular/core';
-import { Lesson, lessonAt, newId, Student, today } from './model';
+import { computed, inject, Injectable } from '@angular/core';
+import { ConfigStore } from './config.store';
+import { formatShortDate, isActiveIn, Lesson, lessonAt, newId, Student, Teacher, teacherOf, today } from './model';
+import { samePerson } from './import/student-import';
+import { ReportPeriod } from './report-period';
 import { storedSignal } from './stored-signal';
 
+/** Angaben für eine neue Person; der Lehrer gilt im gewählten Berichtszeitraum. */
+export interface NewStudent {
+  name: string;
+  instrumentId: string | null;
+  teacherId: string | null;
+  birthDate?: string;
+}
+
+/**
+ * Personen und ihre Stunden. Gespeichert sind alle Personen; `students` sind die im gewählten Berichtszeitraum
+ * aktiven, nur sie erscheinen in Listen, Kalender und Export.
+ */
 @Injectable({ providedIn: 'root' })
 export class StudentsStore {
-  readonly students = storedSignal<Student[]>('feedback.students', () => [], parseStudents);
+  private readonly reportPeriod = inject(ReportPeriod);
+  private readonly config = inject(ConfigStore).config;
+  private readonly periodId = computed(() => this.reportPeriod.period().id);
+
+  /** Alle Personen aller Zeiträume, z. B. für Sicherung und Synchronisation */
+  readonly allStudents = storedSignal<Student[]>('feedback.students', () => [], parseStudents);
+  readonly students = computed(() => this.allStudents().filter((student) => isActiveIn(student, this.periodId())));
   readonly selectedStudentId = storedSignal<string | null>('feedback.selectedStudent', () => null);
   readonly selectedLessonId = storedSignal<string | null>('feedback.selectedLesson', () => null);
 
   readonly sortedStudents = computed(() =>
     [...this.students()].sort((a, b) => a.name.localeCompare(b.name, 'de')),
   );
+  /** Auch eine Person anderer Zeiträume lässt sich auswählen, z. B. um frühere Stunden anzusehen. */
   readonly selectedStudent = computed(() =>
-    this.students().find((s) => s.id === this.selectedStudentId()),
+    this.allStudents().find((s) => s.id === this.selectedStudentId()),
   );
   readonly selectedLesson = computed(() =>
     this.selectedStudent()?.lessons.find((l) => l.id === this.selectedLessonId()),
   );
 
-  addStudent(name: string, instrumentId: string | null, teacherId: string | null): void {
-    const student: Student = { id: newId(), name, instrumentId, teacherId, generalTexts: {}, lessons: [] };
-    this.students.update((students) => [...students, student]);
+  /**
+   * Anzeigename je Person: der Name, bei gleichnamigen Personen mit Geburtsdatum, z. B. „Anna Berg (geb. 03.05.2015)“
+   */
+  readonly labels = computed(() => {
+    const students = this.allStudents();
+    const count = new Map<string, number>();
+    students.forEach((s) => count.set(s.name.trim().toLowerCase(), (count.get(s.name.trim().toLowerCase()) ?? 0) + 1));
+    return new Map(
+      students.map((s) => {
+        const twin = (count.get(s.name.trim().toLowerCase()) ?? 0) > 1;
+        return [s.id, twin && s.birthDate ? `${s.name} (geb. ${formatShortDate(s.birthDate)})` : s.name] as const;
+      }),
+    );
+  });
+
+  label(student: Student): string {
+    return this.labels().get(student.id) ?? student.name;
+  }
+
+  /** Lehrer der Person im gewählten Berichtszeitraum */
+  teacherOf(student: Student): Teacher {
+    return teacherOf(student, this.config(), this.periodId());
+  }
+
+  /**
+   * Wie `addStudent`, aber eine vorhandene Person (siehe `samePerson`: gleicher Name, kein abweichendes
+   * Geburtsdatum) wird weiterverwendet: Ist sie im gewählten Zeitraum, wird sie nur ausgewählt; stammt sie aus
+   * anderen Zeiträumen, kommt sie mit ihrem bisherigen Lehrer in den gewählten, und ihre früheren Stunden bleiben
+   * sichtbar. Ein angegebenes Geburtsdatum wird bei ihr ergänzt.
+   */
+  addOrReuse(entry: NewStudent): 'created' | 'reused' | 'existing' {
+    const existing = this.findPerson(entry);
+    if (!existing) {
+      this.addStudent(entry);
+      return 'created';
+    }
+    const active = isActiveIn(existing, this.periodId());
+    if (!active) this.addToPeriod([{ studentId: existing.id, teacherId: this.teacherOf(existing).id }]);
+    if (entry.birthDate && !existing.birthDate) this.setBirthDate(existing.id, entry.birthDate);
+    this.selectStudent(existing.id);
+    return active ? 'existing' : 'reused';
+  }
+
+  /** Vorhandene Person zu Name und Geburtsdatum; eine mit gleichem Geburtsdatum geht vor. */
+  findPerson(entry: { name: string; birthDate?: string }): Student | undefined {
+    const candidates = this.allStudents().filter((s) => samePerson(s, entry));
+    return candidates.find((s) => s.birthDate && s.birthDate === entry.birthDate) ?? candidates[0];
+  }
+
+  /** Neue Personen sind im gewählten Berichtszeitraum aktiv. */
+  addStudent(entry: NewStudent): void {
+    const student = this.newStudent(entry);
+    this.allStudents.update((students) => [...students, student]);
     this.selectStudent(student.id);
   }
 
   /** Legt mehrere Personen auf einmal an, z. B. beim Import; die Auswahl bleibt unverändert. */
-  addStudents(entries: { name: string; instrumentId: string | null; teacherId: string | null }[]): void {
-    const students: Student[] = entries.map((e) => ({ id: newId(), ...e, generalTexts: {}, lessons: [] }));
-    this.students.update((list) => [...list, ...students]);
+  addStudents(entries: NewStudent[]): void {
+    const students = entries.map((entry) => this.newStudent(entry));
+    this.allStudents.update((list) => [...list, ...students]);
   }
 
   renameStudent(studentId: string, name: string): void {
     this.mutateStudent(studentId, (student) => (student.name = name));
   }
 
+  /** Leer entfernt das Geburtsdatum. */
+  setBirthDate(studentId: string, birthDate: string): void {
+    this.mutateStudent(studentId, (student) => {
+      if (birthDate) student.birthDate = birthDate;
+      else delete student.birthDate;
+    });
+  }
+
+  /** Lehrer im gewählten Berichtszeitraum; frühere Zeiträume behalten ihren Lehrer. */
   setTeacher(studentId: string, teacherId: string): void {
-    this.mutateStudent(studentId, (student) => (student.teacherId = teacherId));
+    this.mutateStudent(studentId, (student) => (student.periods[this.periodId()] = teacherId));
+  }
+
+  /** Nimmt Personen eines anderen Zeitraums in den gewählten auf, mit ihrem Lehrer dort. */
+  addToPeriod(entries: { studentId: string; teacherId: string | null }[]): void {
+    for (const { studentId, teacherId } of entries) {
+      this.mutateStudent(studentId, (student) => (student.periods[this.periodId()] = teacherId));
+    }
+  }
+
+  /** Die Person bleibt mit ihren Stunden erhalten, ist im gewählten Zeitraum aber inaktiv. */
+  removeFromPeriod(studentId: string): void {
+    this.mutateStudent(studentId, (student) => delete student.periods[this.periodId()]);
+    if (this.selectedStudentId() === studentId) this.selectStudent(null);
   }
 
   setInstrument(studentId: string, instrumentId: string | null): void {
@@ -43,7 +137,7 @@ export class StudentsStore {
   }
 
   removeStudent(studentId: string): void {
-    this.students.update((students) => students.filter((s) => s.id !== studentId));
+    this.allStudents.update((students) => students.filter((s) => s.id !== studentId));
     if (this.selectedStudentId() === studentId) this.selectStudent(null);
   }
 
@@ -56,20 +150,29 @@ export class StudentsStore {
   /**
    * Wählt die Person und ihre Stunde zu einem Termin aus; gibt es noch keine, wird sie mit Datum und
    * Uhrzeit des Termins angelegt. Einer vorhandenen Stunde ohne Uhrzeit wird die des Termins ergänzt.
+   * Neue Stunden gibt es nur im gewählten Berichtszeitraum, und nur, wenn die Person dort ist (siehe
+   * `canHaveLesson`); sonst `false`.
    */
-  openLesson(studentId: string, date: string, time?: { start: string; durationMinutes?: number }): void {
+  openLesson(studentId: string, date: string, time?: { start: string; durationMinutes?: number }): boolean {
     this.selectStudent(studentId);
     const student = this.selectedStudent();
-    if (!student) return;
+    if (!student) return false;
     const existing = lessonAt(student, date, time?.start);
     if (existing) {
       if (time && !existing.start) this.mutateLesson(studentId, existing.id, (lesson) => Object.assign(lesson, time));
       this.selectedLessonId.set(existing.id);
-      return;
+      return true;
     }
+    if (!this.canHaveLesson(student, date)) return false;
     const lesson: Lesson = { id: newId(), date, ...time, checked: {}, texts: {} };
     this.mutateStudent(studentId, (s) => s.lessons.push(lesson));
     this.selectedLessonId.set(lesson.id);
+    return true;
+  }
+
+  /** Stunden liegen im gewählten Berichtszeitraum, und die Person ist dort. */
+  canHaveLesson(student: Student, date: string): boolean {
+    return this.reportPeriod.contains(date) && isActiveIn(student, this.periodId());
   }
 
   /** Ohne `start` hat die Stunde keine Uhrzeit mehr; die Länge gilt nur zusammen mit dem Beginn. */
@@ -89,12 +192,14 @@ export class StudentsStore {
     studentId: string,
     lessonId: string,
     time: { date: string; start: string; durationMinutes: number },
-  ): void {
+  ): boolean {
+    if (!this.reportPeriod.contains(time.date)) return false;
     this.mutateLesson(studentId, lessonId, (lesson) => Object.assign(lesson, {
       date: time.date,
       start: time.start,
       durationMinutes: time.durationMinutes,
     }));
+    return true;
   }
 
   removeLesson(studentId: string, lessonId: string): void {
@@ -102,8 +207,11 @@ export class StudentsStore {
     if (this.selectedLessonId() === lessonId) this.selectedLessonId.set(null);
   }
 
-  setLessonDate(studentId: string, lessonId: string, date: string): void {
+  /** Nur innerhalb des gewählten Berichtszeitraums; sonst `false` */
+  setLessonDate(studentId: string, lessonId: string, date: string): boolean {
+    if (!this.reportPeriod.contains(date)) return false;
     this.mutateLesson(studentId, lessonId, (lesson) => (lesson.date = date));
+    return true;
   }
 
   toggleItem(studentId: string, lessonId: string, sectionId: string, itemId: string): void {
@@ -139,8 +247,21 @@ export class StudentsStore {
     });
   }
 
+  private newStudent(entry: NewStudent): Student {
+    const { name, instrumentId, teacherId, birthDate } = entry;
+    return {
+      id: newId(),
+      name,
+      ...(birthDate ? { birthDate } : {}),
+      instrumentId,
+      periods: { [this.periodId()]: teacherId },
+      generalTexts: {},
+      lessons: [],
+    };
+  }
+
   private mutateStudent(studentId: string, change: (student: Student) => void): void {
-    this.students.update((students) =>
+    this.allStudents.update((students) =>
       students.map((student) => {
         if (student.id !== studentId) return student;
         const copy = structuredClone(student);
@@ -155,20 +276,33 @@ export function parseStudents(data: unknown): Student[] {
   if (!Array.isArray(data)) {
     throw new Error('Die Datei enthält keine Personen.');
   }
-  return data.map((student: Partial<Student>) => {
+  return data.map((student: Partial<Student> & { teacherId?: unknown }) => {
     if (typeof student?.name !== 'string' || !Array.isArray(student.lessons)) {
       throw new Error('Eine Person hat keinen Namen oder keine Stundenliste.');
     }
     return {
       id: typeof student.id === 'string' ? student.id : newId(),
       name: student.name,
+      ...(typeof student.birthDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(student.birthDate)
+        ? { birthDate: student.birthDate }
+        : {}),
       instrumentId: typeof student.instrumentId === 'string' ? student.instrumentId : null,
-      teacherId: typeof student.teacherId === 'string' ? student.teacherId : null,
+      periods: isRecord(student.periods) ? parsePeriods(student.periods) : {},
       // Ältere Daten haben noch keine allgemeinen Freitexte.
       generalTexts: isRecord(student.generalTexts) ? student.generalTexts : {},
       lessons: student.lessons.map(parseLesson),
+      // Ältere Daten haben einen Lehrer statt Zeiträumen; die Zeiträume ergänzt `withPeriodMembership`.
+      ...(isRecord(student.periods)
+        ? {}
+        : { legacyTeacherId: typeof student.teacherId === 'string' ? student.teacherId : null }),
     };
   });
+}
+
+function parsePeriods(data: Record<string, unknown>): Record<string, string | null> {
+  return Object.fromEntries(
+    Object.entries(data).map(([periodId, teacherId]) => [periodId, typeof teacherId === 'string' ? teacherId : null]),
+  );
 }
 
 export function parseLesson(lesson: Partial<Lesson>): Lesson {

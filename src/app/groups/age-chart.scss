@@ -1,0 +1,69 @@
+:host {
+  display: block;
+}
+
+.age-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  font-family: inherit;
+}
+
+.grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.tick {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.name {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sub {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.range {
+  stroke: var(--primary-light);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.dot {
+  fill: var(--primary);
+  fill-opacity: 0.75;
+  stroke: white;
+  stroke-width: 1;
+}
+
+.mean {
+  fill: var(--text);
+}
+
+.legend {
+  margin: 0.25rem 0 0;
+
+  .key {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    vertical-align: middle;
+
+    &.dot {
+      border-radius: 50%;
+      background: var(--primary);
+    }
+
+    &.mean {
+      background: var(--text);
+      transform: rotate(45deg) scale(0.8);
+    }
+  }
+}

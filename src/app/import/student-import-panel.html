@@ -18,7 +18,9 @@
     @case ('file') {
       <p class="muted">
         Wähle eine Excel-Datei (.xlsx) oder eine CSV-Datei mit einer Zeile je Person. Welche Spalte Vorname,
-        Nachname und Instrument enthält, legst du im nächsten Schritt fest.
+        Nachname, Instrument, Lehrer und Gruppen enthält, legst du im nächsten Schritt fest. Personen aus anderen
+        Berichtszeiträumen werden übernommen statt doppelt angelegt; benannte Gruppen aus der Datei werden in
+        „{{ periodName() }}“ ohne Mitglieder angelegt.
       </p>
       <button (click)="fileInput.click()">Datei wählen</button>
       <input #fileInput type="file" accept=".xlsx,.csv,.txt" hidden (change)="loadFile(fileInput)" />
@@ -63,6 +65,33 @@
             }
           </select>
         </label>
+        <label>
+          Lehrer
+          <select (change)="setColumn('teacher', $event)">
+            <option value="" [selected]="mapping().teacher === null">– keine Spalte (im nächsten Schritt) –</option>
+            @for (column of columns(); track $index) {
+              <option [value]="$index" [selected]="$index === mapping().teacher">{{ column }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Geburtsdatum
+          <select (change)="setColumn('birthDate', $event)">
+            <option value="" [selected]="mapping().birthDate === null">– keine Spalte –</option>
+            @for (column of columns(); track $index) {
+              <option [value]="$index" [selected]="$index === mapping().birthDate">{{ column }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Gruppen
+          <select (change)="setColumn('groups', $event)">
+            <option value="" [selected]="mapping().groups === null">– keine Spalte –</option>
+            @for (column of columns(); track $index) {
+              <option [value]="$index" [selected]="$index === mapping().groups">{{ column }}</option>
+            }
+          </select>
+        </label>
       </div>
       <label class="check-line">
         <input type="checkbox" [checked]="mapping().hasHeader" (change)="setHasHeader($event)" />
@@ -74,18 +103,24 @@
         <thead>
           <tr>
             <th>Name</th>
+            <th>Geburtsdatum</th>
             <th>Instrument</th>
+            <th>Gruppen</th>
           </tr>
         </thead>
         <tbody>
           @for (row of preview(); track row.line) {
             <tr>
               <td>{{ row.name }}</td>
+              <td [class.problem]="row.invalidBirthDate">
+                {{ row.birthDate ? formatShortDate(row.birthDate) : row.invalidBirthDate ? 'ungültig' : '' }}
+              </td>
               <td>{{ row.instrument || '(Standard)' }}</td>
+              <td>{{ row.groups.join(', ') }}</td>
             </tr>
           } @empty {
             <tr>
-              <td colspan="2" class="muted">Keine Namen in den gewählten Spalten.</td>
+              <td colspan="4" class="muted">Keine Namen in den gewählten Spalten.</td>
             </tr>
           }
         </tbody>
@@ -94,6 +129,13 @@
         {{ rows().length }} Person(en) gefunden.
         @if (newInstruments().length > 0) {
           Neu angelegt werden: {{ newInstruments().join(', ') }}.
+        }
+        @if (newGroups().length > 0) {
+          Gruppen ohne Mitglieder: {{ newGroups().join(', ') }}.
+        }
+        @if (invalidBirthDates() > 0) {
+          {{ invalidBirthDates() === 1 ? '1 Geburtsdatum ist' : invalidBirthDates() + ' Geburtsdaten sind' }} nicht
+          lesbar; diese Personen kommen ohne Geburtsdatum.
         }
       </p>
       <div class="row actions">
@@ -151,8 +193,13 @@
                 </td>
                 <td>
                   {{ row.name }}
+                  @if (row.birthDate) {
+                    <span class="muted small">geb. {{ formatShortDate(row.birthDate) }}</span>
+                  }
                   @if (row.existing) {
                     <span class="exists">gibt es schon</span>
+                  } @else if (row.formerId) {
+                    <span class="exists">aus anderem Zeitraum, wird übernommen</span>
                   }
                 </td>
                 <td>{{ row.instrument || '(Standard)' }}</td>

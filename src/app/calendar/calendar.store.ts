@@ -1,6 +1,6 @@
 import { effect, inject, Injectable } from '@angular/core';
 import { ConfigStore } from '../config.store';
-import { CalendarSettings, newId, Teacher, teachingWindowsOn, today } from '../model';
+import { CalendarSettings, isTeachingDay, newId, Teacher, teachingWindowsOn, today } from '../model';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
 import {
@@ -36,7 +36,8 @@ const DEFAULT_REPEAT_DAYS = 1;
 export class CalendarStore {
   // Vor den Terminen: Frühere wöchentliche Termine bekommen beim Laden das Ende ihres Berichtszeitraums.
   private readonly config = inject(ConfigStore).config;
-  private readonly students = inject(StudentsStore).students;
+  /** Auch Personen anderer Zeiträume, damit ihre Stunden im Kalender bleiben */
+  private readonly students = inject(StudentsStore).allStudents;
   readonly appointments = storedSignal<Appointment[]>('feedback.appointments', () => [], (data) =>
     parseAppointments(data, this.config().reportPeriods),
   );
@@ -119,11 +120,15 @@ export class CalendarStore {
    * Alle Termine zwischen `from` und `to` (jeweils einschließlich), nach Tag und Uhrzeit sortiert.
    * Mit `filter` nur bestimmte Termine, z. B. die im Kalender eines Lehrers (`GroupsStore.calendarFilter`).
    */
+  /** Unterrichtstermine finden nur an Tagen in einem Berichtszeitraum statt, auch Wiederholungen einer Serie. */
   occurrences(from: string, to: string, filter?: AppointmentFilter): Occurrence[] {
     const appointments = this.appointments()
       .filter((appointment) => matchesFilter(appointment, filter))
       .sort((a, b) => startMinutes(a) - startMinutes(b));
-    return daysBetween(from, to).flatMap((date) =>
+    const config = this.config();
+    return daysBetween(from, to)
+      .filter((date) => isTeachingDay(config, date))
+      .flatMap((date) =>
       appointments.filter((appointment) => occursOn(appointment, date)).map((appointment) => ({ date, appointment })),
     );
   }

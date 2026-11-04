@@ -1,9 +1,19 @@
-import { Appointment, ownerOf as appointmentOwner, parseAppointments } from '../calendar/appointments';
+import { Appointment, lastDate, ownerOf as appointmentOwner, parseAppointments } from '../calendar/appointments';
 import { Blocker, parseBlockers } from '../calendar/blockers';
 import { parseSharedAppointments, SharedAppointment } from '../calendar/shared-appointments';
 import { parseConfig } from '../config.store';
 import { parseGroups } from '../groups.store';
-import { BlockVariant, FeedbackConfig, Group, groupTeacherOf, Student, Teacher, teacherOf } from '../model';
+import {
+  BlockVariant,
+  containsDate,
+  FeedbackConfig,
+  Group,
+  groupTeacherOf,
+  ReportPeriodEntry,
+  Student,
+  Teacher,
+  teacherOf,
+} from '../model';
 import { safeFileName } from '../save-file';
 import { parseStudents } from '../students.store';
 
@@ -22,24 +32,27 @@ export type SyncFiles = Map<string, string>;
 
 /** Gemeinsame Konfiguration: Überschrift, Farbe, Abschnitte, Instrumente, feste Inhalte … */
 export const GENERAL_FILE = 'konfiguration.json';
-/** Gruppen, auch über mehrere Lehrer hinweg; ihre Termine stehen in der Datei ihres Lehrers. */
+/** Gruppen in älteren Sicherungen; heute stehen sie in der Datei ihres Zeitraums und Lehrers. */
 export const GROUPS_FILE = 'gruppen.json';
 /** Termine für mehrere Lehrer, z. B. Konferenzen */
 export const SHARED_FILE = 'allgemeine-termine.json';
 // Nur Zeichen, die `safeFileName` erzeugt; so zählen Konfliktkopien der Nextcloud wie
 // „lehrer-Anna (conflicted copy 2026-…).json“ nicht als Lehrerdatei.
 const TEACHER_FILE = /^lehrer-[\p{L}\p{N}_-]+\.json$/u;
+const PERIOD_FILE = /^zeitraum-[\p{L}\p{N}_-]+\.json$/u;
 
 interface GeneralFile {
   format: 'unterricht-feedback/konfiguration';
   version: 1;
   /** Ohne Lehrer und ohne Varianten, die nur für einen Lehrer gelten */
   config: FeedbackConfig;
+  /** Nur in der Sicherung eines Berichtszeitraums: dessen ID */
+  period?: string;
 }
 
 /**
- * Alles, was zu einem Lehrer gehört. Fehlt die Datei, funktionieren die anderen Lehrer weiter; mit ihr fehlen
- * nur dieser Lehrer, seine Textvarianten, seine Personen und seine Termine.
+ * Was zu einem Lehrer gehört, unabhängig vom Zeitraum. Fehlt die Datei, funktionieren die anderen Lehrer weiter.
+ * Ältere Dateien (ohne Zeiträume je Person) enthalten auch die Personen und Termine des Lehrers.
  */
 interface TeacherFile {
   format: 'unterricht-feedback/lehrer';
@@ -48,10 +61,29 @@ interface TeacherFile {
   position: number;
   teacher: Teacher;
   variants: TeacherVariant[];
-  students: Student[];
-  appointments: Appointment[];
   /** Fehlt in älteren Dateien */
   blockers: Blocker[];
+  /** Nur in älteren Dateien */
+  students?: unknown[];
+  /** Nur in älteren Dateien */
+  appointments?: Appointment[];
+}
+
+/**
+ * Personen, Gruppen und Termine eines Lehrers in einem Berichtszeitraum. Eine Person in mehreren Zeiträumen steht
+ * in mehreren Dateien, jeweils mit den Stunden dieses Zeitraums. Weil jede Datei nur einem Lehrer gehört, stören
+ * sich mehrere Lehrer bei der Synchronisation nicht.
+ */
+interface PeriodFile {
+  format: 'unterricht-feedback/zeitraum';
+  version: 1;
+  /** Leer für Personen und Gruppen ohne bekannten Zeitraum */
+  periodId: string;
+  teacherId: string;
+  /** Zeitraum und Lehrer der Personen ergeben sich aus der Datei. */
+  students: Omit<Student, 'periods' | 'legacyTeacherId'>[];
+  groups: Group[];
+  appointments: Appointment[];
 }
 
 interface GroupsFile {
@@ -74,7 +106,9 @@ interface TeacherVariant {
 }
 
 export function isSyncFile(name: string): boolean {
-  return name === GENERAL_FILE || name === GROUPS_FILE || name === SHARED_FILE || TEACHER_FILE.test(name);
+  return (
+    name === GENERAL_FILE || name === GROUPS_FILE || name === SHARED_FILE || TEACHER_FILE.test(name) || PERIOD_FILE.test(name)
+  );
 }
 
 export function isTeacherFile(name: string): boolean {
@@ -85,15 +119,37 @@ export function toSyncFiles(data: AppData): SyncFiles {
   const { config } = data;
   const files: SyncFiles = new Map();
   files.set(GENERAL_FILE, json(generalFile(config)));
-  const groupsFile: GroupsFile = { format: 'unterricht-feedback/gruppen', version: 1, groups: data.groups };
-  files.set(GROUPS_FILE, json(groupsFile));
-  const sharedFile: SharedFile = { format: 'unterricht-feedback/allgemeine-termine', version: 1, appointments: data.sharedAppointments };
-  files.set(SHARED_FILE, json(sharedFile));
+  files.set(SHARED_FILE, json(sharedFile(data.sharedAppointments)));
   const fileNames = teacherFileNames(config.teachers);
   config.teachers.forEach((teacher, position) =>
     files.set(fileNames.get(teacher.id)!, json(teacherFile(data, teacher, position))),
   );
+  for (const { name, file } of periodFiles(data)) files.set(name, json(file));
   return files;
+}
+
+/**
+ * Sicherung eines Berichtszeitraums, z. B. für einen Lehrer, der neu dazukommt: Konfiguration und Lehrer wie in der
+ * vollen Sicherung, Personen, Gruppen, Termine und allgemeine Termine nur aus diesem Zeitraum.
+ */
+export function toPeriodBackupFiles(data: AppData, periodId: string): SyncFiles {
+  const period = data.config.reportPeriods.find((p) => p.id === periodId);
+  if (!period) throw new Error('Diesen Berichtszeitraum gibt es nicht.');
+  const files = toSyncFiles(data);
+  const general: GeneralFile = { ...generalFile(data.config), period: periodId };
+  files.set(GENERAL_FILE, json(general));
+  const shared = data.sharedAppointments.filter((a) => a.date <= period.to && lastDate(a) >= period.from);
+  files.set(SHARED_FILE, json(sharedFile(shared)));
+  const otherPeriods = new Set(periodFiles(data).filter((entry) => entry.file.periodId !== periodId).map((e) => e.name));
+  for (const name of otherPeriods) files.delete(name);
+  return files;
+}
+
+/** Zeitraum einer Sicherung, die nur einen Berichtszeitraum enthält; sonst `null` */
+export function backupPeriodOf(files: SyncFiles): string | null {
+  const content = files.get(GENERAL_FILE);
+  const general = content ? (JSON.parse(content) as Partial<GeneralFile>) : null;
+  return typeof general?.period === 'string' ? general.period : null;
 }
 
 /**
@@ -122,14 +178,42 @@ export function fromSyncFiles(files: SyncFiles): AppData {
     teachers: teacherFiles.map((file) => file.teacher),
     blocks: withTeacherVariants(general.config!.blocks ?? [], teacherFiles),
   });
+  const periodFiles = [...files]
+    .filter(([name]) => PERIOD_FILE.test(name))
+    .map(([name, content]) => parsePeriodFile(name, content));
   return {
     config,
-    students: parseStudents(teacherFiles.flatMap((file) => file.students)),
-    groups: parseGroupsFile(files.get(GROUPS_FILE)),
-    appointments: parseAppointments(teacherFiles.flatMap((file) => file.appointments), config.reportPeriods),
+    students: parseStudents([
+      ...mergedStudents(periodFiles, config.reportPeriods),
+      // Ältere Lehrerdateien: Die Zeiträume ergänzt `withPeriodMembership`.
+      ...teacherFiles.flatMap((file) => file.students ?? []),
+    ]),
+    groups: [...parseGroups(periodFiles.flatMap((file) => file.groups)), ...parseGroupsFile(files.get(GROUPS_FILE))],
+    appointments: parseAppointments(
+      [...periodFiles, ...teacherFiles].flatMap((file) => file.appointments ?? []),
+      config.reportPeriods,
+    ),
     blockers: parseBlockers(teacherFiles.flatMap((file) => file.blockers)),
     sharedAppointments: parseSharedFile(files.get(SHARED_FILE), config),
   };
+}
+
+/**
+ * Setzt jede Person aus ihren Einträgen in den Zeitraumdateien zusammen: Zeiträume und Stunden aus allen, Name,
+ * Instrument und allgemeine Texte aus dem spätesten Zeitraum.
+ */
+function mergedStudents(files: PeriodFile[], periods: ReportPeriodEntry[]): Student[] {
+  const start = (file: PeriodFile) => periods.find((p) => p.id === file.periodId)?.from ?? '';
+  const byId = new Map<string, Student>();
+  for (const file of [...files].sort((a, b) => start(a).localeCompare(start(b)))) {
+    for (const entry of file.students) {
+      const known = byId.get(entry.id);
+      const lessons = [...(known?.lessons ?? []), ...entry.lessons.filter((l) => !known?.lessons.some((k) => k.id === l.id))];
+      const periodsOf = { ...known?.periods, ...(file.periodId ? { [file.periodId]: file.teacherId } : {}) };
+      byId.set(entry.id, { ...entry, periods: periodsOf, lessons });
+    }
+  }
+  return [...byId.values()];
 }
 
 /** Ältere Sicherungen haben noch keine allgemeinen Termine. */
@@ -150,6 +234,10 @@ function parseGroupsFile(content: string | undefined): Group[] {
   return parseGroups(file.groups);
 }
 
+function sharedFile(appointments: SharedAppointment[]): SharedFile {
+  return { format: 'unterricht-feedback/allgemeine-termine', version: 1, appointments };
+}
+
 function generalFile(config: FeedbackConfig): GeneralFile {
   const blocks = config.blocks.map((block) => ({
     ...block,
@@ -160,20 +248,6 @@ function generalFile(config: FeedbackConfig): GeneralFile {
 
 function teacherFile(data: AppData, teacher: Teacher, position: number): TeacherFile {
   const { config } = data;
-  const students = data.students
-    .filter((student) => teacherOf(student, config).id === teacher.id)
-    // Personen ohne gültigen Lehrer gehören zum ersten; in der Datei steht er ausdrücklich.
-    .map((student) => ({ ...student, teacherId: teacher.id }));
-  // Termine der eigenen Personen und Gruppen; Termine ohne bekannte Person oder Gruppe landen beim ersten Lehrer.
-  const ownerIds = new Set([
-    ...students.map((student) => student.id),
-    ...data.groups.filter((group) => groupTeacherOf(group, config).id === teacher.id).map((group) => group.id),
-  ]);
-  const knownOwnerIds = new Set([...data.students.map((s) => s.id), ...data.groups.map((g) => g.id)]);
-  const appointments = data.appointments.filter((appointment) => {
-    const owner = appointmentOwner(appointment);
-    return ownerIds.has(owner) || (position === 0 && !knownOwnerIds.has(owner));
-  });
   const variants = config.blocks.flatMap((block) =>
     block.variants
       .map((variant, index) => ({ blockId: block.id, index, variant }))
@@ -184,7 +258,70 @@ function teacherFile(data: AppData, teacher: Teacher, position: number): Teacher
   const blockers = data.blockers.filter(
     (blocker) => blocker.teacherId === teacher.id || (position === 0 && !teacherIds.has(blocker.teacherId)),
   );
-  return { format: 'unterricht-feedback/lehrer', version: 1, position, teacher, variants, students, appointments, blockers };
+  return { format: 'unterricht-feedback/lehrer', version: 1, position, teacher, variants, blockers };
+}
+
+/**
+ * Teilt Personen, Gruppen und Termine auf Zeitraum und Lehrer auf. Eine Stunde und ein Termin einer Person stehen
+ * in dem ihrer Zeiträume, in dem sie liegen, sonst im spätesten. Personen ohne bekannten Zeitraum und Termine ohne
+ * bekannte Person oder Gruppe stehen in einer Datei ohne Zeitraum. Leere Dateien entfallen.
+ */
+function periodFiles(data: AppData): { name: string; file: PeriodFile }[] {
+  const { config } = data;
+  const periods = [...config.reportPeriods].sort((a, b) => a.from.localeCompare(b.from));
+  const files = new Map<string, PeriodFile>();
+  const fileOf = (periodId: string, teacherId: string) => {
+    const key = `${periodId}|${teacherId}`;
+    if (!files.has(key)) {
+      files.set(key, { format: 'unterricht-feedback/zeitraum', version: 1, periodId, teacherId, students: [], groups: [], appointments: [] });
+    }
+    return files.get(key)!;
+  };
+  /** Datei zu einem Datum der Person: ihr Zeitraum, in dem es liegt, sonst ihr spätester */
+  const studentTargets = new Map<string, (date: string) => PeriodFile>();
+  for (const student of data.students) {
+    const own = periods.filter((period) => Object.hasOwn(student.periods, period.id));
+    const targets = own.map((period) => ({ period, file: fileOf(period.id, teacherOf(student, config, period.id).id) }));
+    const fallback = targets.at(-1)?.file ?? fileOf('', teacherOf(student, config, '').id);
+    const target = (date: string) => targets.find(({ period }) => containsDate(period, date))?.file ?? fallback;
+    studentTargets.set(student.id, target);
+    const { periods: _p, legacyTeacherId: _l, lessons, ...rest } = student;
+    for (const file of new Set([fallback, ...targets.map((t) => t.file)])) {
+      file.students.push({ ...rest, lessons: lessons.filter((lesson) => target(lesson.date) === file) });
+    }
+  }
+  const knownPeriods = new Set(periods.map((period) => period.id));
+  const groupFiles = new Map<string, PeriodFile>();
+  for (const group of data.groups) {
+    const file = fileOf(knownPeriods.has(group.periodId) ? group.periodId : '', groupTeacherOf(group, config).id);
+    file.groups.push(group);
+    groupFiles.set(group.id, file);
+  }
+  for (const appointment of data.appointments) {
+    const owner = appointmentOwner(appointment);
+    const file = groupFiles.get(owner) ?? studentTargets.get(owner)?.(appointment.date) ?? fileOf('', config.teachers[0].id);
+    file.appointments.push(appointment);
+  }
+  const names = periodFileNames([...files.values()], config);
+  return [...files.values()]
+    .filter((file) => file.students.length + file.groups.length + file.appointments.length > 0)
+    .map((file) => ({ name: names.get(file)!, file }));
+}
+
+/** z. B. „zeitraum-1-Halbjahr-2026-27-Anna-Schmidt.json“; bei gleichen Namen hilft der Anfang der IDs. */
+function periodFileNames(files: PeriodFile[], config: FeedbackConfig): Map<PeriodFile, string> {
+  const names = new Map<PeriodFile, string>();
+  const used = new Set<string>();
+  for (const file of files) {
+    const period = config.reportPeriods.find((p) => p.id === file.periodId);
+    const teacher = config.teachers.find((t) => t.id === file.teacherId);
+    const label = `${period ? safeFileName(period.name) : 'ohne'}-${safeFileName(teacher?.name ?? 'Lehrer')}`;
+    let name = `zeitraum-${label}.json`;
+    if (used.has(name)) name = `zeitraum-${label}-${file.periodId.slice(0, 8)}-${file.teacherId.slice(0, 8)}.json`;
+    used.add(name);
+    names.set(file, name);
+  }
+  return names;
 }
 
 /** Eine Variante gehört einem Lehrer, wenn sie nur für ihn gilt. */
@@ -216,9 +353,25 @@ function parseTeacherFile(name: string, content: string): TeacherFile {
     position: Number(file.position) || 0,
     teacher: file.teacher,
     variants: Array.isArray(file.variants) ? file.variants : [],
+    blockers: Array.isArray(file.blockers) ? file.blockers : [],
     students: Array.isArray(file.students) ? file.students : [],
     appointments: Array.isArray(file.appointments) ? file.appointments : [],
-    blockers: Array.isArray(file.blockers) ? file.blockers : [],
+  };
+}
+
+function parsePeriodFile(name: string, content: string): PeriodFile {
+  const file = JSON.parse(content) as Partial<PeriodFile>;
+  if (file?.format !== 'unterricht-feedback/zeitraum' || typeof file.teacherId !== 'string') {
+    throw new Error(`„${name}“ ist keine Zeitraumdatei dieser App.`);
+  }
+  return {
+    format: file.format,
+    version: 1,
+    periodId: typeof file.periodId === 'string' ? file.periodId : '',
+    teacherId: file.teacherId,
+    students: Array.isArray(file.students) ? file.students : [],
+    groups: Array.isArray(file.groups) ? file.groups : [],
+    appointments: Array.isArray(file.appointments) ? file.appointments : [],
   };
 }
 

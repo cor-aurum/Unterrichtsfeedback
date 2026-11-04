@@ -1,4 +1,5 @@
 import type { jsPDF } from 'jspdf';
+import { WithLane, withLanes } from './lanes';
 import { CalendarPdfTexts, formatDate, formatLongDate, logoSize, PdfLogo } from '../model';
 import type { DayPlan, ScheduleEntry, SchedulePeriod, ScheduleTeacher, SharedSpan } from '../pdf-export';
 import { GRAYSCALE_THEME, Theme } from '../theme';
@@ -22,10 +23,7 @@ const LINE = '#d5dbe1';
 const LINE_LIGHT = '#eceff2';
 
 /** Termin in einer Tagesspalte; `lane`/`lanes` teilen die Spalte, wenn sich Termine überschneiden. */
-interface Block extends ScheduleEntry {
-  lane: number;
-  lanes: number;
-}
+type Block = WithLane<ScheduleEntry>;
 
 /**
  * Wochenplan als Tabelle im Querformat: je Lehrer und Woche eine Seite, Tage als Spalten, Uhrzeiten als Zeilen.
@@ -357,32 +355,6 @@ function hourRangeOf(appointments: ScheduleEntry[], windows: { from: string; to:
   const first = Math.floor(Math.min(...starts) / 60);
   const last = Math.max(Math.ceil(Math.max(...ends) / 60), first + MIN_HOURS);
   return last > 24 ? [24 - MIN_HOURS, 24] : [first, last];
-}
-
-/** Verteilt sich überschneidende Termine nebeneinander. */
-function withLanes(entries: ScheduleEntry[]): Block[] {
-  const sorted = [...entries].sort((a, b) => a.startMinutes - b.startMinutes);
-  const blocks: Block[] = [];
-  let cluster: Block[] = [];
-  let clusterEnd = -1;
-  const closeCluster = () => {
-    const lanes = Math.max(1, ...cluster.map((b) => b.lane + 1));
-    cluster.forEach((b) => (b.lanes = lanes));
-    cluster = [];
-  };
-  for (const entry of sorted) {
-    if (entry.startMinutes >= clusterEnd) closeCluster();
-    const laneEnds = new Map<number, number>();
-    for (const b of cluster) laneEnds.set(b.lane, Math.max(laneEnds.get(b.lane) ?? 0, b.startMinutes + b.durationMinutes));
-    let lane = 0;
-    while ((laneEnds.get(lane) ?? -1) > entry.startMinutes) lane++;
-    const block = { ...entry, lane, lanes: 1 };
-    cluster.push(block);
-    blocks.push(block);
-    clusterEnd = Math.max(clusterEnd, entry.startMinutes + entry.durationMinutes);
-  }
-  closeCluster();
-  return blocks;
 }
 
 function entriesOn(teacher: ScheduleTeacher, date: string): ScheduleEntry[] {

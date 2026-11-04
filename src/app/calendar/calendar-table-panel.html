@@ -1,0 +1,30 @@
+<section class="card">
+  <h2>Termine als Tabelle (Excel/CSV)</h2>
+  <p class="muted small">
+    Eine Zeile je Termin und Tag mit Art, Bezeichnung, Datum, Beginn, Ende, Dauer, Ort und Lehrer – für alle Lehrer.
+    Die CSV-Datei öffnet sich in Excel. Die Spalten passen zu „Termine importieren …“: Liest du die Datei wieder ein,
+    werden nur die allgemeinen Termine übernommen.
+  </p>
+  <div class="row options">
+    <label>
+      Von
+      <input type="date" [value]="from()" (change)="from.set(valueOf($event))" />
+    </label>
+    <label>
+      Bis
+      <input type="date" [value]="to()" (change)="to.set(valueOf($event))" />
+    </label>
+    @for (entry of kinds; track entry.kind) {
+      <label class="check">
+        <input type="checkbox" [checked]="selectedKinds().includes(entry.kind)" (change)="toggleKind(entry.kind)" />
+        {{ entry.label }}
+      </label>
+    }
+  </div>
+  @if (message(); as text) {
+    <p class="message error">{{ text }}</p>
+  }
+  <div class="row actions">
+    <button [disabled]="!canExport()" (click)="export()">{{ nativeApp ? 'CSV-Datei teilen' : 'CSV-Datei herunterladen' }}</button>
+  </div>
+</section>

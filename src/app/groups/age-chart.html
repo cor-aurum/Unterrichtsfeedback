@@ -1,0 +1,37 @@
+@if (hasAges()) {
+  <svg
+    class="age-chart"
+    [attr.viewBox]="'0 0 ' + width + ' ' + height()"
+    role="img"
+    aria-label="Altersverteilung der Gruppen"
+  >
+    @for (tick of ticks(); track tick.x) {
+      <line class="grid" [attr.x1]="tick.x" [attr.x2]="tick.x" y1="20" [attr.y2]="height() - 4" />
+      <text class="tick" [attr.x]="tick.x" y="14" text-anchor="middle">{{ tick.label }}</text>
+    }
+    <text class="tick" [attr.x]="labelWidth - 8" y="14" text-anchor="end">Alter</text>
+    @for (row of rows(); track $index) {
+      <text class="name" x="0" [attr.y]="row.y - 3">{{ row.name }}</text>
+      <text class="sub" x="0" [attr.y]="row.y + 12">{{ rowLabel(row) }}</text>
+      @if (row.line; as line) {
+        <line class="range" [attr.x1]="line.from" [attr.x2]="line.to" [attr.y1]="row.y" [attr.y2]="row.y" />
+      }
+      @for (dot of row.dots; track dot.member.id) {
+        <circle class="dot" [attr.cx]="dot.x" [attr.cy]="dot.y" r="5">
+          <title>{{ dot.member.name }}, {{ formatAge(dot.age!) }}</title>
+        </circle>
+      }
+      @if (row.meanX !== null) {
+        <polygon class="mean" [attr.points]="diamond(row.meanX, row.y)">
+          <title>Durchschnitt {{ formatAge(row.stats.mean!) }}</title>
+        </polygon>
+      }
+    }
+  </svg>
+  <p class="legend muted small">
+    <span class="key dot"></span> Person · <span class="key mean"></span> Durchschnitt · Linie: jüngste bis älteste
+    Person. Ohne Geburtsdatum zählen Personen nur bei der Anzahl.
+  </p>
+} @else {
+  <p class="muted small">Für die Altersverteilung braucht es Personen mit Geburtsdatum.</p>
+}

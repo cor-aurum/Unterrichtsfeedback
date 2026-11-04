@@ -1,7 +1,8 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { ConfigStore } from './config.store';
-import { Student, Teacher, teacherOf } from './model';
+import { Student, Teacher } from './model';
 import { storedSignal } from './stored-signal';
+import { StudentsStore } from './students.store';
 
 /**
  * Lehrer, der gerade mit der App arbeitet. Er gilt nur auf diesem Gerät und steuert, welchen Kalender,
@@ -10,6 +11,7 @@ import { storedSignal } from './stored-signal';
 @Injectable({ providedIn: 'root' })
 export class ActiveTeacher {
   private readonly config = inject(ConfigStore).config;
+  private readonly studentsStore = inject(StudentsStore);
   private readonly selectedId = storedSignal<string | null>('feedback.activeTeacher', () => null);
 
   /** Fehlt der gewählte Lehrer (noch keiner gewählt oder gelöscht), gilt der erste. */
@@ -22,6 +24,6 @@ export class ActiveTeacher {
   }
 
   teaches(student: Student): boolean {
-    return teacherOf(student, this.config()).id === this.teacher().id;
+    return this.studentsStore.teacherOf(student).id === this.teacher().id;
   }
 }

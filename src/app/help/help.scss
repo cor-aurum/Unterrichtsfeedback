@@ -143,3 +143,30 @@ table.devices {
 .important {
   border-left: 4px solid var(--primary);
 }
+
+/* Inhaltsverzeichnis: springt zu den Abschnitten */
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+
+  strong {
+    margin-right: 0.25rem;
+  }
+}
+
+section[id] {
+  scroll-margin-top: 1rem;
+}
+
+/* Knöpfe, die wie Links aussehen (Inhalt, Verweise im Text) */
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary-text);
+  text-decoration: underline;
+  font: inherit;
+  white-space: normal;
+}

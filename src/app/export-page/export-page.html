@@ -4,7 +4,7 @@
   <h2>PDF-Export</h2>
   @if (store.students().length === 0) {
     <p class="muted">
-      Noch keine Personen erfasst. <a routerLink="/stunden">Stunden erfassen</a>
+      Noch keine Personen erfasst. <a routerLink="/personen">Personen anlegen</a>
     </p>
   } @else {
     <p class="period">
@@ -38,7 +38,7 @@
         <option value="" disabled [selected]="!studentId()">Bitte wählen</option>
         @for (student of store.sortedStudents(); track student.id) {
           <option [value]="student.id" [selected]="student.id === studentId()">
-            {{ student.name }} ({{ lessonsInPeriod(student) }})
+            {{ student | studentLabel }} ({{ lessonsInPeriod(student) }})
           </option>
         }
       </select>
@@ -105,10 +105,15 @@
 <section class="card">
   <h2>Datensicherung</h2>
   <p class="muted">
-    Die Sicherung ist ein ZIP mit der allgemeinen Konfiguration (<code>konfiguration.json</code>) und einer Datei je
-    Lehrer (<code>lehrer-….json</code>) mit seinen Textvarianten, Personen, Stunden und Terminen. Fehlt beim Import
-    eine Lehrerdatei, fehlt nur dieser Lehrer. Beim Import werden die Daten auf diesem Gerät vollständig ersetzt;
-    ältere Sicherungen als JSON lassen sich weiterhin importieren.
+    Die Sicherung ist ein ZIP mit der allgemeinen Konfiguration (<code>konfiguration.json</code>), einer Datei je
+    Lehrer (<code>lehrer-….json</code>) mit seinen Textvarianten und Blockern und einer Datei je Berichtszeitraum und
+    Lehrer (<code>zeitraum-….json</code>) mit Personen, Gruppen, Stunden und Terminen. Beim Import werden die Daten
+    auf diesem Gerät vollständig ersetzt; ältere Sicherungen lassen sich weiterhin importieren.
+  </p>
+  <p class="muted">
+    Die Sicherung des Berichtszeitraums enthält Personen, Gruppen und Termine nur aus „{{ reportPeriod.period().name }}“.
+    Gib sie einem Lehrer, der in diesem Zeitraum neu dazukommt: Er spielt sie beim ersten Start im Willkommensdialog
+    ein und legt sich dort an.
   </p>
 
   @if (message(); as msg) {
@@ -117,6 +122,9 @@
 
   <div class="row">
     <button (click)="backup.exportToFile()">Daten exportieren</button>
+    <button class="secondary" (click)="backup.exportToFile(reportPeriod.period().id)">
+      Nur „{{ reportPeriod.period().name }}“ exportieren
+    </button>
     <button class="secondary" (click)="backupInput.click()">Daten importieren</button>
     <input #backupInput type="file" accept=".zip,.json,application/zip,application/json" hidden (change)="importBackup(backupInput)" />
   </div>

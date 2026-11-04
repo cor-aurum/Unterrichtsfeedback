@@ -1,4 +1,5 @@
 import { Component, computed, inject, input } from '@angular/core';
+import { StudentLabelPipe } from '../student-label.pipe';
 import { RouterLink } from '@angular/router';
 import { CalendarStore } from '../calendar/calendar.store';
 import { Clock } from '../calendar/clock';
@@ -7,18 +8,20 @@ import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
 import {
   formatDate,
-  GROUP_PLACEHOLDERS,
   Group,
+  GROUP_PLACEHOLDERS,
   groupLabel,
   groupTeacherOf,
+  isTeachingDay,
   Lesson,
   lessonTime,
   memberNames,
+  NO_TEACHING_TEXT,
   Section,
   Student,
-  teacherOf,
   today,
 } from '../model';
+import { ReportPeriod } from '../report-period';
 import { sortedLessons, StudentsStore } from '../students.store';
 
 /**
@@ -27,7 +30,7 @@ import { sortedLessons, StudentsStore } from '../students.store';
  */
 @Component({
   selector: 'app-group-panel',
-  imports: [RouterLink],
+  imports: [RouterLink, StudentLabelPipe],
   templateUrl: './group-panel.html',
   styleUrl: './groups.scss',
 })
@@ -39,6 +42,7 @@ export class GroupPanel {
   private readonly configStore = inject(ConfigStore);
   private readonly calendar = inject(CalendarStore);
   private readonly clock = inject(Clock);
+  private readonly reportPeriod = inject(ReportPeriod);
   protected readonly config = this.configStore.config;
   protected readonly formatDate = formatDate;
   protected readonly lessonTime = lessonTime;
@@ -48,6 +52,8 @@ export class GroupPanel {
   protected readonly members = computed(() => memberNames(this.group(), this.studentsStore.students()));
   protected readonly teachers = computed(() => this.config().teachers);
   protected readonly groupTeacherId = computed(() => groupTeacherOf(this.group(), this.config()).id);
+  /** Lehrer des Zeitraums der Gruppe; ihr bisheriger bleibt wählbar */
+  protected readonly groupTeachers = computed(() => this.reportPeriod.teachersWith(this.groupTeacherId()));
   protected readonly lessons = computed(() => sortedLessons(this.group()).reverse());
 
   /** Alle Personen, nach Lehrer gegliedert, zum Ankreuzen der Mitglieder */
@@ -55,7 +61,7 @@ export class GroupPanel {
     const config = this.config();
     const students = this.studentsStore.sortedStudents();
     return config.teachers
-      .map((teacher) => ({ teacher, students: students.filter((s) => teacherOf(s, config).id === teacher.id) }))
+      .map((teacher) => ({ teacher, students: students.filter((s) => this.studentsStore.teacherOf(s).id === teacher.id) }))
       .filter((entry) => entry.students.length > 0);
   });
 
@@ -85,6 +91,10 @@ export class GroupPanel {
   /** „+ Neue Gruppenstunde“: Stunde des gerade laufenden Gruppentermins öffnen oder anlegen, sonst gerundete Uhrzeit */
   protected startLesson(): void {
     const date = today();
+    if (!this.reportPeriod.contains(date)) {
+      alert(this.notInPeriodText(date));
+      return;
+    }
     const groupId = this.group().id;
     const occurrences = this.calendar.occurrences(date, date, (a) => a.groupId === groupId);
     const next = lessonStartAt(this.group(), date, occurrences, this.clock.now());
@@ -95,6 +105,14 @@ export class GroupPanel {
     }
   }
 
+  /** Gruppenstunden gibt es nur im Berichtszeitraum der Gruppe, dem gewählten. */
+  private notInPeriodText(date: string): string {
+    const period = this.reportPeriod.period();
+    return isTeachingDay(this.config(), date)
+      ? `Der ${formatDate(date)} liegt nicht im Berichtszeitraum „${period.name}“. Gruppen gelten nur für ihren Zeitraum.`
+      : `Der ${formatDate(date)} ${NO_TEACHING_TEXT}`;
+  }
+
   protected removeGroup(): void {
     if (confirm(`Gruppe „${this.label()}“ mit allen Gruppenstunden und Gruppenterminen löschen?`)) {
       this.store.remove(this.group().id);
@@ -102,8 +120,11 @@ export class GroupPanel {
   }
 
   protected setDate(lesson: Lesson, event: Event): void {
-    const date = this.valueOf(event);
-    if (date) this.store.setLessonDate(this.group().id, lesson.id, date);
+    const input = event.target as HTMLInputElement;
+    if (input.value && !this.store.setLessonDate(this.group().id, lesson.id, input.value)) {
+      alert(this.notInPeriodText(input.value));
+      input.value = lesson.date;
+    }
   }
 
   protected setStart(lesson: Lesson, event: Event): void {

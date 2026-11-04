@@ -1,11 +1,13 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
+import { ActiveTeacher } from '../active-teacher';
 import { BackupService } from '../backup';
 import { WEEKDAY_NAMES } from '../calendar/appointments';
 import { ConfigStore, isPeriod } from '../config.store';
 import { newId, ReportPeriodEntry, schoolHalfYear, TeachingWindow, today } from '../model';
+import { ReportPeriod } from '../report-period';
 import { DEFAULT_THEME_COLOR } from '../theme';
 
 /** Ein Wochentag in der Begrüßung: angehakt mit einem Zeitfenster */
@@ -22,7 +24,9 @@ const COLOR_PRESETS = [DEFAULT_THEME_COLOR, '#d32f2f', '#c2185b', '#7b1fa2', '#3
 
 /**
  * Begrüßung beim allerersten Start: Statt eines vorläufigen Lehrers legt man sich selbst an (Name, Instrument,
- * optional Unterrichtszeiten und Lieblingsfarbe) oder spielt eine Sicherung bzw. Konfiguration ein.
+ * optional Unterrichtszeiten und Lieblingsfarbe) oder spielt eine Sicherung bzw. Konfiguration ein. Danach wählt
+ * man sich unter den Lehrern aus der Datei aus oder legt sich dort neu an, z. B. als neuer Lehrer mit der
+ * Sicherung eines Berichtszeitraums.
  */
 @Component({
   selector: 'app-welcome-dialog',
@@ -33,6 +37,8 @@ export class WelcomeDialog {
   private readonly configStore = inject(ConfigStore);
   private readonly backup = inject(BackupService);
   private readonly router = inject(Router);
+  private readonly activeTeacher = inject(ActiveTeacher);
+  protected readonly selectedPeriod = inject(ReportPeriod);
 
   protected readonly colorPresets = COLOR_PRESETS;
   protected readonly color = signal(DEFAULT_THEME_COLOR);
@@ -43,6 +49,11 @@ export class WelcomeDialog {
   protected readonly error = signal<string | null>(null);
   protected readonly importing = signal(false);
   protected readonly helpOpen = signal(false);
+  /** Nach dem Einspielen: Wer bist du? */
+  protected readonly choosingTeacher = signal(false);
+  protected readonly teachers = computed(() => this.configStore.config().teachers);
+  /** Gewählter Lehrer; `new` legt einen neuen an */
+  protected readonly chosenTeacherId = signal<string>('new');
 
   constructor() {
     // Nur die Hilfe ist vor der Einrichtung erreichbar: Wer von dort weiternavigiert, landet wieder im Dialog.
@@ -137,7 +148,8 @@ export class WelcomeDialog {
       } else {
         this.configStore.importFromJson(await file.text());
       }
-      this.configStore.setupPending.set(false);
+      this.chosenTeacherId.set('new');
+      this.choosingTeacher.set(true);
     } catch (e) {
       const reason =
         e instanceof SyntaxError
@@ -149,6 +161,27 @@ export class WelcomeDialog {
     } finally {
       this.importing.set(false);
     }
+  }
+
+  /** Wählt den eigenen Lehrer aus der Datei oder legt ihn an; ein neuer ist im gewählten Zeitraum aktiv. */
+  protected chooseTeacher(event: Event): void {
+    event.preventDefault();
+    let teacherId = this.chosenTeacherId();
+    if (teacherId === 'new') {
+      const form = new FormData(event.target as HTMLFormElement);
+      const name = String(form.get('name') ?? '').trim();
+      const instrument = String(form.get('instrument') ?? '').trim();
+      if (!name || !instrument) {
+        this.error.set('Bitte gib deinen Namen und dein Instrument an.');
+        return;
+      }
+      teacherId = this.configStore.addTeacher(name, instrument);
+      const period = this.selectedPeriod.period();
+      if (!period.teacherIds.includes(teacherId)) this.configStore.toggleReportPeriodTeacher(period.id, teacherId);
+    }
+    this.activeTeacher.select(teacherId);
+    this.error.set(null);
+    this.configStore.setupPending.set(false);
   }
 }
 

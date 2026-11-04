@@ -204,16 +204,26 @@ export interface FillResult {
 }
 
 /** Wertung beim Füllen; verglichen wird der Reihe nach (wichtigstes zuerst). */
-type FillScore = [empty: number, conflicts: number, balance: number, secondOnDay: number, groupCost: number];
+type FillScore = [
+  empty: number,
+  conflicts: number,
+  balance: number,
+  newSameDay: number,
+  secondOnDay: number,
+  spread: number,
+  groupCost: number,
+];
 
 /**
  * Füllt alle freien Slots eines Zeitraums mit einmaligen Terminen; jede Person kann mehrere bekommen. Danach
  * zählt der Reihe nach: möglichst wenige Überschneidungen mit anderem Unterricht, möglichst gleich viele neue
- * Termine je Person, möglichst niemand zweimal am selben Tag (vorhandene Termine eingerechnet), zuletzt die
- * Verteilung der Gruppenmitglieder (`placement`).
+ * Termine je Person, möglichst keine zwei neuen Termine einer Person am selben Tag, dann auch keine zusätzlich zu
+ * vorhandenen, möglichst gleichmäßige Abstände zwischen den Terminen einer Person, zuletzt die Verteilung der
+ * Gruppenmitglieder (`placement`).
  *
  * Die gleichmäßige Verteilung geht dem „zweimal am Tag“ vor: Sonst bekämen die wenigen Personen ohne Termine in
- * der Woche fast alle Slots, sobald die anderen schon (z. B. tägliche) Termine haben.
+ * der Woche fast alle Slots, sobald die anderen schon (z. B. tägliche) Termine haben. Neue Termine am selben Tag
+ * zählen eigens, weil bei Personen mit Terminen an jedem Tag sonst jede Verteilung gleich viel kostet.
  */
 export function fillSlots(input: FillInput): FillResult {
   const { slots, studentIds } = input;
@@ -229,6 +239,8 @@ export function fillSlots(input: FillInput): FillResult {
   const byDay = new Map<string, number[]>();
   slots.forEach((slot, i) => byDay.set(slot.date, [...(byDay.get(slot.date) ?? []), i]));
   const owner: (string | null)[] = slots.map(() => null);
+  const dayNumbers = slots.map((slot) => Math.round(Date.parse(slot.date + 'T00:00:00Z') / 86_400_000));
+  const starts = slots.map((slot) => minutesOf(slot.start));
 
   const score = (): FillScore => {
     const empty = owner.filter((id) => id === null).length;
@@ -249,7 +261,8 @@ export function fillSlots(input: FillInput): FillResult {
       group += dayGroupCost(indices, owner, slots, groupsOf, input.placement);
     }
     const balance = [...counts.values()].reduce((sum, n) => sum + n * n, 0);
-    return [empty, conflicts, balance, secondOnDay, group];
+    const { newSameDay, spread } = spacingOf(owner, dayNumbers, starts, slots[0]?.durationMinutes ?? 30);
+    return [empty, conflicts, balance, newSameDay, secondOnDay, spread, group];
   };
 
   // Gierig: Slot für Slot die Person, mit der die Wertung am besten bleibt
@@ -303,6 +316,38 @@ export function fillSlots(input: FillInput): FillResult {
     }),
     empty: slots.filter((_, i) => owner[i] === null),
   };
+}
+
+/**
+ * Wie dicht die neuen Termine je Person liegen: `newSameDay` zählt zweite Termine am selben Tag, `spread` wird
+ * kleiner, je gleichmäßiger die Abstände sind (1/Abstand in Tagen; am selben Tag nach Abstand in Slots).
+ */
+function spacingOf(
+  owner: (string | null)[],
+  dayNumbers: number[],
+  starts: number[],
+  duration: number,
+): { newSameDay: number; spread: number } {
+  const byPerson = new Map<string, number[]>();
+  owner.forEach((id, i) => {
+    if (id) byPerson.set(id, [...(byPerson.get(id) ?? []), i]);
+  });
+  let newSameDay = 0;
+  let spread = 0;
+  for (const indices of byPerson.values()) {
+    indices.sort((a, b) => dayNumbers[a] - dayNumbers[b] || starts[a] - starts[b]);
+    for (let k = 1; k < indices.length; k++) {
+      const [a, b] = [indices[k - 1], indices[k]];
+      const days = dayNumbers[b] - dayNumbers[a];
+      if (days > 0) {
+        spread += 1 / days;
+      } else {
+        newSameDay++;
+        spread += 2 + 1 / Math.max(1, (starts[b] - starts[a]) / duration);
+      }
+    }
+  }
+  return { newSameDay, spread };
 }
 
 function allowedTableOf(

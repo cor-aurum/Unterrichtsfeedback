@@ -56,6 +56,16 @@
   margin-top: 0.75rem;
 }
 
+.convert {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+
+  .small {
+    margin: 0.35rem 0 0;
+  }
+}
+
 .actions {
   flex-wrap: wrap;
   margin-top: 1rem;

@@ -4,9 +4,18 @@ import { CalendarStore } from './calendar/calendar.store';
 import { ConfigStore, parseConfig } from './config.store';
 import { GroupsStore } from './groups.store';
 import { FeedbackConfig, Student, today } from './model';
-import { saveFile } from './save-file';
+import { ReportPeriod } from './report-period';
+import { safeFileName, saveFile } from './save-file';
 import { parseStudents, StudentsStore } from './students.store';
-import { AppData, fromSyncFiles, isSyncFile, SyncFiles, toSyncFiles } from './sync/sync-files';
+import {
+  AppData,
+  backupPeriodOf,
+  fromSyncFiles,
+  isSyncFile,
+  SyncFiles,
+  toPeriodBackupFiles,
+  toSyncFiles,
+} from './sync/sync-files';
 
 /** Frühere Sicherung als eine JSON-Datei; wird weiterhin gelesen. */
 interface LegacyBackup {
@@ -17,8 +26,9 @@ interface LegacyBackup {
 }
 
 /**
- * Sicherung aller erfassten Daten als ZIP mit einer allgemeinen Konfiguration und einer Datei je Lehrer
- * (siehe `sync-files.ts`). Dieselben Dateien schreibt auch die Ordner-Synchronisation.
+ * Sicherung aller erfassten Daten als ZIP mit einer allgemeinen Konfiguration, einer Datei je Lehrer und einer je
+ * Lehrer und Berichtszeitraum (siehe `sync-files.ts`). Dieselben Dateien schreibt auch die Ordner-Synchronisation.
+ * Die Sicherung eines Zeitraums enthält Personen, Gruppen und Termine nur aus diesem.
  */
 @Injectable({ providedIn: 'root' })
 export class BackupService {
@@ -26,31 +36,48 @@ export class BackupService {
   private readonly studentsStore = inject(StudentsStore);
   private readonly calendarStore = inject(CalendarStore);
   private readonly groupsStore = inject(GroupsStore);
+  private readonly reportPeriod = inject(ReportPeriod);
 
   readonly data = computed<AppData>(() => ({
     config: this.configStore.config(),
-    students: this.studentsStore.students(),
-    groups: this.groupsStore.groups(),
+    students: this.studentsStore.allStudents(),
+    groups: this.groupsStore.allGroups(),
     appointments: this.calendarStore.appointments(),
     blockers: this.calendarStore.blockers(),
     sharedAppointments: this.calendarStore.sharedAppointments(),
   }));
   readonly files = computed(() => toSyncFiles(this.data()));
 
-  async exportToFile(): Promise<void> {
+  /** Ohne `periodId` alles, sonst nur den Berichtszeitraum, z. B. für einen neuen Lehrer */
+  async exportToFile(periodId?: string): Promise<void> {
     const { zipSync, strToU8 } = await import('fflate');
-    const entries = Object.fromEntries([...this.files()].map(([name, content]) => [name, strToU8(content)]));
+    const files = periodId ? toPeriodBackupFiles(this.data(), periodId) : this.files();
+    const entries = Object.fromEntries([...files].map(([name, content]) => [name, strToU8(content)]));
     const zip = zipSync(entries, { level: 6 });
-    await saveFile(`unterricht-feedback-sicherung_${today()}.zip`, new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' }));
+    const period = this.configStore.config().reportPeriods.find((p) => p.id === periodId);
+    const label = period ? `_${safeFileName(period.name)}` : '';
+    await saveFile(
+      `unterricht-feedback-sicherung${label}_${today()}.zip`,
+      new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' }),
+    );
+  }
+
+  /** Berichtszeitraum, wenn die Datei die Sicherung nur eines Zeitraums ist; sonst `null` */
+  async periodOf(file: File): Promise<string | null> {
+    return file.name.toLowerCase().endsWith('.zip') ? backupPeriodOf(await unzip(file)) : null;
   }
 
   /**
    * Ersetzt Konfiguration, Personen und Termine durch den Inhalt einer ZIP-Sicherung oder einer älteren
    * JSON-Sicherung. Wirft einen Fehler, wenn die Datei kein gültiges Format hat; dann bleibt alles unverändert.
+   * Nach der Sicherung eines Berichtszeitraums ist dieser gewählt.
    */
   async importFile(file: File): Promise<void> {
     if (file.name.toLowerCase().endsWith('.zip')) {
-      this.importFiles(await unzip(file));
+      const files = await unzip(file);
+      this.importFiles(files);
+      const periodId = backupPeriodOf(files);
+      if (periodId) this.reportPeriod.select(periodId);
     } else {
       this.importLegacyJson(await file.text());
     }
@@ -81,8 +108,8 @@ export class BackupService {
   /** Übernimmt Änderungen aus der Synchronisation; die gerade gewählte Person und Stunde bleiben ausgewählt. */
   applySynced(data: AppData): void {
     this.configStore.config.set(data.config);
-    this.studentsStore.students.set(data.students);
-    this.groupsStore.groups.set(data.groups);
+    this.studentsStore.allStudents.set(data.students);
+    this.groupsStore.allGroups.set(data.groups);
     this.calendarStore.appointments.set(data.appointments);
     this.calendarStore.blockers.set(data.blockers);
     this.calendarStore.sharedAppointments.set(data.sharedAppointments);

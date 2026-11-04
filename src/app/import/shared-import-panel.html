@@ -1,0 +1,145 @@
+<section class="card import">
+  <div class="row">
+    <h2 class="grow">Allgemeine Termine importieren</h2>
+    <button class="secondary" (click)="closed.emit('')">Abbrechen</button>
+  </div>
+
+  <ol class="steps">
+    <li [class.active]="step() === 'file'">Datei</li>
+    <li [class.active]="step() === 'columns'">Spalten und Vorschau</li>
+  </ol>
+
+  @if (error(); as text) {
+    <p class="message error">{{ text }}</p>
+  }
+
+  @switch (step()) {
+    @case ('file') {
+      <p class="muted">
+        Wähle eine Excel-Datei (.xlsx) oder eine CSV-Datei mit einer Zeile je Termin, z. B. mit den
+        Spalten Bezeichnung, Datum, Beginn, Ende, Ort und Lehrer. Welche Spalte was enthält, legst
+        du im nächsten Schritt fest. Mehrere Lehrer trennst du mit Komma; ohne Lehrer gilt der
+        Termin für alle, die am Tag im Berichtszeitraum aktiv sind. Eine Tabelle aus „Termine als
+        Tabelle“ kannst du direkt einlesen; daraus werden nur die allgemeinen Termine übernommen.
+      </p>
+      <button (click)="fileInput.click()">Datei wählen</button>
+      <input
+        #fileInput
+        type="file"
+        accept=".xlsx,.csv,.txt"
+        hidden
+        (change)="loadFile(fileInput)"
+      />
+    }
+
+    @case ('columns') {
+      <p class="muted">„{{ fileName() }}“</p>
+      <div class="fields">
+        @if (tables().length > 1) {
+          <label>
+            Tabellenblatt
+            <select (change)="selectTable(+$any($event.target).value)">
+              @for (t of tables(); track $index) {
+                <option [value]="$index" [selected]="$index === tableIndex()">{{ t.name }}</option>
+              }
+            </select>
+          </label>
+        }
+        @for (field of columnFields; track field.key) {
+          <label>
+            {{ field.label }}
+            <select (change)="setColumn(field.key, $event)">
+              @if (field.optional) {
+                <option value="" [selected]="mapping()[field.key] === null">
+                  {{ field.optional }}
+                </option>
+              }
+              @for (column of columns(); track $index) {
+                <option [value]="$index" [selected]="$index === mapping()[field.key]">
+                  {{ column }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+      </div>
+      <label class="check-line">
+        <input type="checkbox" [checked]="mapping().hasHeader" (change)="setHasHeader($event)" />
+        Erste Zeile enthält Überschriften (wird nicht importiert)
+      </label>
+      <div class="fields">
+        <label>
+          Frühester Termin am (optional)
+          <input type="date" [value]="startDate()" (change)="setStartDate($event)" />
+        </label>
+      </div>
+      <p class="muted small">
+        @if (earliestFileDate(); as earliest) {
+          Der früheste Termin der Datei ist am {{ formatDate(earliest) }}.
+        }
+        Mit einem Datum hier werden alle Termine verschoben: Der früheste liegt an diesem Tag, die
+        übrigen behalten ihren Abstand in Tagen; der Wochentag kann sich dabei ändern.
+      </p>
+
+      <h3>Vorschau</h3>
+      <div class="table-scroll">
+        <table class="preview">
+          <thead>
+            <tr>
+              <th>Zeile</th>
+              <th>Bezeichnung</th>
+              <th>Datum</th>
+              <th>Zeit</th>
+              <th>Ort</th>
+              <th>Lehrer</th>
+              <th>Hinweis</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.line) {
+              <tr [class.muted]="row.problem || row.existing">
+                <td>{{ row.line }}</td>
+                <td>{{ row.appointment.title }}</td>
+                <td>
+                  {{ row.appointment.date ? formatDate(row.appointment.date) : '' }}
+                  @if (row.fileDate && row.fileDate !== row.appointment.date) {
+                    <br /><span class="muted small">Datei: {{ formatDate(row.fileDate) }}</span>
+                  }
+                </td>
+                <td>
+                  @if (row.appointment.start) {
+                    {{ row.appointment.start }} · {{ row.appointment.durationMinutes }} Min.
+                  }
+                </td>
+                <td>{{ row.appointment.location }}</td>
+                <td>{{ teacherNames(row) }}</td>
+                <td [class.problem]="row.problem">{{ status(row) }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="7" class="muted">Keine Termine in den gewählten Spalten.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        {{ importable().length }} von {{ rows().length }} Termin(en) werden übernommen. Zeilen mit
+        Hinweis in Rot und schon vorhandene Termine (gleiche Bezeichnung, gleiches Datum, gleicher
+        Beginn) werden übersprungen. Alle importierten Termine blockieren die automatische Planung;
+        das lässt sich je Termin ändern.
+        @if (otherKinds() > 0) {
+          {{ otherKinds() }} Zeile(n) anderer Art (Einzelunterricht, Gruppe, Blocker) werden nicht
+          angezeigt und nicht importiert.
+        }
+      </p>
+      <div class="row actions">
+        <button class="secondary" (click)="step.set('file')">Andere Datei</button>
+        <span class="grow"></span>
+        <button [disabled]="importable().length === 0" (click)="import()">
+          {{ importable().length }} Termin(e) importieren
+        </button>
+      </div>
+    }
+  }
+</section>

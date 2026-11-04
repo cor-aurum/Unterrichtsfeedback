@@ -195,6 +195,13 @@ details {
   font-size: 1.05rem;
 }
 
+.teacher-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
 .restore {
   display: flex;
   flex-direction: column;

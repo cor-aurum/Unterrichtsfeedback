@@ -30,6 +30,7 @@ import {
   SectionType,
   Teacher,
   TeachingWindow,
+  WindowsOwner,
   teachingWindowsFor,
   TimeWindow,
   standardWindowsFor,
@@ -106,20 +107,25 @@ export class ConfigStore {
     this.mutate((config) => (config.calendarPdf = { ...DEFAULT_CALENDAR_PDF_TEXTS }));
   }
 
-  /** Ein neuer Lehrer ist in allen laufenden und künftigen Berichtszeiträumen aktiv. */
-  addTeacher(name: string): void {
+  /**
+   * Ein neuer Lehrer ist in allen laufenden und künftigen Berichtszeiträumen aktiv. Ohne Instrument gilt das
+   * Standardinstrument, ein unbekanntes wird angelegt. Gibt die ID des Lehrers zurück.
+   */
+  addTeacher(name: string, instrumentName?: string): string {
+    const instrumentId = instrumentName ? this.ensureInstruments([instrumentName]).get(instrumentName.trim().toLowerCase()) : null;
+    const id = newId();
     this.mutate((config) => {
-      const id = newId();
       config.teachers.push({
         id,
         name,
-        instrumentId: config.defaultInstrumentId,
+        instrumentId: instrumentId ?? config.defaultInstrumentId,
         location: '',
         teachingWindows: defaultTeachingWindows(config.calendar),
         periodWindows: {},
       });
       config.reportPeriods.filter((period) => period.to >= today()).forEach((period) => period.teacherIds.push(id));
     });
+    return id;
   }
 
   updateTeacher(teacherId: string, change: Partial<Pick<Teacher, 'name' | 'instrumentId' | 'location'>>): void {
@@ -170,41 +176,66 @@ export class ConfigStore {
   }
 
   /*
-   * Unterrichtszeiten ändern sich je Berichtszeitraum (`periodId`) oder, mit `null`, außerhalb aller Zeiträume.
-   * Hat der Zeitraum noch keine eigenen, bekommt er dabei eine Kopie der allgemeinen.
+   * Unterrichtszeiten gehören einem Lehrer in einem Berichtszeitraum oder, gemeinsam für alle, dem Zeitraum (siehe
+   * `WindowsOwner`). Hat der Lehrer im Zeitraum noch keine eigenen, bekommt er dabei eine Kopie seiner Standardzeiten.
    */
 
-  addTeachingWindow(teacherId: string, periodId: string | null, weekday: number): void {
-    this.mutateWindows(teacherId, periodId, (windows) => [...windows, { id: newId(), weekday, from: '14:00', to: '18:00' }]);
+  windowsOf(owner: WindowsOwner): TeachingWindow[] {
+    const config = this.config();
+    if ('sharedPeriodId' in owner) return config.reportPeriods.find((p) => p.id === owner.sharedPeriodId)?.sharedWindows ?? [];
+    const teacher = config.teachers.find((t) => t.id === owner.teacherId);
+    return teacher ? teachingWindowsFor(teacher, owner.periodId) : [];
   }
 
-  updateTeachingWindow(
-    teacherId: string,
-    periodId: string | null,
-    windowId: string,
-    change: Partial<Pick<TeachingWindow, 'from' | 'to'>>,
-  ): void {
-    this.mutateWindows(teacherId, periodId, (windows) => windows.map((w) => (w.id === windowId ? { ...w, ...change } : w)));
+  addTeachingWindow(owner: WindowsOwner, weekday: number): void {
+    this.mutateWindows(owner, (windows) => [...windows, { id: newId(), weekday, from: '14:00', to: '18:00' }]);
   }
 
-  removeTeachingWindow(teacherId: string, periodId: string | null, windowId: string): void {
-    this.mutateWindows(teacherId, periodId, (windows) => windows.filter((w) => w.id !== windowId));
+  updateTeachingWindow(owner: WindowsOwner, windowId: string, change: Partial<Pick<TeachingWindow, 'from' | 'to'>>): void {
+    this.mutateWindows(owner, (windows) => windows.map((w) => (w.id === windowId ? { ...w, ...change } : w)));
   }
 
-  /** Ersetzt die Unterrichtszeiten des Lehrers an diesem Wochentag durch die Standardunterrichtszeiten. */
-  applyStandardWindows(teacherId: string, periodId: string | null, weekday: number): void {
+  removeTeachingWindow(owner: WindowsOwner, windowId: string): void {
+    this.mutateWindows(owner, (windows) => windows.filter((w) => w.id !== windowId));
+  }
+
+  /** Ersetzt die Unterrichtszeiten an diesem Wochentag durch die Standardunterrichtszeiten. */
+  applyStandardWindows(owner: WindowsOwner, weekday: number): void {
     const standard = standardWindowsFor(this.config().calendar, weekday);
-    this.mutateWindows(teacherId, periodId, (windows) => [...windows.filter((w) => w.weekday !== weekday), ...standard]);
+    this.mutateWindows(owner, (windows) => [...windows.filter((w) => w.weekday !== weekday), ...standard]);
   }
 
-  private mutateWindows(
-    teacherId: string,
-    periodId: string | null,
-    change: (windows: TeachingWindow[]) => TeachingWindow[],
-  ): void {
-    this.mutateTeacher(teacherId, (teacher) => {
-      const next = change(teachingWindowsFor(teacher, periodId));
-      if (periodId) teacher.periodWindows[periodId] = next;
+  /**
+   * Gemeinsame Unterrichtszeiten für alle Lehrer im Zeitraum ein- oder ausschalten. Beim Einschalten beginnen sie
+   * mit den Zeiten des ersten aktiven Lehrers, sonst mit den Standardunterrichtszeiten; beim Ausschalten gelten
+   * wieder die eigenen Zeiten der Lehrer, die dabei unverändert geblieben sind.
+   */
+  setSharedWindows(periodId: string, shared: boolean): void {
+    this.mutate((config) => {
+      const period = config.reportPeriods.find((p) => p.id === periodId);
+      if (!period || shared === !!period.sharedWindows) return;
+      if (!shared) {
+        delete period.sharedWindows;
+        return;
+      }
+      const teacher = config.teachers.find((t) => period.teacherIds.includes(t.id));
+      period.sharedWindows = copyWindows(
+        teacher ? teachingWindowsFor(teacher, periodId) : defaultTeachingWindows(config.calendar),
+      );
+    });
+  }
+
+  private mutateWindows(owner: WindowsOwner, change: (windows: TeachingWindow[]) => TeachingWindow[]): void {
+    this.mutate((config) => {
+      if ('sharedPeriodId' in owner) {
+        const period = config.reportPeriods.find((p) => p.id === owner.sharedPeriodId);
+        if (period) period.sharedWindows = change(period.sharedWindows ?? []);
+        return;
+      }
+      const teacher = config.teachers.find((t) => t.id === owner.teacherId);
+      if (!teacher) return;
+      const next = change(teachingWindowsFor(teacher, owner.periodId));
+      if (owner.periodId) teacher.periodWindows[owner.periodId] = next;
       else teacher.teachingWindows = next;
     });
   }
@@ -335,7 +366,9 @@ export class ConfigStore {
       // Die Lehrer behalten ihre Unterrichtszeiten aus dem spätesten Zeitraum; ändern lassen sie sich danach je Zeitraum.
       const latest = [...config.reportPeriods].sort((a, b) => a.to.localeCompare(b.to)).at(-1);
       config.teachers.forEach((teacher) => (teacher.periodWindows[id] = copyWindows(teachingWindowsFor(teacher, latest?.id ?? null))));
-      config.reportPeriods.push({ id, ...period });
+      // Gemeinsame Zeiten übernimmt der neue Zeitraum ebenso.
+      const shared = latest?.sharedWindows ? { sharedWindows: copyWindows(latest.sharedWindows) } : {};
+      config.reportPeriods.push({ id, ...period, ...shared });
     });
     return id;
   }
@@ -587,6 +620,7 @@ function parseReportPeriods(data: unknown, allTeacherIds: string[]): ReportPerio
       from: p.from!,
       to: p.to!,
       teacherIds: Array.isArray(p.teacherIds) ? p.teacherIds.filter((id) => typeof id === 'string') : [...allTeacherIds],
+      ...(Array.isArray(p.sharedWindows) ? { sharedWindows: parseTeachingWindows(p.sharedWindows) } : {}),
     }));
   return periods.length > 0 ? periods : [{ ...schoolHalfYear(today()), teacherIds: [...allTeacherIds] }];
 }

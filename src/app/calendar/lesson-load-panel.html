@@ -42,7 +42,7 @@
       @for (load of loads(); track load.student.id) {
         <li [class.none]="totalMinutes(load) === 0">
           <span class="who">
-            {{ load.student.name }}
+            {{ load.student | studentLabel }}
             @if (allTeachers() && multipleTeachers()) {
               <span class="muted teacher">{{ teacherName(load) }}</span>
             }

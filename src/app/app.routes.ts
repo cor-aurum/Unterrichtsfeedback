@@ -5,6 +5,16 @@ import { Lessons } from './lessons/lessons';
 export const routes: Routes = [
   { path: 'stunden', component: Lessons, title: 'Stunden erfassen' },
   {
+    path: 'personen',
+    loadComponent: () => import('./people/people-page').then((m) => m.PeoplePage),
+    title: 'Personen',
+  },
+  {
+    path: 'gruppen',
+    loadComponent: () => import('./groups/group-planning-page').then((m) => m.GroupPlanningPage),
+    title: 'Gruppenplanung',
+  },
+  {
     path: 'kalender',
     loadComponent: () => import('./calendar/calendar-page').then((m) => m.CalendarPage),
     title: 'Kalender',

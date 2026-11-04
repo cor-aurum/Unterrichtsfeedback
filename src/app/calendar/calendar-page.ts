@@ -12,17 +12,20 @@ import {
   groupMembers,
   groupTeacherOf,
   instrumentOf,
+  isTeachingDay,
+  NO_TEACHING_TEXT,
   Student,
   Teacher,
-  teacherOf,
   teachingWindowsOn,
   today,
 } from '../model';
 import { DayPlan, PdfExport, ScheduleDay, ScheduleEntry } from '../pdf-export';
+import { SharedImportPanel } from '../import/shared-import-panel';
 import { ReportPeriod } from '../report-period';
 import { isNativeApp } from '../save-file';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
+import { StudentLabelPipe } from '../student-label.pipe';
 import {
   addDays,
   Appointment,
@@ -30,6 +33,7 @@ import {
   endTime,
   followsLesson,
   minutesOf,
+  timeOf,
   mondayOf,
   Occurrence,
   ownerOf,
@@ -41,10 +45,12 @@ import {
 } from './appointments';
 import { AutoSchedulePanel } from './auto-schedule-panel';
 import { Blocker, blockerOnDay, blockerTimeText } from './blockers';
+import { TimeSpan, withLanes } from './lanes';
 import { APPOINTMENT_STATE_LABELS, appointmentState, AppointmentState } from './appointment-state';
 import { CalendarStore } from './calendar.store';
 import { Clock } from './clock';
 import { LessonOpener } from './lesson-opener';
+import { CalendarTablePanel } from './calendar-table-panel';
 import { IcalExportPanel } from './ical-export-panel';
 import { RecurrenceFields } from './recurrence-fields';
 import { LessonLoadPanel } from './lesson-load-panel';
@@ -71,7 +77,17 @@ const MAX_PDF_DAYS = 366;
 
 @Component({
   selector: 'app-calendar-page',
-  imports: [RouterLink, AutoSchedulePanel, LessonLoadPanel, IcalExportPanel, SharedAppointmentForm, RecurrenceFields],
+  imports: [
+    RouterLink,
+    AutoSchedulePanel,
+    LessonLoadPanel,
+    IcalExportPanel,
+    CalendarTablePanel,
+    SharedAppointmentForm,
+    SharedImportPanel,
+    RecurrenceFields,
+    StudentLabelPipe,
+  ],
   templateUrl: './calendar-page.html',
   styleUrl: './calendar-page.scss',
 })
@@ -118,6 +134,10 @@ export class CalendarPage {
   protected readonly today = today();
   /** Die Woche von heute; liegt heute nicht im Berichtszeitraum, dessen erste Woche (wie das Datum neuer Termine) */
   protected readonly weekStart = signal(mondayOf(this.defaultDate()));
+  /**
+   * Die Woche als Zeitraster: je Tag die Einträge mit Beginn und Dauer, sich überschneidende nebeneinander.
+   * Ganztägige Blocker stehen über dem Raster.
+   */
   protected readonly week = computed(() => {
     const start = this.weekStart();
     const end = addDays(start, 6);
@@ -125,17 +145,89 @@ export class CalendarPage {
     const occurrences = this.calendar.occurrences(start, end, all ? undefined : this.inCalendar());
     const blockers = (all ? this.teachers() : [this.teacher()]).flatMap((t) => this.calendar.blockersOf(t.id, start, end));
     const shared = this.calendar.sharedOccurrences(start, end, all ? undefined : this.teacher().id);
-    return daysBetween(start, end).map((date) => ({
-      date,
-      label: formatDay(date),
-      occurrences: occurrences.filter((o) => o.date === date),
-      shared: shared.filter((o) => o.date === date).map((o) => o.appointment),
-      blockers: blockers.flatMap((blocker) => {
+    const config = this.config();
+    return daysBetween(start, end).map((date) => {
+      const blockerParts = blockers.flatMap((blocker) => {
         const part = blockerOnDay(blocker, date);
-        return part ? [{ blocker, time: blockerTimeText(part), order: minutesOf(part.start) }] : [];
-      }),
-    }));
+        return part ? [{ blocker, part }] : [];
+      });
+      const fullDay = blockerParts.filter(({ part }) => part.start === '00:00' && part.end === '24:00');
+      const items: WeekItem[] = [
+        ...occurrences
+          .filter((o) => o.date === date && this.reportPeriod.contains(date))
+          .map((occurrence) => ({ kind: 'appointment' as const, occurrence, ...spanOf(occurrence.appointment) })),
+        ...shared.filter((o) => o.date === date).map(({ appointment }) => ({ kind: 'shared' as const, shared: appointment, ...spanOf(appointment) })),
+        ...blockerParts
+          .filter((entry) => !fullDay.includes(entry))
+          .map(({ blocker, part }) => ({
+            kind: 'blocker' as const,
+            blocker,
+            time: blockerTimeText(part),
+            startMinutes: minutesOf(part.start),
+            durationMinutes: minutesOf(part.end) - minutesOf(part.start),
+          })),
+      ];
+      return {
+        date,
+        label: formatDay(date),
+        teaching: isTeachingDay(config, date),
+        inPeriod: this.reportPeriod.contains(date),
+        otherPeriod: this.otherPeriodOn(date),
+        fullDayBlockers: fullDay.map(({ blocker }) => blocker),
+        items: withLanes(items),
+        windows: all ? [] : teachingWindowsOn(this.teacher(), config, date),
+      };
+    });
   });
+
+  /**
+   * Stunden, die das Raster zeigt: von der ersten bis zur letzten Stunde mit Einträgen oder Unterrichtszeiten der
+   * Woche, mindestens sechs Stunden; ohne beides 8 bis 18 Uhr.
+   */
+  protected readonly gridHours = computed(() => {
+    const days = this.week();
+    const starts = days.flatMap((d) => [...d.items.map((i) => i.startMinutes), ...d.windows.map((w) => minutesOf(w.from))]);
+    const ends = days.flatMap((d) => [
+      ...d.items.map((i) => i.startMinutes + i.durationMinutes),
+      ...d.windows.map((w) => minutesOf(w.to)),
+    ]);
+    if (starts.length === 0) return { first: 8, last: 18 };
+    const first = Math.floor(Math.min(...starts) / 60);
+    const last = Math.min(24, Math.max(Math.ceil(Math.max(...ends) / 60), first + 6));
+    return { first: Math.min(first, last - 6), last };
+  });
+  protected readonly hourLabels = computed(() => {
+    const { first, last } = this.gridHours();
+    return Array.from({ length: last - first }, (_, i) => ({ label: `${first + i}:00`, top: i * 60 * PX_PER_MINUTE }));
+  });
+  protected readonly gridHeight = computed(() => (this.gridHours().last - this.gridHours().first) * 60 * PX_PER_MINUTE);
+
+  /** Lage im Raster; Einträge außerhalb der gezeigten Stunden werden abgeschnitten. */
+  protected boxOf(item: { startMinutes: number; durationMinutes: number; lane: number; lanes: number }): BoxStyle {
+    const { first, last } = this.gridHours();
+    const from = Math.max(item.startMinutes, first * 60);
+    const to = Math.min(item.startMinutes + item.durationMinutes, last * 60);
+    return {
+      top: (from - first * 60) * PX_PER_MINUTE,
+      height: Math.max((to - from) * PX_PER_MINUTE - 2, 16),
+      left: (item.lane / item.lanes) * 100,
+      width: 100 / item.lanes,
+    };
+  }
+
+  protected windowBox(window: { from: string; to: string }): { top: number; height: number } {
+    return this.boxOf({ startMinutes: minutesOf(window.from), durationMinutes: minutesOf(window.to) - minutesOf(window.from), lane: 0, lanes: 1 });
+  }
+
+  /** Klick auf eine freie Stelle: neuer Termin zu dieser Uhrzeit (auf 15 Minuten abgerundet) */
+  protected newAt(date: string, event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (target.closest('button')) return;
+    const body = event.currentTarget as HTMLElement;
+    const minutes = this.gridHours().first * 60 + (event.clientY - body.getBoundingClientRect().top) / PX_PER_MINUTE;
+    const start = timeOf(Math.floor(minutes / 15) * 15);
+    this.newAppointment(date, false, start);
+  }
   protected readonly weekLabel = computed(() => formatPeriod(this.weekStart(), addDays(this.weekStart(), 6)));
 
   protected readonly draft = signal<Draft | null>(null);
@@ -148,6 +240,7 @@ export class CalendarPage {
   protected readonly openedOccurrence = signal<Occurrence | null>(null);
   protected readonly message = signal<string | null>(null);
   protected readonly autoScheduleOpen = signal(false);
+  protected readonly sharedImportOpen = signal(false);
   /** Erfolgsmeldung, z. B. nach dem automatischen Einplanen */
   protected readonly notice = signal<string | null>(null);
 
@@ -155,8 +248,10 @@ export class CalendarPage {
   protected readonly pdfFrom = linkedSignal(() => this.weekStart());
   protected readonly pdfTo = linkedSignal(() => addDays(this.weekStart(), 6));
   /** Liste oder Wochenplan als Tabelle; gilt nur auf diesem Gerät. */
-  protected readonly pdfFormat = storedSignal<'list' | 'events' | 'grid' | 'day'>('feedback.scheduleFormat', () => 'list', (data) =>
-    data === 'events' || data === 'grid' || data === 'day' ? data : 'list',
+  protected readonly pdfFormat = storedSignal<'list' | 'individual' | 'events' | 'grid' | 'day'>(
+    'feedback.scheduleFormat',
+    () => 'list',
+    (data) => (data === 'individual' || data === 'events' || data === 'grid' || data === 'day' ? data : 'list'),
   );
 
   private readonly studentsById = computed(() => new Map(this.studentsStore.students().map((s) => [s.id, s])));
@@ -164,11 +259,11 @@ export class CalendarPage {
 
   /** Personen des Lehrers – die anderen lassen sich als Ausnahme in seinen Kalender eintragen */
   protected studentsOf(teacherId: string): Student[] {
-    return this.studentsStore.sortedStudents().filter((s) => teacherOf(s, this.config()).id === teacherId);
+    return this.studentsStore.sortedStudents().filter((s) => this.studentsStore.teacherOf(s).id === teacherId);
   }
 
   protected otherStudentsOf(teacherId: string): Student[] {
-    return this.studentsStore.sortedStudents().filter((s) => teacherOf(s, this.config()).id !== teacherId);
+    return this.studentsStore.sortedStudents().filter((s) => this.studentsStore.teacherOf(s).id !== teacherId);
   }
 
   protected groupsOf(teacherId: string): Group[] {
@@ -198,15 +293,8 @@ export class CalendarPage {
     return this.teachers().find((t) => t.id === teacherId)?.name ?? '';
   }
 
-  /** In wessen Kalender der Termin steht: bei Ausnahmen der eingetragene Lehrer, sonst der der Person oder Gruppe */
   private calendarTeacherOf(appointment: Appointment): Teacher {
-    const config = this.config();
-    const exception = config.teachers.find((t) => t.id === appointment.teacherId);
-    if (exception) return exception;
-    const group = appointment.groupId ? this.groupsById().get(appointment.groupId) : undefined;
-    if (group) return groupTeacherOf(group, config);
-    const student = appointment.studentId ? this.studentsById().get(appointment.studentId) : undefined;
-    return student ? teacherOf(student, config) : this.teacher();
+    return this.groupsStore.calendarTeacherOf(appointment);
   }
 
   /** Lehrername vor den Angaben eines Termins, nur in der Ansicht aller Lehrer */
@@ -257,7 +345,7 @@ export class CalendarPage {
   }
 
   protected teacherName(student: Student): string {
-    return teacherOf(student, this.config()).name;
+    return this.studentsStore.teacherOf(student).name;
   }
 
   protected instrumentName(student: Student): string {
@@ -291,6 +379,18 @@ export class CalendarPage {
     this.autoScheduleOpen.set(true);
   }
 
+  protected openSharedImport(): void {
+    this.closeForms();
+    this.autoScheduleOpen.set(false);
+    this.notice.set(null);
+    this.sharedImportOpen.set(true);
+  }
+
+  protected closeSharedImport(result: string): void {
+    this.sharedImportOpen.set(false);
+    this.notice.set(result || null);
+  }
+
   protected closeAutoSchedule(result: string): void {
     this.autoScheduleOpen.set(false);
     this.notice.set(result || null);
@@ -302,6 +402,21 @@ export class CalendarPage {
 
   protected showToday(): void {
     this.weekStart.set(mondayOf(this.today));
+  }
+
+  /** Zeiträume für den Sprung an ihren Beginn, nach Beginn sortiert */
+  protected readonly periodsByStart = computed(() =>
+    [...this.reportPeriod.periods()].sort((a, b) => a.from.localeCompare(b.from)),
+  );
+
+  /** Wählt den Zeitraum (und damit seine Personen und Gruppen) und zeigt seine erste Woche. */
+  protected showPeriodStart(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const period = this.reportPeriod.periods().find((p) => p.id === select.value);
+    select.value = '';
+    if (!period) return;
+    this.reportPeriod.select(period.id);
+    this.weekStart.set(mondayOf(period.from));
   }
 
   /**
@@ -378,6 +493,25 @@ export class CalendarPage {
   }
 
   /** Tag neuer Termine: heute, liegt heute nicht im Berichtszeitraum, sein erster Tag */
+  /** Unterricht gibt es nur im gewählten Berichtszeitraum (und damit nie außerhalb aller Zeiträume). */
+  protected isTeachingDay(date: string): boolean {
+    return !date || this.reportPeriod.contains(date);
+  }
+
+  /** Warum an dem Tag kein Unterricht im gewählten Zeitraum möglich ist */
+  protected noLessonText(date: string): string {
+    const other = this.otherPeriodOn(date);
+    return other
+      ? `Der ${formatDate(date)} gehört zum Berichtszeitraum „${other}“. Wähle ihn oben, um dort Termine zu planen.`
+      : `Der ${formatDate(date)} ${NO_TEACHING_TEXT}`;
+  }
+
+  /** Name eines anderen Berichtszeitraums, in dem der Tag liegt */
+  private otherPeriodOn(date: string): string | null {
+    if (this.reportPeriod.contains(date)) return null;
+    return this.config().reportPeriods.find((period) => containsDate(period, date))?.name ?? null;
+  }
+
   private defaultDate(): string {
     const period = this.reportPeriod.period();
     return containsDate(period, this.today) ? this.today : period.from;
@@ -386,6 +520,12 @@ export class CalendarPage {
   protected newShared(date = this.defaultDate()): void {
     this.closeForms();
     this.sharedDraft.set(newSharedDraft(this.config, date));
+  }
+
+  /** Nach dem Umwandeln in Gruppentermine kommt ein Hinweis mit. */
+  protected closeShared(result: string | void): void {
+    this.sharedDraft.set(null);
+    if (result) this.notice.set(result);
   }
 
   protected editShared(appointment: SharedAppointment): void {
@@ -418,7 +558,7 @@ export class CalendarPage {
    * Neuer Termin im Kalender des aktiven Lehrers; mit `forGroup` ist eine Gruppe vorausgewählt. Hat der aktive
    * Lehrer keine Gruppe, gilt der Kalender des Lehrers der ersten Gruppe.
    */
-  protected newAppointment(date = this.defaultDate(), forGroup = false): void {
+  protected newAppointment(date = this.defaultDate(), forGroup = false, start?: string): void {
     const settings = this.config().calendar;
     const firstGroup = this.groupsStore.groups()[0];
     const teacher =
@@ -430,7 +570,7 @@ export class CalendarPage {
       calendarTeacherId: teacher.id,
       ...this.firstOwnerOf(teacher.id, forGroup),
       date,
-      start: firstWindow?.from ?? '15:00',
+      start: start ?? firstWindow?.from ?? '15:00',
       durationMinutes: settings.defaultDurationMinutes,
       ...(settings.repeatByDefault ? { repeat: recurrenceUntilPeriodEnd(this.config().reportPeriods, date, 1) } : {}),
     });
@@ -458,7 +598,10 @@ export class CalendarPage {
 
   /** Öffnet die Stunde zum Termin oder legt sie mit Datum und Uhrzeit des Termins an und wechselt zur Erfassung. */
   protected openLesson({ date, appointment }: Occurrence): void {
-    this.opener.open(appointment, date);
+    if (!this.opener.open(appointment, date)) {
+      this.message.set(this.noLessonText(date));
+      return;
+    }
     this.router.navigate(['/stunden']);
   }
 
@@ -483,7 +626,7 @@ export class CalendarPage {
     if (clashes.length === 0) return true;
     const teachers = this.config().teachers;
     const lines = clashes.slice(0, 3).map(({ date, appointment: other }) => {
-      const teacher = teachers.find((t) => t.id === other.teacherId) ?? teacherOf(student, this.config());
+      const teacher = teachers.find((t) => t.id === other.teacherId) ?? this.studentsStore.teacherOf(student);
       return `• ${formatDate(date)}, ${other.start}–${endTime(other)} bei ${teacher.name}`;
     });
     if (clashes.length > 3) lines.push(`• und ${clashes.length - 3} weitere`);
@@ -495,6 +638,10 @@ export class CalendarPage {
     if (!draft) return;
     if (!ownerOf({ ...draft, id: draft.id ?? '' }) || !draft.date || !draft.start || !(draft.durationMinutes > 0)) {
       this.message.set('Bitte Person oder Gruppe, Datum, Beginn und Dauer angeben.');
+      return;
+    }
+    if (!this.isTeachingDay(draft.date)) {
+      this.message.set(this.noLessonText(draft.date));
       return;
     }
     const { id, lessonId, teacherId: _, calendarTeacherId, extraGroupIds, ...rest } = draft;
@@ -571,7 +718,16 @@ export class CalendarPage {
       windowsByDate: Object.fromEntries(daysBetween(from, to).map((date) => [date, teachingWindowsOn(teacher, this.config(), date)])),
       days: this.scheduleDays(teacher, from, to, true),
     }));
-    if (this.pdfFormat() === 'grid') {
+    if (this.pdfFormat() === 'individual') {
+      // Nur Einzelunterricht: ohne Gruppentermine, allgemeine Termine und Blocker; alle Lehrer bleiben in der Liste.
+      const individual = teachers.map((teacher) => ({
+        ...teacher,
+        days: teacher.days
+          .map((day) => ({ ...day, entries: day.entries.filter((e) => !e.blocked && !e.shared && !e.group) }))
+          .filter((day) => day.entries.length > 0),
+      }));
+      this.pdf.exportIndividualList(this.config(), individual, period, action);
+    } else if (this.pdfFormat() === 'grid') {
       this.pdf.exportScheduleGrid(this.config(), teachers, period, action);
     } else {
       this.pdf.exportSchedule(this.config(), teachers, period, action);
@@ -682,6 +838,7 @@ export class CalendarPage {
               name: names.get(ownerOf(appointment)) ?? '',
               startMinutes: startMinutes(appointment),
               durationMinutes: appointment.durationMinutes,
+              group: !!appointment.groupId,
             })),
         ].sort((a, b) => a.startMinutes - b.startMinutes),
       }))
@@ -713,4 +870,27 @@ export function formatPeriod(from: string, to: string): string {
       ...(year ? { year: 'numeric' } : {}),
     });
   return `${day(from, from.slice(0, 4) !== to.slice(0, 4))} – ${day(to, true)}`;
+}
+
+/** Höhe einer Minute im Wochenraster in Pixeln (eine Stunde = 72 px) */
+const PX_PER_MINUTE = 1.2;
+
+/** Ein Eintrag im Wochenraster */
+type WeekItem = TimeSpan &
+  (
+    | { kind: 'appointment'; occurrence: Occurrence }
+    | { kind: 'shared'; shared: SharedAppointment }
+    | { kind: 'blocker'; blocker: Blocker; time: string }
+  );
+
+interface BoxStyle {
+  top: number;
+  height: number;
+  /** Prozent der Spaltenbreite */
+  left: number;
+  width: number;
+}
+
+function spanOf(appointment: { start: string; durationMinutes: number }): TimeSpan {
+  return { startMinutes: minutesOf(appointment.start), durationMinutes: appointment.durationMinutes };
 }

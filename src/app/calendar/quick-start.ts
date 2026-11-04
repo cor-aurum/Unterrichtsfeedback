@@ -6,6 +6,7 @@ import { StudentsStore } from '../students.store';
 import { Appointment, endTime, startMinutes } from './appointments';
 import { appointmentState } from './appointment-state';
 import { CalendarStore } from './calendar.store';
+import { ReportPeriod } from '../report-period';
 import { LessonOpener } from './lesson-opener';
 import { Clock } from './clock';
 
@@ -27,6 +28,7 @@ export class QuickStart {
   private readonly activeTeacher = inject(ActiveTeacher);
   private readonly groups = inject(GroupsStore);
   private readonly opener = inject(LessonOpener);
+  private readonly reportPeriod = inject(ReportPeriod);
   protected readonly students = inject(StudentsStore);
 
   /** Nur Termine im Kalender des aktiven Lehrers. */
@@ -34,6 +36,8 @@ export class QuickStart {
     const now = this.clock.now();
     const date = today();
     const minutes = now.getHours() * 60 + now.getMinutes();
+    // Termine anderer Zeiträume gehören zu Personen, die hier nicht aktiv sind.
+    if (!this.reportPeriod.contains(date)) return [];
     const inCalendar = this.groups.calendarFilter(this.activeTeacher.teacher());
     return this.calendar.occurrences(date, date, inCalendar).flatMap(({ appointment }) => {
       const start = startMinutes(appointment);

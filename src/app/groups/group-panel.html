@@ -29,7 +29,7 @@
     @if (teachers().length > 1) {
       <label class="muted" for="group-teacher">Termine im Kalender von</label>
       <select id="group-teacher" (change)="store.update(group().id, { teacherId: valueOf($event) })">
-        @for (teacher of teachers(); track teacher.id) {
+        @for (teacher of groupTeachers(); track teacher.id) {
           <option [value]="teacher.id" [selected]="teacher.id === groupTeacherId()">{{ teacher.name }}</option>
         }
       </select>
@@ -43,7 +43,7 @@
         @for (student of entry.students; track student.id) {
           <label>
             <input type="checkbox" [checked]="isMember(student)" (change)="store.toggleMember(group().id, student.id)" />
-            {{ student.name }}
+            {{ student | studentLabel }}
             @if (otherGroupsText(student); as text) {
               <span class="other-groups">{{ text }}</span>
             }

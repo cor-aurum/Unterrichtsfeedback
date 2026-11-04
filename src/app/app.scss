@@ -68,6 +68,7 @@
     }
   }
 
+
   .tools {
     display: flex;
     align-items: center;
@@ -77,6 +78,7 @@
 
   // Die Leiste hat Schrift in --on-primary; die Auswahl selbst ist hell und braucht dunkle Schrift.
   .teacher-select {
+    min-width: 0;
     max-width: 11rem;
     padding: 0.3rem 0.5rem;
     border: none;
@@ -86,6 +88,7 @@
   }
 
   .help {
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -96,6 +99,24 @@
     border-radius: 50%;
     font-weight: 700;
     line-height: 1;
+  }
+
+  // Ganz schmal: Zeitraum, Lehrer und Fragezeichen bekommen eine eigene Zeile unter dem Namen der App.
+  @media (max-width: 520px) {
+    .tools {
+      order: 2;
+      flex-basis: 100%;
+      min-width: 0;
+      margin-left: 0;
+      gap: 0.5rem;
+    }
+
+    // Breite 0 als Ausgangspunkt: Beide Auswahlen teilen sich den Platz, statt ihre volle Textbreite zu verlangen.
+    .teacher-select {
+      flex: 1 1 0;
+      width: 0;
+      max-width: none;
+    }
   }
 }
 

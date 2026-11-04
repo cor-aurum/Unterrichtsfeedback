@@ -1,20 +1,21 @@
 import { computed, inject, Injectable } from '@angular/core';
-import { ConfigStore } from './config.store';
+import { ReportPeriod } from './report-period';
 import { storedSignal } from './stored-signal';
 
 /**
- * Lehrerfilter unter „Stunden erfassen“ für Personen- und Gruppenliste; `null` zeigt alle. Gilt nur auf
- * diesem Gerät. Gibt es den gewählten Lehrer nicht mehr, sind wieder alle zu sehen.
+ * Lehrerfilter für Personen- und Gruppenliste; `null` zeigt alle. Gilt nur auf diesem Gerät. Zur Wahl stehen die
+ * Lehrer des gewählten Berichtszeitraums; ist der gewählte dort nicht (mehr) dabei, sind wieder alle zu sehen.
  */
 @Injectable({ providedIn: 'root' })
 export class TeacherFilter {
-  private readonly config = inject(ConfigStore).config;
+  /** Lehrer, nach denen sich filtern lässt */
+  readonly options = inject(ReportPeriod).teachers;
   private readonly selected = storedSignal<string | null>('feedback.teacherFilter', () => null, (data) =>
     typeof data === 'string' ? data : null,
   );
   readonly teacherId = computed(() => {
     const id = this.selected();
-    return this.config().teachers.some((t) => t.id === id) ? id : null;
+    return this.options().some((t) => t.id === id) ? id : null;
   });
 
   set(teacherId: string | null): void {

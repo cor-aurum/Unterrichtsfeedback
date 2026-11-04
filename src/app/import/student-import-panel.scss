@@ -129,6 +129,10 @@ table {
   text-decoration: underline;
 }
 
+.problem {
+  color: var(--danger);
+}
+
 .skipped td {
   color: var(--muted);
 }

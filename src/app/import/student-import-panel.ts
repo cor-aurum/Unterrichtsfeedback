@@ -1,8 +1,18 @@
 import { Component, computed, inject, output, signal } from '@angular/core';
 import { ConfigStore } from '../config.store';
-import { defaultInstrument, Teacher } from '../model';
+import { GroupsStore } from '../groups.store';
+import { ReportPeriod } from '../report-period';
+import { defaultInstrument, formatShortDate, Teacher } from '../model';
 import { StudentsStore } from '../students.store';
-import { ColumnMapping, columnLabels, guessMapping, ImportRow, ImportTable, readTables, toImportRows } from './student-import';
+import {
+  ColumnMapping,
+  columnLabels,
+  guessMapping,
+  ImportRow,
+  ImportTable,
+  readTables,
+  toImportRows,
+} from './student-import';
 
 type Step = 'file' | 'columns' | 'teachers';
 
@@ -11,7 +21,9 @@ const PREVIEW_ROWS = 5;
 
 /**
  * Import von Personen aus einer Excel- oder CSV-Datei in drei Schritten: Datei wählen, Spalten zuordnen,
- * Lehrer je Person festlegen. Nicht vorhandene Instrumente werden angelegt.
+ * Lehrer je Person festlegen. Nicht vorhandene Instrumente werden angelegt. Personen aus anderen
+ * Berichtszeiträumen werden in den gewählten übernommen statt neu angelegt; benannte Gruppen aus der Datei
+ * werden im gewählten Zeitraum ohne Mitglieder angelegt, z. B. mit der Liste des vorigen Zeitraums.
  */
 @Component({
   selector: 'app-student-import-panel',
@@ -23,7 +35,17 @@ export class StudentImportPanel {
 
   private readonly configStore = inject(ConfigStore);
   private readonly studentsStore = inject(StudentsStore);
-  protected readonly teachers = computed(() => this.configStore.config().teachers);
+  private readonly groupsStore = inject(GroupsStore);
+  private readonly reportPeriod = inject(ReportPeriod);
+  /** Lehrer des gewählten Zeitraums; in ihn kommen die importierten Personen. */
+  protected readonly teachers = computed(() => {
+    const teachers = this.reportPeriod.teachers();
+    return teachers.length > 0 ? teachers : this.configStore.config().teachers;
+  });
+  protected readonly periodName = computed(() => this.reportPeriod.period().name);
+  protected readonly formatShortDate = formatShortDate;
+  /** Zeilen, deren Geburtsdatum nicht lesbar ist; sie werden ohne Geburtsdatum importiert. */
+  protected readonly invalidBirthDates = computed(() => this.rows().filter((row) => row.invalidBirthDate).length);
 
   protected readonly step = signal<Step>('file');
   protected readonly error = signal<string | null>(null);
@@ -31,12 +53,30 @@ export class StudentImportPanel {
   protected readonly tables = signal<ImportTable[]>([]);
   protected readonly tableIndex = signal(0);
   protected readonly table = computed(() => this.tables()[this.tableIndex()] ?? { name: '', rows: [] });
-  protected readonly mapping = signal<ColumnMapping>({ firstName: 0, lastName: null, instrument: null, hasHeader: true });
+  protected readonly mapping = signal<ColumnMapping>({
+    firstName: 0,
+    lastName: null,
+    instrument: null,
+    teacher: null,
+    groups: null,
+    birthDate: null,
+    hasHeader: true,
+  });
   protected readonly columns = computed(() => columnLabels(this.table(), this.mapping().hasHeader));
 
-  protected readonly rows = computed(() =>
-    toImportRows(this.table(), this.mapping(), this.studentsStore.students().map((s) => s.name)),
-  );
+  protected readonly rows = computed(() => {
+    const active = new Set(this.studentsStore.students().map((s) => s.id));
+    const known = this.studentsStore
+      .allStudents()
+      .map((s) => ({ id: s.id, name: s.name, birthDate: s.birthDate, active: active.has(s.id) }));
+    return toImportRows(this.table(), this.mapping(), known, this.teachers());
+  });
+  /** Benannte Gruppen aus der Datei, die es im Zeitraum noch nicht gibt */
+  protected readonly newGroups = computed(() => {
+    const known = new Set(this.groupsStore.groups().map((g) => g.name.trim().toLowerCase()));
+    const names = this.rows().flatMap((row) => row.groups).filter((name) => !known.has(name.toLowerCase()));
+    return [...new Map(names.map((name) => [name.toLowerCase(), name])).values()];
+  });
   protected readonly preview = computed(() => this.rows().slice(0, PREVIEW_ROWS));
   /** Instrumente aus der Datei, die es noch nicht gibt */
   protected readonly newInstruments = computed(() => {
@@ -73,7 +113,10 @@ export class StudentImportPanel {
     this.mapping.set(guessMapping(this.table()));
   }
 
-  protected setColumn(key: 'firstName' | 'lastName' | 'instrument', event: Event): void {
+  protected setColumn(
+    key: 'firstName' | 'lastName' | 'instrument' | 'teacher' | 'groups' | 'birthDate',
+    event: Event,
+  ): void {
     const value = (event.target as HTMLSelectElement).value;
     this.mapping.update((m) => ({ ...m, [key]: value === '' ? null : Number(value) }));
   }
@@ -82,8 +125,14 @@ export class StudentImportPanel {
     this.mapping.update((m) => ({ ...m, hasHeader: (event.target as HTMLInputElement).checked }));
   }
 
+  /** Lehrer aus der Datei, sonst bei Personen anderer Zeiträume ihr bisheriger */
   protected toTeachers(): void {
-    this.assigned.set(new Map());
+    const students = new Map(this.studentsStore.allStudents().map((s) => [s.id, s]));
+    const assigned = this.rows().map((row) => {
+      const former = row.formerId ? students.get(row.formerId) : undefined;
+      return [row.line, row.teacherId ?? (former ? this.studentsStore.teacherOf(former).id : null)] as const;
+    });
+    this.assigned.set(new Map(assigned.filter((entry): entry is [number, string] => entry[1] !== null)));
     this.included.set(new Map(this.rows().map((row) => [row.line, !row.existing])));
     this.step.set('teachers');
   }
@@ -117,19 +166,38 @@ export class StudentImportPanel {
 
   protected import(): void {
     const rows = this.rows().filter((row) => this.isIncluded(row));
+    const [former, fresh] = [rows.filter((row) => row.formerId), rows.filter((row) => !row.formerId)];
     const instrumentsBefore = this.configStore.config().instruments.length;
-    const instrumentIds = this.configStore.ensureInstruments(rows.map((row) => row.instrument));
+    const instrumentIds = this.configStore.ensureInstruments(fresh.map((row) => row.instrument));
     const fallback = defaultInstrument(this.configStore.config()).id;
     this.studentsStore.addStudents(
-      rows.map((row) => ({
+      fresh.map((row) => ({
         name: row.name,
+        birthDate: row.birthDate,
         instrumentId: (row.instrument && instrumentIds.get(row.instrument.toLowerCase())) || fallback,
         teacherId: this.teacherOf(row),
       })),
     );
+    this.studentsStore.addToPeriod(former.map((row) => ({ studentId: row.formerId!, teacherId: this.teacherOf(row) })));
+    // Übernommene Personen ohne Geburtsdatum bekommen das aus der Datei.
+    const students = new Map(this.studentsStore.allStudents().map((s) => [s.id, s]));
+    for (const row of former.filter((r) => r.birthDate && !students.get(r.formerId!)?.birthDate)) {
+      this.studentsStore.setBirthDate(row.formerId!, row.birthDate!);
+    }
+    const groups = this.groupsStore.addNamed(
+      this.rows().flatMap((row) => row.groups.map((name) => ({ name, teacherId: this.teacherOf(row) }))),
+    );
     const created = this.configStore.config().instruments.length - instrumentsBefore;
-    const people = rows.length === 1 ? '1 Person' : `${rows.length} Personen`;
-    const instruments = created === 0 ? '' : created === 1 ? ', 1 Instrument neu angelegt' : `, ${created} Instrumente neu angelegt`;
-    this.closed.emit(`${people} importiert${instruments}.`);
+    const parts = [
+      fresh.length > 0 ? `${count(fresh.length, 'Person', 'Personen')} importiert` : '',
+      former.length > 0 ? `${count(former.length, 'Person', 'Personen')} aus anderen Zeiträumen übernommen` : '',
+      created > 0 ? `${count(created, 'Instrument', 'Instrumente')} neu angelegt` : '',
+      groups > 0 ? `${count(groups, 'Gruppe', 'Gruppen')} ohne Mitglieder angelegt` : '',
+    ];
+    this.closed.emit(`${parts.filter(Boolean).join(', ') || 'Nichts importiert'}.`);
   }
+}
+
+function count(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
 }

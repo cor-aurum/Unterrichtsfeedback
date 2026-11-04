@@ -52,32 +52,6 @@
   border-top: 1px solid var(--border);
 }
 
-.week {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 0.75rem;
-}
-
-.day {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.75rem;
-
-  &.today {
-    border: 2px solid var(--primary);
-  }
-
-  h3 {
-    margin: 0;
-  }
-}
-
-/* Die Einträge eines Tages sortieren sich über `order` nach Uhrzeit; der Kopf bleibt oben. */
-.day-head {
-  order: -1;
-}
-
 .group-choice {
   display: flex;
   flex-wrap: wrap;
@@ -112,9 +86,6 @@
   }
 }
 
-.day-head .icon {
-  padding: 0.1rem 0.5rem;
-}
 
 .appointment {
   display: flex;
@@ -146,10 +117,6 @@
   }
 }
 
-.empty {
-  margin: 0;
-  font-size: 0.85rem;
-}
 
 .period {
   flex-wrap: wrap;
@@ -349,5 +316,156 @@
     border: 1px solid var(--primary-text);
     border-left: 3px double var(--primary-text);
     background: var(--card);
+  }
+}
+
+.period-jump {
+  width: auto;
+  max-width: 10rem;
+}
+
+/* Auf schmalen Bildschirmen umbrechen statt die Woche zu quetschen */
+.week-nav {
+  flex-wrap: wrap;
+
+  strong.grow {
+    min-width: 11rem;
+  }
+}
+
+/* Tage ohne Berichtszeitraum: kein Unterricht */
+.no-teaching {
+  margin: 0.25rem 0 0;
+  font-style: italic;
+}
+
+/* Wochenraster: eine Spalte je Tag, Einträge nach Beginn und Dauer; auf schmalen Bildschirmen seitlich scrollbar */
+.week-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: 3rem repeat(7, minmax(7.5rem, 1fr));
+  min-width: calc(3rem + 7 * 7.5rem);
+}
+
+/* Spalte mit den Uhrzeiten bleibt beim seitlichen Scrollen stehen. */
+.corner,
+.time-axis {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+}
+
+.day-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.4rem 0.3rem;
+  border-left: 1px solid var(--border);
+
+  h3 {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+
+  .icon {
+    padding: 0.05rem 0.45rem;
+  }
+
+  &.today h3 {
+    color: var(--primary-text);
+  }
+}
+
+.all-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0 0.3rem 0.4rem;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.all-day-label {
+  border-bottom: 1px solid var(--border);
+}
+
+.time-axis {
+  position: sticky;
+
+  .hour {
+    position: absolute;
+    right: 0.35rem;
+    font-size: 0.7rem;
+    color: var(--muted);
+    transform: translateY(-0.45em);
+  }
+}
+
+/* Stundenlinien als Hintergrund; jede Stunde ist 72 px hoch (siehe PX_PER_MINUTE). */
+.day-body {
+  position: relative;
+  border-left: 1px solid var(--border);
+  background: repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent 72px);
+  cursor: copy;
+
+  &.today {
+    background-color: var(--primary-light);
+  }
+
+  &.closed {
+    cursor: default;
+    background-color: var(--bg);
+  }
+}
+
+/* Unterrichtszeiten des Lehrers, hell hinterlegt */
+.window-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgb(0 0 0 / 0.035);
+  pointer-events: none;
+}
+
+/* Einträge im Raster: absolut nach Beginn, Dauer und Spur; was nicht passt, wird abgeschnitten. */
+.entry {
+  position: absolute;
+  box-sizing: border-box;
+  gap: 0;
+  padding: 0.15rem 0.3rem;
+  overflow: hidden;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--card);
+
+  .time,
+  .detail,
+  .state {
+    font-size: 0.7rem;
+  }
+
+  .name {
+    font-size: 0.8rem;
+  }
+}
+
+.blocker.full-day {
+  width: 100%;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+
+  .detail {
+    font-size: 0.7rem;
+    color: var(--muted);
   }
 }

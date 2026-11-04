@@ -1,4 +1,5 @@
 import { Component, computed, inject, output, signal } from '@angular/core';
+import { StudentLabelPipe } from '../student-label.pipe';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
@@ -57,6 +58,7 @@ interface Proposal {
  */
 @Component({
   selector: 'app-auto-schedule-panel',
+  imports: [StudentLabelPipe],
   templateUrl: './auto-schedule-panel.html',
   styleUrl: './auto-schedule-panel.scss',
 })

@@ -22,6 +22,7 @@ import {
   ReportPeriodEntry,
   Section,
   Student,
+  Teacher,
   TeachingWindow,
   today,
 } from './model';
@@ -128,7 +129,7 @@ export class PdfExport {
     action: 'open' | 'share',
   ): Promise<void> {
     const list = await listDocument(config, config.calendarPdf.listTitle, range);
-    teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0));
+    teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0, true));
     list.writer.addFooters();
     await deliver(`Unterrichtsplan_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
   }
@@ -139,9 +140,25 @@ export class PdfExport {
    */
   async exportAppointmentList(config: FeedbackConfig, days: ScheduleDay[], range: SchedulePeriod, action: 'open' | 'share'): Promise<void> {
     const list = await listDocument(config, config.calendarPdf.eventListTitle, range);
-    writeScheduleDays(list, days, () => undefined);
+    writeScheduleDays(list, days, true, () => undefined);
     list.writer.addFooters();
     await deliver(`Termine_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
+  }
+
+  /**
+   * Nur Einzelunterricht, alle Lehrer: Jeder Lehrer beginnt auf einer neuen Seite, seine Tage folgen darunter ohne
+   * Seitenwechsel.
+   */
+  async exportIndividualList(
+    config: FeedbackConfig,
+    teachers: ScheduleTeacher[],
+    range: SchedulePeriod,
+    action: 'open' | 'share',
+  ): Promise<void> {
+    const list = await listDocument(config, config.calendarPdf.individualListTitle, range);
+    teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0, false));
+    list.writer.addFooters();
+    await deliver(`Einzelunterricht_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
   }
 
   /** Tagesplan im Querformat: je Tag eine Seite mit allen Lehrern als Spalten (siehe `schedule-grid-pdf.ts`). */
@@ -207,7 +224,7 @@ async function listDocument(config: FeedbackConfig, title: string, range: Schedu
  * Jeder Tag eines Lehrers steht auf einer eigenen Seite, mit Name und Raum darüber. Der erste Lehrer beginnt direkt
  * unter der Überschrift der Liste.
  */
-function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, first: boolean): void {
+function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, first: boolean, pagePerDay: boolean): void {
   const { writer } = list;
   if (!first) list.newPage();
   const heading = () => {
@@ -218,22 +235,26 @@ function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, firs
     writer.gap(4, false);
   };
   heading();
-  writeScheduleDays(list, teacher.days, heading);
+  writeScheduleDays(list, teacher.days, pagePerDay, heading);
 }
 
 /**
  * Je Tag das Datum und darunter die Termine mit Uhrzeit; jeder Tag nach dem ersten beginnt auf einer neuen Seite,
  * unter dem Kopf, den `heading` dort schreibt.
  */
-function writeScheduleDays(list: ListDocument, days: ScheduleDay[], heading: () => void): void {
+function writeScheduleDays(list: ListDocument, days: ScheduleDay[], pagePerDay: boolean, heading: () => void): void {
   const { writer } = list;
   if (days.length === 0) {
     writer.text(list.noAppointments, { size: 11, italic: true, color: writer.colors.muted });
   }
   days.forEach((day, index) => {
-    if (index > 0) {
+    if (index > 0 && pagePerDay) {
       list.newPage();
       heading();
+    } else if (index > 0) {
+      // Fortlaufend: Abstand zum vorigen Tag; ein Tag beginnt nicht ganz unten auf der Seite.
+      writer.gap(4, false);
+      writer.keepTogether(16);
     }
     writer.text(formatLongDate(day.date), { size: 12, bold: true, color: writer.colors.accentText, gapAfter: 1.5 });
     for (const entry of day.entries) {
@@ -271,6 +292,8 @@ export interface ScheduleEntry {
   durationMinutes: number;
   /** Blocker des Lehrers statt eines Termins */
   blocked?: boolean;
+  /** Gruppentermin */
+  group?: boolean;
   /** Allgemeiner Termin mehrerer Lehrer, z. B. eine Konferenz */
   shared?: boolean;
 }
@@ -302,6 +325,8 @@ export interface SharedSpan {
 interface Recipient {
   config: FeedbackConfig;
   student: Student;
+  /** Lehrer im Berichtszeitraum, für die Platzhalter */
+  teacher: Teacher;
   /** Wählt die Varianten der festen Inhalte */
   period: ReportPeriodEntry;
 }
@@ -317,7 +342,8 @@ function recipient(
   fill: (text: string) => string = (text) => text,
 ): Recipient {
   const fillAll = (text: string) => fill(text).replace(/\{zeitraum\}/gi, period.name);
-  return { config: withConfigTexts(config, fillAll), student: withStudentTexts(student, fillAll), period };
+  const teacher = teacherOf(student, config, period.id);
+  return { config: withConfigTexts(config, fillAll), student: withStudentTexts(student, fillAll), teacher, period };
 }
 
 function withConfigTexts(config: FeedbackConfig, fill: (text: string) => string): FeedbackConfig {
@@ -362,7 +388,7 @@ function groupRecipient(group: Group, students: Student[], config: FeedbackConfi
     id: group.id,
     name: label,
     instrumentId: null,
-    teacherId: group.teacherId,
+    periods: { [period.id]: group.teacherId },
     generalTexts: group.generalTexts,
     lessons: group.lessons,
   };
@@ -439,31 +465,30 @@ function deliver(fileName: string, pdf: Blob, action: 'open' | 'share'): Promise
  * Stunden ganz.
  */
 function writeStudent(writer: PdfWriter, recipient: Recipient): void {
-  const { config, student } = recipient;
-  const lessons = sortedLessons(student);
-  writeHeader(writer, config, student, lessons);
+  const lessons = sortedLessons(recipient.student);
+  writeHeader(writer, recipient, lessons);
   writeFixedBlocks(writer, recipient, 'start');
-  writeGeneralPart(writer, config, lessons, student);
+  writeGeneralPart(writer, recipient, lessons);
 
   if (lessons.length === 0) {
     writer.text('Es sind noch keine Unterrichtsstunden erfasst.', { size: 11, italic: true, color: writer.colors.muted });
-  } else if (!lessons.some((lesson) => paragraphsOf(config, lesson, student).length > 0)) {
+  } else if (!lessons.some((lesson) => paragraphsOf(recipient, lesson).length > 0)) {
     // Keine Stunde hat eigene Notizen: weder Zeitleiste noch „keine Notizen“-Hinweise.
   } else if (lessons.length === 1) {
-    writeParagraphs(writer, paragraphsOf(config, lessons[0], student), { indent: 0, rail: false });
+    writeParagraphs(writer, paragraphsOf(recipient, lessons[0]), { indent: 0, rail: false });
     writer.gap(8, false);
   } else {
-    lessons.forEach((lesson) => writeTimelineEntry(writer, config, lesson, student));
+    lessons.forEach((lesson) => writeTimelineEntry(writer, recipient, lesson));
   }
 
   writeFixedBlocks(writer, recipient, 'end');
 }
 
-function writeFixedBlocks(writer: PdfWriter, { config, student, period }: Recipient, position: BlockPosition): void {
-  const context = { instrument: instrumentOf(student, config), teacher: teacherOf(student, config), periodId: period.id };
+function writeFixedBlocks(writer: PdfWriter, { config, student, teacher, period }: Recipient, position: BlockPosition): void {
+  const context = { instrument: instrumentOf(student, config), teacher, periodId: period.id };
   for (const block of config.blocks.filter((b) => b.position === position)) {
     const content = contentFor(block, context);
-    const text = fillPlaceholders(content.text, student, config).trim();
+    const text = fillPlaceholders(content.text, student, teacher, config).trim();
     if (block.type === 'image' && content.image) {
       // Am Ende soll ein Bild nicht allein auf eine neue Seite rutschen.
       writer.image(content.image, position === 'end');
@@ -481,10 +506,10 @@ function writeFixedBlocks(writer: PdfWriter, { config, student, period }: Recipi
  * Abschnitts, der in irgendeiner Stunde angehakt ist, erscheint genau einmal; Freitext kommt aus
  * den allgemeinen Texten der Person.
  */
-function writeGeneralPart(writer: PdfWriter, config: FeedbackConfig, lessons: Lesson[], student: Student): void {
+function writeGeneralPart(writer: PdfWriter, { config, student, teacher }: Recipient, lessons: Lesson[]): void {
   const paragraphs = config.sections
     .filter((section) => section.scope === 'general')
-    .map((section) => fillPlaceholders(generalSentencesOf(section, lessons, student).join(' '), student, config))
+    .map((section) => fillPlaceholders(generalSentencesOf(section, lessons, student).join(' '), student, teacher, config))
     .filter((paragraph) => paragraph.length > 0);
   if (paragraphs.length === 0) return;
   writeParagraphs(writer, paragraphs, { indent: 0, rail: false });
@@ -509,9 +534,9 @@ function writeFixedText(writer: PdfWriter, text: string): void {
 }
 
 /** Kopf auf der ersten Seite einer Person; Kopf- und Fußzeile der Folgeseiten merkt sich der Writer. */
-function writeHeader(writer: PdfWriter, config: FeedbackConfig, student: Student, lessons: Lesson[]): void {
+function writeHeader(writer: PdfWriter, { config, student, teacher }: Recipient, lessons: Lesson[]): void {
   const layout = config.pdfLayout;
-  const fill = (text: string) => fillPlaceholders(text, student, config).trim();
+  const fill = (text: string) => fillPlaceholders(text, student, teacher, config).trim();
   writer.beginSection(fill(layout.runningHeader), {
     left: fill(layout.footerLeft),
     center: fill(layout.footerCenter),
@@ -532,10 +557,10 @@ function infoLine(lessons: Lesson[]): string {
   return `${lessons.length} Unterrichtsstunden · Stand ${formatLongDate(today())}`;
 }
 
-function writeTimelineEntry(writer: PdfWriter, config: FeedbackConfig, lesson: Lesson, student: Student): void {
+function writeTimelineEntry(writer: PdfWriter, recipient: Recipient, lesson: Lesson): void {
   writer.keepTogether(22);
   writer.lessonHeading(formatLongDate(lesson.date));
-  writeParagraphs(writer, paragraphsOf(config, lesson, student), { indent: LESSON_INDENT, rail: true });
+  writeParagraphs(writer, paragraphsOf(recipient, lesson), { indent: LESSON_INDENT, rail: true });
   writer.gap(8, false);
 }
 
@@ -550,10 +575,10 @@ function writeParagraphs(writer: PdfWriter, paragraphs: string[], layout: { inde
 }
 
 /** Jeder Abschnitt der Stunde wird ein eigener Absatz; leere Abschnitte entfallen. */
-function paragraphsOf(config: FeedbackConfig, lesson: Lesson, student: Student): string[] {
+function paragraphsOf({ config, student, teacher }: Recipient, lesson: Lesson): string[] {
   return config.sections
     .filter((section) => section.scope === 'lesson')
-    .map((section) => fillPlaceholders(sentencesOf(section, lesson).join(' '), student, config, lesson))
+    .map((section) => fillPlaceholders(sentencesOf(section, lesson).join(' '), student, teacher, config, lesson))
     .filter((paragraph) => paragraph.length > 0);
 }
 

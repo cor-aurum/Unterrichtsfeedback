@@ -21,23 +21,19 @@ export class LessonOpener {
     return owner && lessonOf(owner, date, appointment);
   }
 
-  open(appointment: Appointment, date: string): void {
+  /** `false`, wenn die Stunde nicht angelegt werden darf (außerhalb des gewählten Berichtszeitraums) */
+  open(appointment: Appointment, date: string): boolean {
     const lesson = this.lessonFor(appointment, date);
     const time = { start: appointment.start, durationMinutes: appointment.durationMinutes };
     if (appointment.groupId) {
-      if (lesson) {
-        this.groups.select(appointment.groupId);
-        this.groups.selectedLessonId.set(lesson.id);
-      } else {
-        this.groups.openLesson(appointment.groupId, date, time);
-      }
+      if (!lesson) return this.groups.openLesson(appointment.groupId, date, time);
+      this.groups.select(appointment.groupId);
+      this.groups.selectedLessonId.set(lesson.id);
     } else if (appointment.studentId) {
-      if (lesson) {
-        this.students.selectStudent(appointment.studentId);
-        this.students.selectedLessonId.set(lesson.id);
-      } else {
-        this.students.openLesson(appointment.studentId, date, time);
-      }
+      if (!lesson) return this.students.openLesson(appointment.studentId, date, time);
+      this.students.selectStudent(appointment.studentId);
+      this.students.selectedLessonId.set(lesson.id);
     }
+    return true;
   }
 }

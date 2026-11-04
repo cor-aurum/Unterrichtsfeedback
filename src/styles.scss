@@ -81,8 +81,10 @@ h3 {
   color: var(--muted);
 }
 
+/* Reihen brechen um, statt auf schmalen Bildschirmen aus ihrem Container zu laufen. */
 .row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
 }
@@ -107,6 +109,9 @@ textarea {
   border-radius: 6px;
   background: white;
   color: inherit;
+  // Lange Auswahlen und Datumsfelder werden schmaler, statt den Container zu sprengen.
+  max-width: 100%;
+  min-width: 0;
 
   &:focus {
     outline: 2px solid var(--primary);
@@ -129,6 +134,12 @@ button {
   color: var(--on-primary);
   cursor: pointer;
   white-space: nowrap;
+  max-width: 100%;
+
+  // Auf schmalen Bildschirmen brechen lange Beschriftungen um, statt aus dem Container zu laufen.
+  @media (max-width: 600px) {
+    white-space: normal;
+  }
 
   &:hover:not(:disabled) {
     filter: brightness(1.1);

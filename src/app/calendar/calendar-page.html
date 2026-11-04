@@ -4,6 +4,9 @@
   <button class="secondary" (click)="newShared()" title="Termin für mehrere Lehrer, z. B. eine Konferenz">
     + Allgemeiner Termin
   </button>
+  <button class="secondary" (click)="openSharedImport()" title="Allgemeine Termine aus einer Excel- oder CSV-Datei">
+    Termine importieren …
+  </button>
   <button class="secondary" [disabled]="students().length === 0" (click)="openAutoSchedule()">
     Automatisch einplanen
   </button>
@@ -18,6 +21,10 @@
   <button [disabled]="!anyStudents() && allGroupsEmpty()" (click)="newAppointment()">+ Termin</button>
 </div>
 
+@if (sharedImportOpen()) {
+  <app-shared-import-panel (closed)="closeSharedImport($event)" />
+}
+
 @if (autoScheduleOpen()) {
   <app-auto-schedule-panel (closed)="closeAutoSchedule($event)" />
 }
@@ -28,7 +35,7 @@
 
 @if (students().length === 0 && groups().length === 0) {
   <p class="card muted">
-    {{ teacher().name }} hat noch keine Personen. Lege sie unter <a routerLink="/stunden">Stunden erfassen</a> an
+    {{ teacher().name }} hat noch keine Personen. Lege sie unter <a routerLink="/personen">Personen</a> an
     (oder ordne sie dort diesem Lehrer zu), dann kannst du ihnen Termine geben.
   </p>
 }
@@ -96,7 +103,7 @@
 }
 
 @if (sharedDraft(); as s) {
-  <app-shared-appointment-form [initial]="s" (closed)="sharedDraft.set(null)" />
+  <app-shared-appointment-form [initial]="s" (closed)="closeShared($event)" />
 }
 
 @if (draft(); as d) {
@@ -118,14 +125,14 @@
         <select [disabled]="draftFollowsLesson(d)" (change)="setOwner(valueOf($event))">
           <optgroup label="Personen">
             @for (student of studentsOf(d.calendarTeacherId); track student.id) {
-              <option [value]="'s:' + student.id" [selected]="ownerValue(d) === 's:' + student.id">{{ student.name }}</option>
+              <option [value]="'s:' + student.id" [selected]="ownerValue(d) === 's:' + student.id">{{ student | studentLabel }}</option>
             }
           </optgroup>
           @if (otherStudentsOf(d.calendarTeacherId).length > 0) {
             <optgroup label="Personen anderer Lehrer (Ausnahme)">
               @for (student of otherStudentsOf(d.calendarTeacherId); track student.id) {
                 <option [value]="'s:' + student.id" [selected]="ownerValue(d) === 's:' + student.id">
-                  {{ student.name }} ({{ teacherName(student) }})
+                  {{ student | studentLabel }} ({{ teacherName(student) }})
                 </option>
               }
             </optgroup>
@@ -184,8 +191,11 @@
         Stunde; er verschwindet, wenn du die Stunde löschst oder ihre Uhrzeit entfernst.
       </p>
     }
+    @if (!isTeachingDay(d.date)) {
+      <p class="message error">{{ noLessonText(d.date) }}</p>
+    }
     <div class="row actions">
-      <button (click)="save()">Speichern</button>
+      <button [disabled]="!isTeachingDay(d.date)" (click)="save()">Speichern</button>
       <button class="secondary" (click)="draft.set(null)">Abbrechen</button>
       <span class="grow"></span>
       @if (d.id && !draftFollowsLesson(d)) {
@@ -219,6 +229,12 @@
   <button class="icon" (click)="moveWeek(-1)" title="Vorherige Woche" aria-label="Vorherige Woche">‹</button>
   <strong class="grow">{{ weekLabel() }}</strong>
   <button class="secondary" (click)="showToday()">Heute</button>
+  <select class="period-jump" aria-label="Zum Beginn eines Berichtszeitraums" (change)="showPeriodStart($event)">
+    <option value="" selected disabled>Zum Beginn …</option>
+    @for (period of periodsByStart(); track period.id) {
+      <option [value]="period.id">{{ period.name }}</option>
+    }
+  </select>
   <button class="icon" (click)="moveWeek(1)" title="Nächste Woche" aria-label="Nächste Woche">›</button>
 </div>
 <div class="legend" aria-label="Legende">
@@ -229,85 +245,146 @@
   <span><i class="swatch shared"></i>Allgemeiner Termin</span>
 </div>
 
-<div class="week">
-  @for (day of week(); track day.date) {
-    <section class="card day" [class.today]="day.date === today">
-      <div class="row day-head">
+<!-- Zeitraster: Kopfzeile, Zeile für Ganztägiges und die Uhrzeiten als eigene Zeilen, damit alle Tage auf einer Höhe beginnen -->
+<div class="week-scroll">
+  <div class="week-grid">
+    <div class="corner"></div>
+    @for (day of week(); track day.date) {
+      <div class="day-head" [class.today]="day.date === today">
         <h3 class="grow">{{ day.label }}</h3>
-        @if (anyStudents() || !allGroupsEmpty()) {
+        @if (day.inPeriod && (anyStudents() || !allGroupsEmpty())) {
           <button class="icon" (click)="newAppointment(day.date)" title="Termin an diesem Tag" aria-label="Termin an diesem Tag">+</button>
         }
       </div>
-      @for (entry of day.blockers; track entry.blocker.id) {
-        <button class="blocker" [style.order]="entry.order" (click)="editBlocker(entry.blocker)">
-          <span class="time">{{ entry.time }}</span>
-          <span class="name">{{ entry.blocker.title || 'Blockiert' }}</span>
-          @if (showAll()) {
-            <span class="detail">{{ teacherNameOf(entry.blocker.teacherId) }}</span>
-          }
-        </button>
-      }
-      @for (shared of day.shared; track shared.id) {
-        <button class="shared" [style.order]="minutesOf(shared.start)" (click)="editShared(shared)">
-          <span class="headline">
-            <span class="time">{{ shared.start }}–{{ sharedEndTime(shared) }}</span>
-            <span class="name">{{ shared.title }}</span>
-          </span>
-          @if (sharedDetail(shared); as detail) {
-            <span class="detail">{{ detail }}</span>
-          }
-        </button>
-      }
-      @for (occurrence of day.occurrences; track occurrence.appointment.id) {
-        @if (studentOf(occurrence.appointment); as student) {
-          <button
-            class="appointment"
-            [style.order]="minutesOf(occurrence.appointment.start)"
-            [attr.data-state]="stateOf(occurrence)"
-            (click)="edit(occurrence)"
-          >
-            <span class="time">{{ occurrence.appointment.start }}–{{ endTime(occurrence.appointment) }}</span>
-            <span class="name">{{ student.name }}</span>
-            <span class="detail">
-              {{ teacherTag(occurrence.appointment) }}{{ instrumentName(student) }}
-              @if (occurrence.appointment.teacherId) {
-                · Schüler von {{ teacherName(student) }}
-              }
-              @if (occurrence.appointment.repeat) {
-                · {{ repeatText(occurrence.appointment) }}
-              }
-            </span>
-            @if (stateOf(occurrence) !== 'planned') {
-              <span class="state">{{ stateLabels[stateOf(occurrence)] }}</span>
-            }
-          </button>
-        } @else if (groupOf(occurrence.appointment); as group) {
-          <button
-            class="appointment group"
-            [style.order]="minutesOf(occurrence.appointment.start)"
-            [attr.data-state]="stateOf(occurrence)"
-            (click)="edit(occurrence)"
-          >
-            <span class="time">{{ occurrence.appointment.start }}–{{ endTime(occurrence.appointment) }}</span>
-            <span class="name">Gruppe {{ groupLabel(group) }}</span>
-            <span class="detail">
-              {{ teacherTag(occurrence.appointment) }}{{ memberCount(group) }} {{ memberCount(group) === 1 ? 'Person' : 'Personen' }}
-              @if (occurrence.appointment.repeat) {
-                · {{ repeatText(occurrence.appointment) }}
-              }
-            </span>
-            @if (stateOf(occurrence) !== 'planned') {
-              <span class="state">{{ stateLabels[stateOf(occurrence)] }}</span>
-            }
+    }
+
+    <div class="corner all-day-label"></div>
+    @for (day of week(); track day.date) {
+      <div class="all-day" [class.today]="day.date === today">
+        @if (!day.teaching) {
+          <p class="muted small no-teaching">Kein Berichtszeitraum – kein Unterricht</p>
+        } @else if (day.otherPeriod) {
+          <p class="muted small no-teaching">Gehört zu „{{ day.otherPeriod }}“</p>
+        }
+        @for (blocker of day.fullDayBlockers; track blocker.id) {
+          <button class="blocker full-day" (click)="editBlocker(blocker)">
+            <span class="name">{{ blocker.title || 'Blockiert' }}</span>
+            <span class="detail">ganztägig{{ showAll() ? ' · ' + teacherNameOf(blocker.teacherId) : '' }}</span>
           </button>
         }
-      } @empty {
-        @if (day.blockers.length === 0 && day.shared.length === 0) {
-          <p class="muted empty">Keine Termine</p>
-        }
+      </div>
+    }
+
+    <div class="time-axis" [style.height.px]="gridHeight()">
+      @for (hour of hourLabels(); track hour.label) {
+        <span class="hour" [style.top.px]="hour.top">{{ hour.label }}</span>
       }
-    </section>
-  }
+    </div>
+    @for (day of week(); track day.date) {
+      <div
+        class="day-body"
+        [class.today]="day.date === today"
+        [class.closed]="!day.inPeriod"
+        [style.height.px]="gridHeight()"
+        [title]="day.inPeriod ? 'Klicken: neuer Termin zu dieser Uhrzeit' : ''"
+        (click)="day.inPeriod && newAt(day.date, $event)"
+      >
+        @for (window of day.windows; track $index) {
+          <div class="window-band" [style.top.px]="windowBox(window).top" [style.height.px]="windowBox(window).height"></div>
+        }
+        @for (item of day.items; track $index) {
+          @switch (item.kind) {
+            @case ('blocker') {
+              <button
+                class="entry blocker"
+                [style.top.px]="boxOf(item).top"
+                [style.height.px]="boxOf(item).height"
+                [style.left.%]="boxOf(item).left"
+                [style.width.%]="boxOf(item).width"
+                [title]="item.time + ' ' + (item.blocker.title || 'Blockiert')"
+                (click)="editBlocker(item.blocker)"
+              >
+                <span class="time">{{ item.time }}</span>
+                <span class="name">{{ item.blocker.title || 'Blockiert' }}</span>
+                @if (showAll()) {
+                  <span class="detail">{{ teacherNameOf(item.blocker.teacherId) }}</span>
+                }
+              </button>
+            }
+            @case ('shared') {
+              <button
+                class="entry shared"
+                [style.top.px]="boxOf(item).top"
+                [style.height.px]="boxOf(item).height"
+                [style.left.%]="boxOf(item).left"
+                [style.width.%]="boxOf(item).width"
+                [title]="item.shared.start + '–' + sharedEndTime(item.shared) + ' ' + item.shared.title"
+                (click)="editShared(item.shared)"
+              >
+                <span class="time">{{ item.shared.start }}–{{ sharedEndTime(item.shared) }}</span>
+                <span class="name">{{ item.shared.title }}</span>
+                @if (sharedDetail(item.shared); as detail) {
+                  <span class="detail">{{ detail }}</span>
+                }
+              </button>
+            }
+            @case ('appointment') {
+              @if (studentOf(item.occurrence.appointment); as student) {
+                <button
+                  class="entry appointment"
+                  [attr.data-state]="stateOf(item.occurrence)"
+                  [style.top.px]="boxOf(item).top"
+                  [style.height.px]="boxOf(item).height"
+                  [style.left.%]="boxOf(item).left"
+                  [style.width.%]="boxOf(item).width"
+                  [title]="item.occurrence.appointment.start + '–' + endTime(item.occurrence.appointment) + ' ' + student.name"
+                  (click)="edit(item.occurrence)"
+                >
+                  <span class="time">{{ item.occurrence.appointment.start }}–{{ endTime(item.occurrence.appointment) }}</span>
+                  <span class="name">{{ student | studentLabel }}</span>
+                  <span class="detail">
+                    {{ teacherTag(item.occurrence.appointment) }}{{ instrumentName(student) }}
+                    @if (item.occurrence.appointment.teacherId) {
+                      · Schüler von {{ teacherName(student) }}
+                    }
+                    @if (item.occurrence.appointment.repeat) {
+                      · {{ repeatText(item.occurrence.appointment) }}
+                    }
+                  </span>
+                  @if (stateOf(item.occurrence) !== 'planned') {
+                    <span class="state">{{ stateLabels[stateOf(item.occurrence)] }}</span>
+                  }
+                </button>
+              } @else if (groupOf(item.occurrence.appointment); as group) {
+                <button
+                  class="entry appointment group"
+                  [attr.data-state]="stateOf(item.occurrence)"
+                  [style.top.px]="boxOf(item).top"
+                  [style.height.px]="boxOf(item).height"
+                  [style.left.%]="boxOf(item).left"
+                  [style.width.%]="boxOf(item).width"
+                  [title]="item.occurrence.appointment.start + '–' + endTime(item.occurrence.appointment) + ' Gruppe ' + groupLabel(group)"
+                  (click)="edit(item.occurrence)"
+                >
+                  <span class="time">{{ item.occurrence.appointment.start }}–{{ endTime(item.occurrence.appointment) }}</span>
+                  <span class="name">Gruppe {{ groupLabel(group) }}</span>
+                  <span class="detail">
+                    {{ teacherTag(item.occurrence.appointment) }}{{ memberCount(group) }} {{ memberCount(group) === 1 ? 'Person' : 'Personen' }}
+                    @if (item.occurrence.appointment.repeat) {
+                      · {{ repeatText(item.occurrence.appointment) }}
+                    }
+                  </span>
+                  @if (stateOf(item.occurrence) !== 'planned') {
+                    <span class="state">{{ stateLabels[stateOf(item.occurrence)] }}</span>
+                  }
+                </button>
+              }
+            }
+          }
+        }
+      </div>
+    }
+  </div>
 </div>
 
 <app-lesson-load-panel />
@@ -318,6 +395,10 @@
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'list'" (change)="pdfFormat.set('list')" />
       Liste
+    </label>
+    <label>
+      <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'individual'" (change)="pdfFormat.set('individual')" />
+      Liste nur mit Einzelunterricht (je Lehrer eine neue Seite)
     </label>
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'events'" (change)="pdfFormat.set('events')" />
@@ -350,5 +431,7 @@
     }
   </div>
 </section>
+
+<app-calendar-table-panel />
 
 <app-ical-export-panel />

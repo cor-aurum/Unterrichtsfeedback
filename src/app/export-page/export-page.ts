@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { StudentLabelPipe } from '../student-label.pipe';
 import { RouterLink } from '@angular/router';
 import { BackupService } from '../backup';
 import { FolderSync } from '../sync/folder-sync';
@@ -18,7 +19,7 @@ const EMPTY_WEBDAV: WebDavSettings = { url: '', user: '', password: '', folder: 
 
 @Component({
   selector: 'app-export-page',
-  imports: [RouterLink],
+  imports: [RouterLink, StudentLabelPipe],
   templateUrl: './export-page.html',
   styleUrl: './export-page.scss',
 })
@@ -116,10 +117,15 @@ export class ExportPage {
   protected async importBackup(input: HTMLInputElement): Promise<void> {
     const file = input.files?.[0];
     input.value = '';
-    if (!file || !confirm('Alle Personen, Stunden und die Konfiguration in diesem Browser werden ersetzt. Fortfahren?')) {
-      return;
-    }
+    if (!file) return;
     try {
+      // Die Sicherung eines Zeitraums ersetzt ebenfalls alles; darauf eigens hinweisen.
+      const periodId = await this.backup.periodOf(file);
+      const text = periodId
+        ? 'Die Datei enthält nur einen Berichtszeitraum. Alle Daten auf diesem Gerät werden durch sie ersetzt, auch ' +
+          'die Personen und Stunden anderer Zeiträume. Fortfahren?'
+        : 'Alle Personen, Stunden und die Konfiguration auf diesem Gerät werden ersetzt. Fortfahren?';
+      if (!confirm(text)) return;
       await this.backup.importFile(file);
       this.studentId.set(null);
       this.message.set({ text: `Daten aus „${file.name}“ importiert.`, error: false });

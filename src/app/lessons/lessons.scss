@@ -245,10 +245,6 @@ fieldset {
 }
 
 
-.import-button {
-  font-size: 0.85rem;
-}
-
 .import-message {
   margin-bottom: 1rem;
 }
@@ -285,19 +281,44 @@ fieldset {
   font-size: 0.85rem;
 }
 
-/* Personen anlegen und importieren: unter der Liste, zusammenklappbar */
-.add-people {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
+/* Berichtszeiträume einer Person */
+.member-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.9rem;
 
-  summary {
-    color: var(--primary-text);
+  .current {
     font-weight: 600;
-    cursor: pointer;
   }
+}
 
-  .new-student {
-    margin-top: 0.6rem;
+.inactive-period {
+  font-style: italic;
+}
+
+.inactive-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.remove-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Kopf der Personenliste mit Verweis auf die Personenverwaltung */
+.list-head {
+  align-items: baseline;
+
+  h2 {
+    margin: 0;
   }
+}
+
+.person-link {
+  margin: 1rem 0 0;
 }

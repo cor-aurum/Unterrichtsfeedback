@@ -1,0 +1,233 @@
+<h1>Personen</h1>
+
+@if (importOpen()) {
+  <app-student-import-panel (closed)="closeImport($event)" />
+}
+@if (importMessage(); as text) {
+  <p class="message import-message">{{ text }}</p>
+}
+
+<div class="people-layout">
+  <div class="column">
+    <section class="card">
+      <div class="person-filter">
+        <input
+          type="search"
+          placeholder="Personen suchen …"
+          aria-label="Personen suchen"
+          [value]="search()"
+          (input)="search.set(valueOf($event))"
+        />
+        <details [open]="extraFilterCount() > 0">
+          <summary>
+            Weitere Filter
+            @if (extraFilterCount() > 0) {
+              <span class="badge">{{ extraFilterCount() }}</span>
+            }
+          </summary>
+          @if (periodsByStart().length > 1) {
+            <select aria-label="Nach Berichtszeitraum filtern" (change)="periodFilter.set(valueOf($event))">
+              <option value="" [selected]="!periodFilter()">Nur {{ reportPeriod.period().name }}</option>
+              <option value="all" [selected]="periodFilter() === 'all'">Alle Berichtszeiträume</option>
+              @for (period of periodsByStart(); track period.id) {
+                @if (period.id !== reportPeriod.period().id) {
+                  <option [value]="period.id" [selected]="period.id === periodFilter()">Aus {{ period.name }}</option>
+                }
+              }
+            </select>
+          }
+          @if (teacherFilter.options().length > 1) {
+            <select aria-label="Nach Lehrer filtern" (change)="teacherFilter.set(valueOf($event))">
+              <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer</option>
+              @for (teacher of teacherFilter.options(); track teacher.id) {
+                <option [value]="teacher.id" [selected]="teacher.id === teacherFilter.teacherId()">Nur {{ teacher.name }}</option>
+              }
+            </select>
+          }
+          <select aria-label="Nach Instrument filtern" (change)="instrumentFilter.set(valueOf($event))">
+            <option value="" [selected]="!instrumentFilter()">Alle Instrumente</option>
+            @for (instrument of config().instruments; track instrument.id) {
+              <option [value]="instrument.id" [selected]="instrument.id === instrumentFilter()">{{ instrument.name }}</option>
+            }
+          </select>
+          @if (groups.groups().length > 0) {
+            <select aria-label="Nach Gruppe filtern" (change)="groupFilter.set(valueOf($event))">
+              <option value="" [selected]="!groupFilter()">Alle Gruppen</option>
+              @for (group of groups.groups(); track group.id) {
+                <option [value]="group.id" [selected]="group.id === groupFilter()">Gruppe {{ groupName(group) }}</option>
+              }
+            </select>
+          }
+          <select aria-label="Nach Status filtern" (change)="statusFilter.set($any(valueOf($event)))">
+            <option value="" [selected]="!statusFilter()">Alle</option>
+            <option value="today" [selected]="statusFilter() === 'today'">mit Termin heute</option>
+            <option value="noWeekly" [selected]="statusFilter() === 'noWeekly'">ohne laufende Terminserie</option>
+            <option value="noLessonInPeriod" [selected]="statusFilter() === 'noLessonInPeriod'">
+              ohne Stunde im Berichtszeitraum
+            </option>
+          </select>
+          <button class="secondary small-button" (click)="resetFilters()">Filter zurücksetzen</button>
+        </details>
+        @if (visibleStudents().length !== store.students().length) {
+          <p class="muted filter-count">{{ visibleStudents().length }} von {{ store.students().length }} Personen</p>
+        }
+      </div>
+      <ul class="list">
+        @for (student of visibleStudents(); track student.id) {
+          <li [class.selected]="student.id === store.selectedStudentId()" (click)="store.selectStudent(student.id)">
+            <span class="grow">
+              {{ student.name }}
+              <span class="instrument">
+                {{ instrumentOf(student).name }}
+                @if (teachers().length > 1) {
+                  · {{ teacherOf(student).name }}
+                }
+                @if (student.birthDate) {
+                  · geb. {{ formatShortDate(student.birthDate) }}
+                }
+              </span>
+              @if (groupsLineOf(student); as line) {
+                <span class="instrument">{{ line }}</span>
+              }
+              @if (periodsLineOf(student); as line) {
+                <span class="instrument" [class.inactive-period]="!isActive(student)">{{ line }}</span>
+              }
+            </span>
+            @if (hasDoubleLessons(student)) {
+              <span class="double-warning" title="Mindestens zwei Stunden am selben Tag">⚠</span>
+            }
+            <span class="badge" title="Unterrichtsstunden">{{ student.lessons.length }}</span>
+          </li>
+        } @empty {
+          <li class="empty muted">
+            {{ store.students().length === 0 ? 'Noch keine Personen angelegt.' : 'Keine Personen passen zum Filter.' }}
+          </li>
+        }
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Personen hinzufügen</h2>
+      <div class="new-student">
+        <div class="row">
+          <input
+            #nameInput
+            type="text"
+            class="grow"
+            placeholder="Name der Person"
+            aria-label="Name der neuen Person"
+            (keydown.enter)="addStudent(nameInput, birthInput)"
+          />
+          <button (click)="addStudent(nameInput, birthInput)" title="Person hinzufügen">+</button>
+        </div>
+        <app-instrument-select [(value)]="newStudentInstrumentId" label="Instrument der neuen Person" />
+        <label class="birth-date">
+          <span class="muted small">Geburtsdatum (optional, unterscheidet gleichnamige Personen)</span>
+          <input #birthInput type="date" (keydown.enter)="addStudent(nameInput, birthInput)" />
+        </label>
+        <p class="muted small">
+          Gibt es den Namen schon (und kein abweichendes Geburtsdatum), wird die vorhandene Person mit ihren
+          bisherigen Stunden übernommen.
+        </p>
+        <div class="row wrap-actions">
+          <button class="secondary" (click)="openImport()">Aus Excel-Datei importieren …</button>
+          @if (store.students().length > 0) {
+            <button class="secondary" (click)="exportStudents()">Als Tabelle exportieren</button>
+          }
+        </div>
+      </div>
+    </section>
+  </div>
+
+  @if (store.selectedStudent(); as student) {
+    <section class="card person-detail">
+      <div class="row detail-head">
+        <h2 class="grow">{{ student.name }}</h2>
+        <button (click)="openLessons(student)">Stunden erfassen</button>
+      </div>
+      <p class="muted small">{{ lessonSummary(student) }}</p>
+
+      @if (!isActive(student)) {
+        <div class="message inactive-note">
+          {{ student.name }} ist nicht im Berichtszeitraum „{{ reportPeriod.period().name }}“.
+          <button class="secondary" (click)="adoptToPeriod(student)">In diesen Zeitraum übernehmen</button>
+        </div>
+      }
+
+      <div class="person-settings">
+        <label class="muted" for="student-name">Name</label>
+        <input id="student-name" type="text" [value]="student.name" (change)="renameStudent(student, $event)" />
+        <label class="muted" for="student-birth-date">Geburtsdatum (optional)</label>
+        <input
+          id="student-birth-date"
+          type="date"
+          [value]="student.birthDate ?? ''"
+          (change)="setBirthDate(student, $event)"
+        />
+        <label class="muted" for="student-instrument">Instrument</label>
+        <app-instrument-select
+          selectId="student-instrument"
+          [value]="instrumentOf(student).id"
+          (valueChange)="store.setInstrument(student.id, $event)"
+        />
+        @if (teachers().length > 1 && isActive(student)) {
+          <label class="muted" for="student-teacher">Lehrer in „{{ reportPeriod.period().name }}“</label>
+          <select id="student-teacher" (change)="setTeacher(student, $event)">
+            @for (teacher of reportPeriod.teachersWith(teacherOf(student).id); track teacher.id) {
+              <option [value]="teacher.id" [selected]="teacher.id === teacherOf(student).id">{{ teacher.name }}</option>
+            }
+          </select>
+        }
+        <span class="muted">Berichtszeiträume</span>
+        <div class="member-periods">
+          @for (entry of periodsOf(student); track entry.id) {
+            <span [class.current]="entry.current">
+              {{ entry.name }}@if (teachers().length > 1) { · {{ entry.teacher }}}
+            </span>
+          } @empty {
+            <span class="muted small">in keinem</span>
+          }
+        </div>
+        <span class="muted">Gruppen</span>
+        @if (groups.groupsOf(student.id).length > 0) {
+          <div class="member-groups">
+            @for (group of groups.groupsOf(student.id); track group.id) {
+              <button class="secondary" (click)="openGroup(group)" title="Gruppe öffnen">{{ groupName(group) }}</button>
+            }
+          </div>
+        } @else {
+          <span class="muted small">in keiner Gruppe – Mitglieder legst du unter „Stunden erfassen“ bei der Gruppe fest</span>
+        }
+      </div>
+
+      @if (isActive(student)) {
+        <div class="person-settings">
+          @if (slotMessage(); as text) {
+            <p class="slot-message">{{ text }}</p>
+          }
+          @if (nextSlot(); as slot) {
+            <p class="next-slot">
+              <span class="muted">Nächster freier Termin</span>
+              {{ slotText(slot) }}
+            </p>
+            <button class="secondary" (click)="placeInSlot(student, slot)">Termin eintragen</button>
+          } @else {
+            <p class="next-slot muted">
+              Kein freier Termin in den nächsten 8 Wochen. Unterrichtszeiten legst du unter
+              <a routerLink="/konfiguration">Konfiguration</a> → Lehrer fest.
+            </p>
+          }
+        </div>
+      }
+
+      <div class="row remove-actions">
+        @if (isActive(student)) {
+          <button class="secondary" (click)="leavePeriod(student)">Aus diesem Zeitraum entfernen</button>
+        }
+        <button class="danger" (click)="removeStudent(student)">Person löschen</button>
+      </div>
+    </section>
+  } @else {
+    <section class="card placeholder muted">Person auswählen oder neu anlegen.</section>
+  }
+</div>

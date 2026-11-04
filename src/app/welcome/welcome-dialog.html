@@ -10,121 +10,163 @@
   <section class="welcome card" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
     <img class="logo" src="logo.png" alt="" />
     <h1 id="welcome-title">Willkommen!</h1>
-    <p class="muted">
-      Mit dieser App hältst du nach jeder Stunde fest, wie es lief, und machst daraus ein PDF als Rückmeldung.
-      Erzähl kurz etwas über dich; alles lässt sich später unter „Konfiguration“ ändern. Wie alles funktioniert,
-      erklärt die <button type="button" class="link" (click)="openHelp()">Hilfe</button>.
-    </p>
-
-    <form (submit)="start($event)">
-      <div class="fields">
-        <label>
-          Dein Name
-          <input name="name" type="text" required autocomplete="name" placeholder="z. B. Anna Schmidt" />
-        </label>
-        <label>
-          Dein Instrument
-          <input name="instrument" type="text" required placeholder="z. B. Klavier" />
-        </label>
-      </div>
-
-      <details>
-        <summary>Unterrichtszeiten <span class="muted">(optional)</span></summary>
-        <p class="muted small">
-          Daran orientieren sich Kalender und Terminvorschläge. Voreingestellt ist Montag bis Freitag.
-        </p>
-        <div class="days">
-          @for (day of days(); track day.weekday) {
-            <div class="day" [class.inactive]="!day.active">
-              <label class="check">
-                <input type="checkbox" [checked]="day.active" (change)="updateDay(day.weekday, { active: checked($event) })" />
-                {{ day.name }}
-              </label>
-              <input
-                type="time"
-                [value]="day.from"
-                [disabled]="!day.active"
-                [attr.aria-label]="day.name + ' von'"
-                (change)="updateDay(day.weekday, { from: valueOf($event) })"
-              />
-              <span>–</span>
-              <input
-                type="time"
-                [value]="day.to"
-                [disabled]="!day.active"
-                [attr.aria-label]="day.name + ' bis'"
-                (change)="updateDay(day.weekday, { to: valueOf($event) })"
-              />
-            </div>
-          }
-        </div>
-      </details>
-
-      <details>
-        <summary>Berichtszeitraum <span class="muted">(optional)</span></summary>
-        <p class="muted small">
-          Für diesen Zeitraum schreibst du Rückmeldungen, voreingestellt ist das aktuelle Schulhalbjahr. Weitere
-          Zeiträume legst du später unter „Konfiguration“ an.
-        </p>
-        <div class="period">
-          <label class="period-name">
-            Name
-            <input type="text" [value]="reportPeriod().name" (change)="updatePeriod({ name: valueOf($event) })" />
-          </label>
-          <label>
-            von
-            <input type="date" [value]="reportPeriod().from" (change)="updatePeriod({ from: valueOf($event) })" />
-          </label>
-          <label>
-            bis
-            <input type="date" [value]="reportPeriod().to" (change)="updatePeriod({ to: valueOf($event) })" />
-          </label>
-        </div>
-      </details>
-
-      <details>
-        <summary>Lieblingsfarbe <span class="muted">(optional)</span></summary>
-        <p class="muted small">Färbt die App und die PDFs.</p>
-        <div class="colors">
-          @for (preset of colorPresets; track preset) {
-            <button
-              type="button"
-              class="swatch"
-              [class.selected]="preset === color()"
-              [style.background]="preset"
-              [attr.aria-label]="'Farbe ' + preset"
-              (click)="setColor(preset)"
-            ></button>
-          }
-          <label class="custom">
-            Eigene:
-            <input type="color" [value]="color()" (input)="setColor(valueOf($event))" aria-label="Eigene Farbe" />
-          </label>
-        </div>
-      </details>
-
-      @if (error(); as message) {
-        <p class="message error">{{ message }}</p>
-      }
-
-      <button type="submit" class="start">Los geht’s</button>
-    </form>
-
-    <div class="restore">
-      <p class="muted small">
-        Du hast die App schon auf einem anderen Gerät benutzt? Spiele eine Komplettsicherung (ZIP) oder eine
-        exportierte Konfiguration (JSON) ein.
+    @if (choosingTeacher()) {
+      <p class="muted">
+        Die Daten sind eingespielt (Berichtszeitraum „{{ selectedPeriod.period().name }}“). Wer bist du? Wähle dich aus
+        oder lege dich neu an, wenn du neu dazukommst.
       </p>
-      <button type="button" class="secondary" [disabled]="importing()" (click)="fileInput.click()">
-        {{ importing() ? 'Wird eingespielt …' : 'Sicherung einspielen …' }}
-      </button>
-      <input
-        #fileInput
-        type="file"
-        accept=".zip,.json,application/zip,application/json"
-        hidden
-        (change)="restore(fileInput)"
-      />
-    </div>
+      <form (submit)="chooseTeacher($event)">
+        <div class="teacher-choice" role="radiogroup" aria-label="Wer bist du?">
+          @for (teacher of teachers(); track teacher.id) {
+            <label class="check">
+              <input
+                type="radio"
+                name="teacher"
+                [checked]="chosenTeacherId() === teacher.id"
+                (change)="chosenTeacherId.set(teacher.id)"
+              />
+              {{ teacher.name }}
+            </label>
+          }
+          <label class="check">
+            <input type="radio" name="teacher" [checked]="chosenTeacherId() === 'new'" (change)="chosenTeacherId.set('new')" />
+            Ich bin neu
+          </label>
+        </div>
+        @if (chosenTeacherId() === 'new') {
+          <div class="fields">
+            <label>
+              Dein Name
+              <input name="name" type="text" required autocomplete="name" placeholder="z. B. Anna Schmidt" />
+            </label>
+            <label>
+              Dein Instrument
+              <input name="instrument" type="text" required placeholder="z. B. Klavier" />
+            </label>
+          </div>
+        }
+        @if (error(); as message) {
+          <p class="message error">{{ message }}</p>
+        }
+        <button type="submit" class="start">Los geht’s</button>
+      </form>
+    } @else {
+      <p class="muted">
+        Mit dieser App hältst du nach jeder Stunde fest, wie es lief, und machst daraus ein PDF als Rückmeldung.
+        Erzähl kurz etwas über dich; alles lässt sich später unter „Konfiguration“ ändern. Wie alles funktioniert,
+        erklärt die <button type="button" class="link" (click)="openHelp()">Hilfe</button>.
+      </p>
+
+      <form (submit)="start($event)">
+        <div class="fields">
+          <label>
+            Dein Name
+            <input name="name" type="text" required autocomplete="name" placeholder="z. B. Anna Schmidt" />
+          </label>
+          <label>
+            Dein Instrument
+            <input name="instrument" type="text" required placeholder="z. B. Klavier" />
+          </label>
+        </div>
+
+        <details>
+          <summary>Unterrichtszeiten <span class="muted">(optional)</span></summary>
+          <p class="muted small">
+            Daran orientieren sich Kalender und Terminvorschläge. Voreingestellt ist Montag bis Freitag.
+          </p>
+          <div class="days">
+            @for (day of days(); track day.weekday) {
+              <div class="day" [class.inactive]="!day.active">
+                <label class="check">
+                  <input type="checkbox" [checked]="day.active" (change)="updateDay(day.weekday, { active: checked($event) })" />
+                  {{ day.name }}
+                </label>
+                <input
+                  type="time"
+                  [value]="day.from"
+                  [disabled]="!day.active"
+                  [attr.aria-label]="day.name + ' von'"
+                  (change)="updateDay(day.weekday, { from: valueOf($event) })"
+                />
+                <span>–</span>
+                <input
+                  type="time"
+                  [value]="day.to"
+                  [disabled]="!day.active"
+                  [attr.aria-label]="day.name + ' bis'"
+                  (change)="updateDay(day.weekday, { to: valueOf($event) })"
+                />
+              </div>
+            }
+          </div>
+        </details>
+
+        <details>
+          <summary>Berichtszeitraum <span class="muted">(optional)</span></summary>
+          <p class="muted small">
+            Für diesen Zeitraum schreibst du Rückmeldungen, voreingestellt ist das aktuelle Schulhalbjahr. Weitere
+            Zeiträume legst du später unter „Konfiguration“ an.
+          </p>
+          <div class="period">
+            <label class="period-name">
+              Name
+              <input type="text" [value]="reportPeriod().name" (change)="updatePeriod({ name: valueOf($event) })" />
+            </label>
+            <label>
+              von
+              <input type="date" [value]="reportPeriod().from" (change)="updatePeriod({ from: valueOf($event) })" />
+            </label>
+            <label>
+              bis
+              <input type="date" [value]="reportPeriod().to" (change)="updatePeriod({ to: valueOf($event) })" />
+            </label>
+          </div>
+        </details>
+
+        <details>
+          <summary>Lieblingsfarbe <span class="muted">(optional)</span></summary>
+          <p class="muted small">Färbt die App und die PDFs.</p>
+          <div class="colors">
+            @for (preset of colorPresets; track preset) {
+              <button
+                type="button"
+                class="swatch"
+                [class.selected]="preset === color()"
+                [style.background]="preset"
+                [attr.aria-label]="'Farbe ' + preset"
+                (click)="setColor(preset)"
+              ></button>
+            }
+            <label class="custom">
+              Eigene:
+              <input type="color" [value]="color()" (input)="setColor(valueOf($event))" aria-label="Eigene Farbe" />
+            </label>
+          </div>
+        </details>
+
+        @if (error(); as message) {
+          <p class="message error">{{ message }}</p>
+        }
+
+        <button type="submit" class="start">Los geht’s</button>
+      </form>
+
+      <div class="restore">
+        <p class="muted small">
+          Du hast die App schon auf einem anderen Gerät benutzt oder kommst in einem Berichtszeitraum neu dazu? Spiele
+          eine Sicherung (ZIP, auch die eines Berichtszeitraums) oder eine exportierte Konfiguration (JSON) ein.
+        </p>
+        <button type="button" class="secondary" [disabled]="importing()" (click)="fileInput.click()">
+          {{ importing() ? 'Wird eingespielt …' : 'Sicherung einspielen …' }}
+        </button>
+        <input
+          #fileInput
+          type="file"
+          accept=".zip,.json,application/zip,application/json"
+          hidden
+          (change)="restore(fileInput)"
+        />
+      </div>
+    }
   </section>
 </div>

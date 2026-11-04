@@ -1,0 +1,44 @@
+/* Die übrigen Stile (Liste, Filter, Einstellungen) teilt die Seite mit „Stunden erfassen“ (lessons.scss). */
+.people-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+
+  @media (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.person-detail {
+  min-width: 0;
+
+  > p.small {
+    margin: 0.25rem 0 0;
+  }
+}
+
+.detail-head {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  h2 {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.birth-date {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.wrap-actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.remove-actions {
+  margin-top: 1.25rem;
+}
