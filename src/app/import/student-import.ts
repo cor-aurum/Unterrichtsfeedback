@@ -38,6 +38,13 @@ export interface ImportRow {
   existing: boolean;
   /** Diese Person gibt es in einem anderen Zeitraum; sie wird übernommen statt neu angelegt. */
   formerId: string | null;
+  /** Die vorhandene Person zu dieser Zeile, im Zeitraum oder in einem anderen */
+  matchId: string | null;
+  /**
+   * Die Zeile hat ein Geburtsdatum, die vorhandene Person nicht: Beim Zusammenführen bekommt sie es, sonst entsteht
+   * eine neue Person.
+   */
+  mergeable: boolean;
 }
 
 /** Vorhandene Person, mit der eine Zeile verglichen wird */
@@ -119,6 +126,8 @@ export function toImportRows(
         groups: splitNames(cell(row, mapping.groups)),
         existing: !!person?.active,
         formerId: person && !person.active ? person.id : null,
+        matchId: person?.id ?? null,
+        mergeable: !!person && !!birthDate && !person.birthDate,
       };
     })
     .filter((row) => row.name);

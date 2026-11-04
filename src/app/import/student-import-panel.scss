@@ -145,3 +145,11 @@ table {
   color: #7a5200;
   font-size: 0.75rem;
 }
+
+/* Vorhandene Person ohne Geburtsdatum: zusammenführen oder neu anlegen */
+.merge-choice {
+  display: block;
+  margin-top: 0.2rem;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.8rem;
+}

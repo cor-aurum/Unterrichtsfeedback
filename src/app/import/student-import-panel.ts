@@ -87,8 +87,13 @@ export class StudentImportPanel {
 
   /** Lehrer je Zeile (`line`); fehlt der Eintrag, gilt der erste Lehrer. */
   private readonly assigned = signal(new Map<number, string>());
-  /** Ob die Zeile importiert wird; Personen, die es schon gibt, zunächst nicht. */
+  /**
+   * Ob die Zeile importiert wird; Personen, die es schon gibt, zunächst nicht – außer sie lassen sich um das
+   * Geburtsdatum ergänzen.
+   */
   private readonly included = signal(new Map<number, boolean>());
+  /** Bei Zeilen, die sich zusammenführen lassen: mit der vorhandenen Person oder als neue Person */
+  private readonly mergeChoice = signal(new Map<number, 'merge' | 'new'>());
   protected readonly selectedCount = computed(() => this.rows().filter((row) => this.isIncluded(row)).length);
 
   protected async loadFile(input: HTMLInputElement): Promise<void> {
@@ -133,7 +138,8 @@ export class StudentImportPanel {
       return [row.line, row.teacherId ?? (former ? this.studentsStore.teacherOf(former).id : null)] as const;
     });
     this.assigned.set(new Map(assigned.filter((entry): entry is [number, string] => entry[1] !== null)));
-    this.included.set(new Map(this.rows().map((row) => [row.line, !row.existing])));
+    this.included.set(new Map(this.rows().map((row) => [row.line, this.includedByDefault(row)])));
+    this.mergeChoice.set(new Map());
     this.step.set('teachers');
   }
 
@@ -153,7 +159,26 @@ export class StudentImportPanel {
   }
 
   protected isIncluded(row: ImportRow): boolean {
-    return this.included().get(row.line) ?? !row.existing;
+    return this.included().get(row.line) ?? this.includedByDefault(row);
+  }
+
+  private includedByDefault(row: ImportRow): boolean {
+    return !row.existing || row.mergeable;
+  }
+
+  protected choiceOf(row: ImportRow): 'merge' | 'new' {
+    return this.mergeChoice().get(row.line) ?? 'merge';
+  }
+
+  protected setChoice(row: ImportRow, event: Event): void {
+    const choice = (event.target as HTMLSelectElement).value === 'new' ? 'new' : 'merge';
+    this.mergeChoice.update((map) => new Map(map).set(row.line, choice));
+  }
+
+  /** Die Zeile gehört zu einer vorhandenen Person: zusammengeführt oder aus einem anderen Zeitraum übernommen */
+  private keepsPerson(row: ImportRow): boolean {
+    if (!row.matchId) return false;
+    return row.mergeable ? this.choiceOf(row) === 'merge' : !!row.formerId;
   }
 
   protected setIncluded(row: ImportRow, value: boolean): void {
@@ -166,7 +191,11 @@ export class StudentImportPanel {
 
   protected import(): void {
     const rows = this.rows().filter((row) => this.isIncluded(row));
-    const [former, fresh] = [rows.filter((row) => row.formerId), rows.filter((row) => !row.formerId)];
+    const kept = rows.filter((row) => this.keepsPerson(row));
+    const fresh = rows.filter((row) => !this.keepsPerson(row));
+    // Aus anderen Zeiträumen kommen sie in den gewählten; wer kein Geburtsdatum hat, bekommt das aus der Datei.
+    const former = kept.filter((row) => row.formerId);
+    const completed = kept.filter((row) => row.mergeable);
     const instrumentsBefore = this.configStore.config().instruments.length;
     const instrumentIds = this.configStore.ensureInstruments(fresh.map((row) => row.instrument));
     const fallback = defaultInstrument(this.configStore.config()).id;
@@ -179,11 +208,7 @@ export class StudentImportPanel {
       })),
     );
     this.studentsStore.addToPeriod(former.map((row) => ({ studentId: row.formerId!, teacherId: this.teacherOf(row) })));
-    // Übernommene Personen ohne Geburtsdatum bekommen das aus der Datei.
-    const students = new Map(this.studentsStore.allStudents().map((s) => [s.id, s]));
-    for (const row of former.filter((r) => r.birthDate && !students.get(r.formerId!)?.birthDate)) {
-      this.studentsStore.setBirthDate(row.formerId!, row.birthDate!);
-    }
+    for (const row of completed) this.studentsStore.setBirthDate(row.matchId!, row.birthDate!);
     const groups = this.groupsStore.addNamed(
       this.rows().flatMap((row) => row.groups.map((name) => ({ name, teacherId: this.teacherOf(row) }))),
     );
@@ -191,6 +216,7 @@ export class StudentImportPanel {
     const parts = [
       fresh.length > 0 ? `${count(fresh.length, 'Person', 'Personen')} importiert` : '',
       former.length > 0 ? `${count(former.length, 'Person', 'Personen')} aus anderen Zeiträumen übernommen` : '',
+      completed.length > 0 ? `bei ${count(completed.length, 'Person', 'Personen')} das Geburtsdatum ergänzt` : '',
       created > 0 ? `${count(created, 'Instrument', 'Instrumente')} neu angelegt` : '',
       groups > 0 ? `${count(groups, 'Gruppe', 'Gruppen')} ohne Mitglieder angelegt` : '',
     ];

@@ -196,7 +196,19 @@
                   @if (row.birthDate) {
                     <span class="muted small">geb. {{ formatShortDate(row.birthDate) }}</span>
                   }
-                  @if (row.existing) {
+                  @if (row.mergeable) {
+                    <span class="exists">gibt es schon ohne Geburtsdatum</span>
+                    <select
+                      class="merge-choice"
+                      [attr.aria-label]="row.name + ': zusammenführen oder neu anlegen'"
+                      (change)="setChoice(row, $event)"
+                    >
+                      <option value="merge" [selected]="choiceOf(row) === 'merge'">
+                        zusammenführen{{ row.formerId ? ' und übernehmen' : '' }}
+                      </option>
+                      <option value="new" [selected]="choiceOf(row) === 'new'">als neue Person</option>
+                    </select>
+                  } @else if (row.existing) {
                     <span class="exists">gibt es schon</span>
                   } @else if (row.formerId) {
                     <span class="exists">aus anderem Zeitraum, wird übernommen</span>
