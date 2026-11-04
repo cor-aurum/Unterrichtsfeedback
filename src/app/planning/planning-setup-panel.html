@@ -1,0 +1,43 @@
+<section class="card setup">
+  <div class="row">
+    <h2 class="grow">Schüler tragen sich ein</h2>
+    <button class="secondary" (click)="closed.emit()">Schließen</button>
+  </div>
+  <p class="muted">
+    Auf diesem Gerät zeigt die App danach nur noch eine Namensliste. Jede Person tippt ihren Namen, wählt freie
+    Zeiten bei {{ teacher().name }} und tippt auf „Fertig“. Zeiten mit eigenem Gruppenunterricht sind mit ⚠
+    markiert, aber wählbar; Einzelunterricht bei anderen Lehrern und ein zweiter Termin am selben Tag sind
+    ausgeschlossen. Belegte Zeiten erscheinen gar nicht, also auch keine Namen anderer.
+  </p>
+
+  <div class="options">
+    <label>
+      Von
+      <input type="date" [value]="from()" [min]="period().from" [max]="period().to" (change)="from.set(valueOf($event))" />
+    </label>
+    <label>
+      Bis
+      <input type="date" [value]="to()" [min]="period().from" [max]="period().to" (change)="to.set(valueOf($event))" />
+    </label>
+    <label>
+      Höchstens je Person
+      <input type="number" min="0" [value]="effectiveMax()" (change)="setMax($event)" />
+    </label>
+    <label>
+      PIN zum Beenden (optional)
+      <input type="text" inputmode="numeric" autocomplete="off" [value]="pin()" (change)="pin.set(valueOf($event))" />
+    </label>
+  </div>
+
+  <p class="muted small">
+    {{ fair().slots }} Termine an {{ fair().days }} Tagen (frei und schon vergeben) für {{ fair().students }}
+    {{ fair().students === 1 ? 'Person' : 'Personen' }} – vorgeschlagen sind {{ fair().share }} je Person
+    (aufgerundet, damit alle Termine vergeben werden können; höchstens einer am Tag). Schon eingetragene Termine
+    zählen mit. Für Runden erst eine kleinere Zahl wählen und die Planung später mit
+    mehr erneut starten.
+  </p>
+
+  <div class="row actions">
+    <button [disabled]="fair().students === 0 || from() > to()" (click)="start()">Planung starten</button>
+  </div>
+</section>

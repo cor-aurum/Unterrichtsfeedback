@@ -1,9 +1,13 @@
-<header class="topbar">
+@if (planning.active()) {
+  <!-- Schüler-Planung am Tablet: nur die Planung, ohne Menü und übrige App -->
+  <app-student-planning-page />
+} @else {
+<header class="topbar" (keydown.escape)="menuOpen.set(false)">
   <a class="brand" routerLink="/kalender">
     <img class="logo" src="logo.png" alt="" />
     Unterrichtsfeedback
   </a>
-  <nav>
+  <nav id="main-menu" [class.open]="menuOpen()">
     <a routerLink="/stunden" routerLinkActive="active">Stunden erfassen</a>
     <a routerLink="/personen" routerLinkActive="active">Personen</a>
     <a routerLink="/gruppen" routerLinkActive="active">Gruppenplanung</a>
@@ -42,6 +46,17 @@
     }
     <a class="help" routerLink="/hilfe" routerLinkActive="active" title="Hilfe" aria-label="Hilfe">?</a>
   </div>
+  <!-- Nur auf schmalen Bildschirmen sichtbar; dort ist das Menü sonst zugeklappt. -->
+  <button
+    type="button"
+    class="menu-toggle"
+    aria-controls="main-menu"
+    [attr.aria-expanded]="menuOpen()"
+    [attr.aria-label]="menuOpen() ? 'Menü schließen' : 'Menü öffnen'"
+    (click)="menuOpen.set(!menuOpen())"
+  >
+    <span class="bars" [class.open]="menuOpen()" aria-hidden="true"><span></span></span>
+  </button>
 </header>
 
 <main>
@@ -88,3 +103,4 @@
     <span class="app-version">Version {{ appVersion }}</span>
   }
 </footer>
+}

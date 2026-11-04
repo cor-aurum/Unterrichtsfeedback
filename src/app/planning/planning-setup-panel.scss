@@ -1,0 +1,39 @@
+.setup {
+  border-left: 4px solid var(--primary);
+
+  h2 {
+    margin: 0;
+  }
+
+  p {
+    margin: 0.5rem 0;
+  }
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem 2rem;
+  margin: 0.75rem 0;
+
+  > label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+  }
+
+  input[type='number'],
+  input[inputmode='numeric'] {
+    width: 8rem;
+  }
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.actions {
+  justify-content: flex-end;
+}

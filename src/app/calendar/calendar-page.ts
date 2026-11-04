@@ -46,6 +46,7 @@ import {
   weekday,
 } from './appointments';
 import { AutoSchedulePanel } from './auto-schedule-panel';
+import { PlanningSetupPanel } from '../planning/planning-setup-panel';
 import { Blocker, blockerOnDay, blockerTimeText } from './blockers';
 import { TimeSpan, withLanes } from './lanes';
 import { APPOINTMENT_STATE_LABELS, appointmentState, AppointmentState } from './appointment-state';
@@ -79,7 +80,7 @@ const MAX_PDF_DAYS = 366;
 
 @Component({
   selector: 'app-calendar-page',
-  imports: [
+  imports: [PlanningSetupPanel, 
     RouterLink,
     AutoSchedulePanel,
     LessonLoadPanel,
@@ -242,6 +243,7 @@ export class CalendarPage {
   protected readonly openedOccurrence = signal<Occurrence | null>(null);
   protected readonly message = signal<string | null>(null);
   protected readonly autoScheduleOpen = signal(false);
+  protected readonly planningSetupOpen = signal(false);
   protected readonly sharedImportOpen = signal(false);
   /** Erfolgsmeldung, z. B. nach dem automatischen Einplanen */
   protected readonly notice = signal<string | null>(null);
@@ -378,7 +380,15 @@ export class CalendarPage {
   protected openAutoSchedule(): void {
     this.draft.set(null);
     this.notice.set(null);
+    this.planningSetupOpen.set(false);
     this.autoScheduleOpen.set(true);
+  }
+
+  protected openPlanningSetup(): void {
+    this.draft.set(null);
+    this.notice.set(null);
+    this.autoScheduleOpen.set(false);
+    this.planningSetupOpen.set(true);
   }
 
   protected openSharedImport(): void {

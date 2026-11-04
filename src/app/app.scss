@@ -59,12 +59,97 @@
     }
   }
 
-  // Auf schmalen Bildschirmen rutscht die Navigation in eine eigene Zeile, das Fragezeichen bleibt
-  // oben rechts neben dem Namen der App.
+  .menu-toggle {
+    display: none;
+  }
+
+  // Auf schmalen Bildschirmen steckt die Navigation hinter dem Menü-Knopf oben rechts; geöffnet steht sie als
+  // Liste unter der Leiste.
   @media (max-width: 700px) {
     nav {
       order: 3;
       flex-basis: 100%;
+      display: none;
+      flex-direction: column;
+      gap: 0.15rem;
+      padding-top: 0.25rem;
+      border-top: 1px solid rgb(255 255 255 / 0.25);
+
+      &.open {
+        display: flex;
+      }
+
+      a {
+        padding: 0.6rem 0.8rem;
+      }
+    }
+
+    .menu-toggle {
+      order: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      width: 2.5rem;
+      height: 2.5rem;
+      padding: 0;
+      border: none;
+      border-radius: 6px;
+      background: none;
+      color: var(--on-primary);
+      cursor: pointer;
+
+      &:hover,
+      &[aria-expanded='true'] {
+        background: rgb(255 255 255 / 0.12);
+      }
+    }
+
+    // Drei Striche, geöffnet ein Kreuz
+    .bars,
+    .bars::before,
+    .bars::after,
+    .bars span {
+      display: block;
+      width: 1.25rem;
+      height: 2px;
+      border-radius: 1px;
+      background: currentColor;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+
+    .bars {
+      position: relative;
+      background: none;
+
+      &::before,
+      &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+      }
+
+      &::before {
+        top: -6px;
+      }
+
+      &::after {
+        top: 6px;
+      }
+
+      &.open {
+        span {
+          opacity: 0;
+        }
+
+        &::before {
+          transform: translateY(6px) rotate(45deg);
+        }
+
+        &::after {
+          transform: translateY(-6px) rotate(-45deg);
+        }
+      }
     }
   }
 
@@ -119,6 +204,11 @@
       min-width: 0;
       margin-left: 0;
       gap: 0.5rem;
+    }
+
+    // Die Werkzeuge stehen in der zweiten Zeile; der Menü-Knopf bleibt oben rechts neben dem Namen.
+    .menu-toggle {
+      margin-left: auto;
     }
 
     // Breite 0 als Ausgangspunkt: Beide Auswahlen teilen sich den Platz, statt ihre volle Textbreite zu verlangen.

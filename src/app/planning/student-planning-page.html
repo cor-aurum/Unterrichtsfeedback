@@ -1,0 +1,71 @@
+@if (session(); as s) {
+  @if (student(); as current) {
+    <header class="student-head">
+      <div class="grow">
+        <h1>{{ current.name }}</h1>
+        @if (remaining() > 0) {
+          <p class="status">Du kannst noch <strong>{{ remaining() }}</strong> {{ remaining() === 1 ? 'Termin' : 'Termine' }} wählen.</p>
+        } @else {
+          <p class="status complete">Du hast alle {{ chosen() }} Termine. Tippe auf „Fertig“.</p>
+        }
+      </div>
+      <button class="done" (click)="done()">Fertig</button>
+    </header>
+    <p class="hint">Tippe auf eine Zeit, um sie zu wählen. Nochmal tippen gibt sie wieder frei.</p>
+    @if (hasGroupClashes()) {
+      <p class="hint clash-hint"><span class="clash-mark">⚠</span> heißt: Zu dieser Zeit hast du Gruppenunterricht.</p>
+    }
+
+    @for (day of days(); track day.date) {
+      <section class="day">
+        <h2>{{ day.label }}</h2>
+        <div class="times">
+          @for (slot of day.slots; track slot.start) {
+            <button
+              class="time"
+              [class.own]="slot.own"
+              [class.clash]="!!slot.groupClash"
+              [disabled]="slot.own ? !slot.appointmentId : remaining() === 0"
+              [attr.aria-pressed]="slot.own"
+              [title]="slot.groupClash ? 'Zu dieser Zeit: ' + slot.groupClash : ''"
+              (click)="toggle(slot)"
+            >
+              <span>{{ slot.start }}@if (slot.own) { ✓}</span>
+              @if (slot.groupClash; as group) {
+                <span class="clash-label"><span class="clash-mark">⚠</span> {{ group }}</span>
+              }
+            </button>
+          }
+        </div>
+      </section>
+    } @empty {
+      <p class="empty">Für dich ist gerade keine Zeit mehr frei. Sprich bitte deine Lehrkraft an.</p>
+    }
+
+    <div class="bottom">
+      <button class="done" (click)="done()">Fertig</button>
+    </div>
+  } @else {
+    <header class="names-head">
+      <h1>Termine eintragen</h1>
+      <p>bei {{ teacher()?.name }} · {{ formatShortDate(s.from) }} bis {{ formatShortDate(s.to) }}</p>
+    </header>
+    @if (thanks(); as text) {
+      <p class="thanks" role="status">{{ text }}</p>
+    }
+    <p class="hint">Tippe auf deinen Namen.</p>
+    <div class="names">
+      @for (person of planning.students(); track person.id) {
+        <button class="name" [class.complete]="isDone(person)" (click)="choose(person)">
+          <span class="person">{{ shortName(person) }}</span>
+          <span class="count">{{ countText(person) }}</span>
+        </button>
+      } @empty {
+        <p class="empty">Im Berichtszeitraum gibt es keine Personen von {{ teacher()?.name }}.</p>
+      }
+    </div>
+    <div class="bottom">
+      <button class="stop" (click)="stop()">Planung beenden</button>
+    </div>
+  }
+}

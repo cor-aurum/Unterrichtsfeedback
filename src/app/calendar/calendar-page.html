@@ -12,6 +12,14 @@
   </button>
   <button
     class="secondary"
+    [disabled]="students().length === 0"
+    (click)="openPlanningSetup()"
+    title="Schüler tragen sich am Tablet selbst in freie Zeiten ein"
+  >
+    Schüler tragen sich ein …
+  </button>
+  <button
+    class="secondary"
     [disabled]="allGroupsEmpty()"
     (click)="newGroupAppointment()"
     [title]="allGroupsEmpty() ? 'Gruppen legst du unter „Stunden erfassen“ an' : 'Termin für eine Gruppe'"
@@ -27,6 +35,10 @@
 
 @if (autoScheduleOpen()) {
   <app-auto-schedule-panel (closed)="closeAutoSchedule($event)" />
+}
+
+@if (planningSetupOpen()) {
+  <app-planning-setup-panel (closed)="planningSetupOpen.set(false)" />
 }
 
 @if (notice(); as text) {
