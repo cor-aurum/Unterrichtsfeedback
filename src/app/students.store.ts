@@ -119,6 +119,11 @@ export class StudentsStore {
     this.mutateStudent(studentId, (student) => (student.periods[this.periodId()] = teacherId));
   }
 
+  /** In der Schüler-Planung gewählt: Mit dem ersten Termin steht der Lehrer für den Zeitraum fest. */
+  chooseTeacher(studentId: string, periodId: string, teacherId: string): void {
+    this.mutateStudent(studentId, (student) => (student.periods[periodId] = teacherId));
+  }
+
   /** Nimmt Personen eines anderen Zeitraums in den gewählten auf, mit ihrem Lehrer dort. */
   addToPeriod(entries: { studentId: string; teacherId: string | null }[]): void {
     for (const { studentId, teacherId } of entries) {

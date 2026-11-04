@@ -1,5 +1,5 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
-import { formatShortDate, Student } from '../model';
+import { formatShortDate, Student, Teacher } from '../model';
 import { PlanningSlot, StudentPlanning } from './student-planning';
 
 /** Ohne Berührung geht die Ansicht nach dieser Zeit zurück zur Namensliste, falls jemand „Fertig“ vergisst. */
@@ -12,8 +12,8 @@ interface PlanningDay {
 }
 
 /**
- * Die Ansicht am Tablet: Name antippen, Zeiten antippen, „Fertig“. Mehr gibt es nicht; die übrige App ist
- * ausgeblendet, bis die Lehrkraft die Planung beendet.
+ * Die Ansicht am Tablet: Name antippen, Zeiten antippen, „Fertig“. Wer seinen Lehrer selbst wählt, tippt vorher
+ * auf ihn. Mehr gibt es nicht; die übrige App ist ausgeblendet, bis die Lehrkraft die Planung beendet.
  */
 @Component({
   selector: 'app-student-planning-page',
@@ -24,19 +24,39 @@ interface PlanningDay {
 export class StudentPlanningPage {
   protected readonly planning = inject(StudentPlanning);
   protected readonly session = this.planning.session;
-  protected readonly teacher = this.planning.teacher;
+  protected readonly teachers = this.planning.teachers;
+  protected readonly teacherNames = computed(() => this.teachers().map((t) => t.name).join(', '));
 
   protected readonly studentId = signal<string | null>(null);
   protected readonly student = computed(() => this.planning.students().find((s) => s.id === this.studentId()) ?? null);
+  /** Wer seinen Lehrer noch wählt: der Lehrer, dessen Zeiten gerade zu sehen sind */
+  protected readonly browsingTeacherId = signal<string | null>(null);
+  /** Muss die Person erst ihren Lehrer wählen? */
+  protected readonly choosing = computed(() => {
+    const student = this.student();
+    return !!student && this.planning.needsTeacher(student);
+  });
+  /** Lehrer, dessen Zeiten die Person sieht: ihr eigener oder der gerade angesehene; `null`: erst wählen */
+  protected readonly teacher = computed<Teacher | null>(() => {
+    const student = this.student();
+    if (!student) return null;
+    if (!this.choosing()) return this.planning.teacherOf(student);
+    const teachers = this.teachers();
+    // Bei nur einer Lehrkraft gibt es nichts zu wählen.
+    return teachers.length === 1 ? teachers[0] : (teachers.find((t) => t.id === this.browsingTeacherId()) ?? null);
+  });
   /** Kurz nach „Fertig“ auf der Namensliste, z. B. „Gespeichert, Anna!“ */
   protected readonly thanks = signal<string | null>(null);
   protected readonly formatShortDate = formatShortDate;
 
   protected readonly days = computed<PlanningDay[]>(() => {
     const student = this.student();
-    if (!student) return [];
+    const teacher = this.teacher();
+    if (!student || !teacher) return [];
     const byDate = new Map<string, PlanningSlot[]>();
-    for (const slot of this.planning.slotsFor(student)) byDate.set(slot.date, [...(byDate.get(slot.date) ?? []), slot]);
+    for (const slot of this.planning.slotsFor(student, teacher)) {
+      byDate.set(slot.date, [...(byDate.get(slot.date) ?? []), slot]);
+    }
     return [...byDate].map(([date, slots]) => ({ date, label: dayLabel(date), slots }));
   });
   /** Erklärt das ⚠ nur, wenn es vorkommt */
@@ -62,24 +82,33 @@ export class StudentPlanningPage {
 
   protected choose(student: Student): void {
     this.thanks.set(null);
+    this.browsingTeacherId.set(null);
     this.studentId.set(student.id);
+    window.scrollTo({ top: 0 });
+  }
+
+  /** Erst ansehen; fest wird der Lehrer mit dem ersten Termin. */
+  protected chooseTeacher(teacher: Teacher | null): void {
+    this.browsingTeacherId.set(teacher?.id ?? null);
     window.scrollTo({ top: 0 });
   }
 
   /** Antippen wählt eine freie Zeit oder gibt eine eigene wieder frei. */
   protected toggle(slot: PlanningSlot): void {
     const student = this.student();
-    if (!student) return;
+    const teacher = this.teacher();
+    if (!student || !teacher) return;
     if (slot.own) {
       if (slot.appointmentId) this.planning.unbook(slot.appointmentId);
       return;
     }
-    this.planning.book(student, slot);
+    this.planning.book(student, teacher, slot);
   }
 
   protected done(): void {
     const student = this.student();
     this.studentId.set(null);
+    this.browsingTeacherId.set(null);
     window.scrollTo({ top: 0 });
     if (!student) return;
     this.thanks.set(`Gespeichert, ${firstName(student.name)}!`);
@@ -105,7 +134,7 @@ export class StudentPlanningPage {
 
   protected touched(): void {
     clearTimeout(this.idleTimer);
-    if (this.studentId()) this.idleTimer = setTimeout(() => this.studentId.set(null), IDLE_MS);
+    if (this.studentId()) this.idleTimer = setTimeout(() => this.done(), IDLE_MS);
   }
 
   /** Kurzname in der Namensliste, je Person eindeutig (siehe `planningLabels`) */

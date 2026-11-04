@@ -5,10 +5,27 @@
   </div>
   <p class="muted">
     Auf diesem Gerät zeigt die App danach nur noch eine Namensliste. Jede Person tippt ihren Namen, wählt freie
-    Zeiten bei {{ teacher().name }} und tippt auf „Fertig“. Zeiten mit eigenem Gruppenunterricht sind mit ⚠
+    Zeiten bei ihrem Lehrer und tippt auf „Fertig“. Zeiten mit eigenem Gruppenunterricht sind mit ⚠
     markiert, aber wählbar; Einzelunterricht bei anderen Lehrern und ein zweiter Termin am selben Tag sind
     ausgeschlossen. Belegte Zeiten erscheinen gar nicht, also auch keine Namen anderer.
   </p>
+
+  @if (candidates().length > 1) {
+    <div class="teachers">
+      <span>Lehrkräfte</span>
+      @for (candidate of candidates(); track candidate.id) {
+        <label>
+          <input type="checkbox" [checked]="isIncluded(candidate)" (change)="toggleTeacher(candidate)" />
+          {{ candidate.name }}
+        </label>
+      }
+    </div>
+    <p class="muted small">
+      Auf dem Tablet erscheinen die Personen aller angehakten Lehrkräfte. Sind mehrere angehakt, wählt eine Person,
+      die im Berichtszeitraum noch keinen Termin hat, zuerst ihren Lehrer; mit ihrem ersten Termin steht er für den
+      Zeitraum fest.
+    </p>
+  }
 
   <div class="options">
     <label>
@@ -38,6 +55,8 @@
   </p>
 
   <div class="row actions">
-    <button [disabled]="fair().students === 0 || from() > to()" (click)="start()">Planung starten</button>
+    <button [disabled]="teacherIds().length === 0 || fair().students === 0 || from() > to()" (click)="start()">
+      Planung starten
+    </button>
   </div>
 </section>

@@ -5,13 +5,14 @@ import { CalendarStore } from '../calendar/calendar.store';
 import { sharedOverlaps } from '../calendar/shared-appointments';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
-import { isActiveIn, Student, Teacher, teacherOf, teachingWindowsOn, today } from '../model';
+import { isActiveIn, Student, Teacher, teacherInstrument, teacherOf, teachingWindowsOn, today } from '../model';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
 
 /** Eine laufende Schüler-Planung auf diesem Gerät; solange sie läuft, zeigt die App nur die Planung. */
 export interface PlanningSession {
-  teacherId: string;
+  /** Lehrkräfte, bei denen man sich eintragen kann, in der Reihenfolge des Berichtszeitraums */
+  teacherIds: string[];
   periodId: string;
   from: string;
   to: string;
@@ -31,12 +32,13 @@ export interface PlanningSlot extends FreeSlot {
 }
 
 /**
- * Schüler tragen sich am Tablet der Lehrkraft selbst für Einzeltermine ein. Angeboten werden die freien Slots im
- * Kalender der Lehrkraft (wie bei „Automatisch einplanen“ im Zeitraum), ohne Zeiten, zu denen die Person anderen
- * Einzelunterricht hat, und ohne Tage, an denen sie schon einen Termin hat. Zeiten mit eigenem Gruppenunterricht
- * bleiben wählbar und sind markiert: Sonst fänden Lehrkräfte, deren Schüler fast alle in Gruppen spielen, kaum
- * jemanden für ihre Einzelstunden. Jede Person darf nur bis
- * zur Höchstzahl wählen; so kann niemand alle guten Zeiten belegen.
+ * Schüler tragen sich am Tablet selbst für Einzeltermine ein, bei einer oder mehreren Lehrkräften. Angeboten werden
+ * die freien Slots im Kalender ihrer Lehrkraft (wie bei „Automatisch einplanen“ im Zeitraum), ohne Zeiten, zu denen
+ * die Person anderen Einzelunterricht hat, und ohne Tage, an denen sie schon einen Termin hat. Zeiten mit eigenem
+ * Gruppenunterricht bleiben wählbar und sind markiert: Sonst fänden Lehrkräfte, deren Schüler fast alle in Gruppen
+ * spielen, kaum jemanden für ihre Einzelstunden. Jede Person darf nur bis zur Höchstzahl wählen; so kann niemand
+ * alle guten Zeiten belegen. Sind mehrere Lehrkräfte dabei, wählt eine Person ohne Termin im Berichtszeitraum
+ * vorher ihren Lehrer; mit dem ersten Termin steht er für den Zeitraum fest.
  */
 @Injectable({ providedIn: 'root' })
 export class StudentPlanning {
@@ -48,38 +50,69 @@ export class StudentPlanning {
   readonly session = storedSignal<PlanningSession | null>('feedback.studentPlanning', () => null, parseSession);
   readonly active = computed(() => !!this.session());
 
-  readonly teacher = computed<Teacher | null>(() => {
-    const session = this.session();
-    return this.config().teachers.find((t) => t.id === session?.teacherId) ?? null;
+  /** Die Lehrkräfte der Planung, in ihrer Reihenfolge */
+  readonly teachers = computed<Teacher[]>(() => {
+    const ids = this.session()?.teacherIds ?? [];
+    return ids.map((id) => this.config().teachers.find((t) => t.id === id)).filter((t): t is Teacher => !!t);
   });
 
-  /** Personen der Lehrkraft im Berichtszeitraum, nach Namen */
+  /** Personen dieser Lehrkräfte im Berichtszeitraum, nach Namen */
   readonly students = computed<Student[]>(() => {
     const session = this.session();
-    if (!session) return [];
-    return this.studentsOf(session.teacherId, session.periodId);
+    return session ? this.studentsOf(session.teacherIds, session.periodId) : [];
   });
 
-  /** Einzeltermine je Person im Zeitraum (auch Wiederholungen von Serien), im Kalender der Lehrkraft */
+  /** Einzeltermine je Person im Zeitraum (auch Wiederholungen von Serien), in den Kalendern der Lehrkräfte */
   readonly lessonsPerStudent = computed(() => {
     const session = this.session();
-    const teacher = this.teacher();
     const counts = new Map<string, Occurrence[]>();
-    if (!session || !teacher) return counts;
-    const inCalendar = this.groupsStore.calendarFilter(teacher);
-    for (const occurrence of this.calendar.occurrences(session.from, session.to, (a) => !!a.studentId && inCalendar(a))) {
+    if (!session) return counts;
+    const inCalendars = this.inCalendars(this.teachers());
+    for (const occurrence of this.calendar.occurrences(session.from, session.to, (a) => !!a.studentId && inCalendars(a))) {
       const id = occurrence.appointment.studentId!;
       counts.set(id, [...(counts.get(id) ?? []), occurrence]);
     }
     return counts;
   });
 
-  /** Alle freien Slots im Kalender der Lehrkraft, ab jetzt bis zum Ende der Planung */
-  readonly freeSlots = computed<FreeSlot[]>(() => {
+  /** Je Lehrkraft alle freien Slots in ihrem Kalender, ab jetzt bis zum Ende der Planung */
+  readonly freeSlots = computed(() => {
     const session = this.session();
-    const teacher = this.teacher();
-    return session && teacher ? this.freeSlotsOf(teacher, session.from, session.to) : [];
+    const slots = new Map<string, FreeSlot[]>();
+    if (!session) return slots;
+    for (const teacher of this.teachers()) slots.set(teacher.id, this.freeSlotsOf(teacher, session.from, session.to));
+    return slots;
   });
+
+  /** Personen mit mindestens einem Einzeltermin im Berichtszeitraum, bei welchem Lehrer auch immer */
+  private readonly withLessons = computed(() => {
+    const session = this.session();
+    const period = this.config().reportPeriods.find((p) => p.id === session?.periodId);
+    if (!period) return new Set<string>();
+    return new Set(this.calendar.occurrences(period.from, period.to, (a) => !!a.studentId).map((o) => o.appointment.studentId!));
+  });
+
+  /** Wählt die Person ihren Lehrer noch? Bei mehreren Lehrkräften, solange sie im Zeitraum keinen Termin hat. */
+  needsTeacher(student: Student): boolean {
+    return this.teachers().length > 1 && !this.withLessons().has(student.id);
+  }
+
+  /** Lehrer der Person im Zeitraum; wer noch wählt, hat noch keinen. */
+  teacherOf(student: Student): Teacher | null {
+    const session = this.session();
+    if (!session || this.needsTeacher(student)) return null;
+    return teacherOf(student, this.config(), session.periodId);
+  }
+
+  /** Instrument der Lehrkraft für die Auswahl, z. B. „Klavier“ */
+  instrumentOf(teacher: Teacher): string {
+    return teacherInstrument(teacher, this.config()).name;
+  }
+
+  /** Freie Zeiten je Lehrkraft für die Auswahl, z. B. „34 freie Zeiten“ */
+  freeCount(teacher: Teacher): number {
+    return this.freeSlots().get(teacher.id)?.length ?? 0;
+  }
 
   /**
    * Freie Slots und schon eingetragene Einzeltermine geteilt durch die Zahl der Personen, aufgerundet: So lassen
@@ -87,18 +120,20 @@ export class StudentPlanning {
    * viele, wie es Unterrichtstage gibt, denn mehr als einen Termin am Tag bietet die Planung nicht an.
    */
   fairShare(
-    teacherId: string,
+    teacherIds: string[],
     periodId: string,
     from: string,
     to: string,
   ): { slots: number; days: number; students: number; share: number } {
-    const teacher = this.config().teachers.find((t) => t.id === teacherId);
-    const students = this.studentsOf(teacherId, periodId);
-    if (!teacher || students.length === 0 || from > to) return { slots: 0, days: 0, students: students.length, share: 0 };
-    const inCalendar = this.groupsStore.calendarFilter(teacher);
+    const teachers = this.config().teachers.filter((t) => teacherIds.includes(t.id));
+    const students = this.studentsOf(teacherIds, periodId);
+    if (teachers.length === 0 || students.length === 0 || from > to) {
+      return { slots: 0, days: 0, students: students.length, share: 0 };
+    }
+    const inCalendars = this.inCalendars(teachers);
     const ids = new Set(students.map((s) => s.id));
-    const booked = this.calendar.occurrences(from, to, (a) => !!a.studentId && ids.has(a.studentId) && inCalendar(a));
-    const free = this.freeSlotsOf(teacher, from, to);
+    const booked = this.calendar.occurrences(from, to, (a) => !!a.studentId && ids.has(a.studentId) && inCalendars(a));
+    const free = teachers.flatMap((teacher) => this.freeSlotsOf(teacher, from, to));
     const slots = free.length + booked.length;
     const days = new Set([...free, ...booked].map(({ date }) => date)).size;
     return { slots, days, students: students.length, share: Math.min(days, Math.ceil(slots / students.length)) };
@@ -115,22 +150,22 @@ export class StudentPlanning {
   }
 
   /**
-   * Was die Person sieht, nach Tag und Uhrzeit: ihre eigenen künftigen Einzeltermine und die freien Slots, die für sie
-   * passen.
+   * Was die Person sieht, nach Tag und Uhrzeit: ihre eigenen künftigen Einzeltermine und die freien Slots ihrer
+   * Lehrkraft (beim Wählen der angesehenen), die für sie passen.
    */
-  slotsFor(student: Student): PlanningSlot[] {
+  slotsFor(student: Student, teacher: Teacher): PlanningSlot[] {
     const session = this.session();
     if (!session) return [];
     const own = (this.lessonsPerStudent().get(student.id) ?? []).filter(({ date }) => isUpcoming(date, '23:59'));
     const ownDays = new Set(own.map(({ date }) => date));
-    const individual = this.otherIndividualLessonsOf(student, session.from, session.to);
+    const individual = this.otherIndividualLessonsOf(student, teacher, session.from, session.to);
     const groups = this.groupLessonsOf(student, session.from, session.to);
     const names = this.groupsStore.ownerNames();
     const groupClash = (slot: FreeSlot) => {
       const clash = groups.find((occurrence) => overlaps(occurrence, slot));
       return clash ? { groupClash: names.get(clash.appointment.groupId!) ?? 'Gruppe' } : {};
     };
-    const free = this.freeSlots().filter(
+    const free = (this.freeSlots().get(teacher.id) ?? []).filter(
       (slot) => !ownDays.has(slot.date) && !individual.some((occurrence) => overlaps(occurrence, slot)),
     );
     const mine: PlanningSlot[] = own.map(({ date, appointment }) => ({
@@ -146,10 +181,15 @@ export class StudentPlanning {
     return [...mine, ...offered].sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
   }
 
-  /** Trägt den Slot ein, wenn die Person noch wählen darf und er noch frei ist. */
-  book(student: Student, slot: FreeSlot): boolean {
-    const stillFree = this.slotsFor(student).some((s) => !s.own && s.date === slot.date && s.start === slot.start);
-    if (!stillFree || this.remaining(student) === 0) return false;
+  /**
+   * Trägt den Slot ein, wenn die Person noch wählen darf und er noch frei ist. Wählt sie ihren Lehrer noch, steht er
+   * damit für den Berichtszeitraum fest.
+   */
+  book(student: Student, teacher: Teacher, slot: FreeSlot): boolean {
+    const session = this.session();
+    const stillFree = this.slotsFor(student, teacher).some((s) => !s.own && s.date === slot.date && s.start === slot.start);
+    if (!session || !stillFree || this.remaining(student) === 0) return false;
+    if (this.needsTeacher(student)) this.studentsStore.chooseTeacher(student.id, session.periodId, teacher.id);
     this.calendar.add({ date: slot.date, start: slot.start, durationMinutes: slot.durationMinutes, studentId: student.id });
     return true;
   }
@@ -167,12 +207,18 @@ export class StudentPlanning {
     this.session.set(null);
   }
 
-  private studentsOf(teacherId: string, periodId: string): Student[] {
+  private studentsOf(teacherIds: string[], periodId: string): Student[] {
     const config = this.config();
     return this.studentsStore
       .allStudents()
-      .filter((s) => isActiveIn(s, periodId) && teacherOf(s, config, periodId).id === teacherId)
+      .filter((s) => isActiveIn(s, periodId) && teacherIds.includes(teacherOf(s, config, periodId).id))
       .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  }
+
+  /** Steht der Termin im Kalender einer dieser Lehrkräfte? */
+  private inCalendars(teachers: Teacher[]): (appointment: Appointment) => boolean {
+    const filters = teachers.map((teacher) => this.groupsStore.calendarFilter(teacher));
+    return (appointment) => filters.some((inCalendar) => inCalendar(appointment));
   }
 
   /**
@@ -206,9 +252,7 @@ export class StudentPlanning {
   }
 
   /** Einzelunterricht der Person bei anderen Lehrern; diese Zeiten fallen weg. */
-  private otherIndividualLessonsOf(student: Student, from: string, to: string): Occurrence[] {
-    const teacher = this.teacher();
-    if (!teacher) return [];
+  private otherIndividualLessonsOf(student: Student, teacher: Teacher, from: string, to: string): Occurrence[] {
     const inCalendar = this.groupsStore.calendarFilter(teacher);
     return this.calendar.occurrences(from, to, (a) => a.studentId === student.id && !inCalendar(a));
   }
@@ -248,12 +292,20 @@ function groupByDate<T extends { date: string }>(items: T[]): Map<string, T[]> {
 }
 
 function parseSession(data: unknown): PlanningSession | null {
-  const s = data as Partial<PlanningSession> | null;
+  const s = data as (Partial<PlanningSession> & { teacherId?: unknown }) | null;
+  // Frühere Planungen hatten genau eine Lehrkraft.
+  const teacherIds = Array.isArray(s?.teacherIds)
+    ? s.teacherIds.filter((id): id is string => typeof id === 'string')
+    : typeof s?.teacherId === 'string'
+      ? [s.teacherId]
+      : [];
   const valid =
-    typeof s?.teacherId === 'string' &&
-    typeof s.periodId === 'string' &&
+    teacherIds.length > 0 &&
+    typeof s?.periodId === 'string' &&
     typeof s.from === 'string' &&
     typeof s.to === 'string' &&
     typeof s.maxPerStudent === 'number';
-  return valid ? { ...(s as PlanningSession), pin: typeof s!.pin === 'string' ? s!.pin : '' } : null;
+  if (!valid) return null;
+  const { periodId, from, to, maxPerStudent } = s as PlanningSession;
+  return { teacherIds, periodId, from, to, maxPerStudent, pin: typeof s!.pin === 'string' ? s!.pin : '' };
 }
