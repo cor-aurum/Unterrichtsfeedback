@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
-import { Teacher } from '../model';
+import { locationOn, Teacher } from '../model';
 import { minutesOf, startMinutes, timeOf } from './appointments';
 import { CalendarStore } from './calendar.store';
 import { CalendarEvent } from './ical';
@@ -39,7 +39,7 @@ export class CalendarEvents {
         start: `${date}T${appointment.start}`,
         end: endOf(date, startMinutes(appointment) + appointment.durationMinutes),
         summary: (names.get(appointment.studentId ?? appointment.groupId ?? '') ?? 'Unterricht') + suffix,
-        location: teacher.location.trim() || undefined,
+        location: locationOn(teacher, this.config(), date) || undefined,
         description: `Unterricht bei ${teacher.name}`,
       }));
   }

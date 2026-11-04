@@ -5,6 +5,7 @@ import { blocksOf, ConfigStore, sectionsOf } from '../config.store';
 import {
   APP_LOGO,
   BlockVariant,
+  byPeriodOrder,
   CalendarPdfTexts,
   ContentKind,
   DEFAULT_CALENDAR_PDF_TEXTS,
@@ -15,6 +16,7 @@ import {
   ImageAlign,
   Instrument,
   isVisibleTo,
+  locationIn,
   LOGO_HEIGHT_LIMITS,
   PdfLogo,
   PLACEHOLDERS,
@@ -346,6 +348,16 @@ export class ConfigEditor {
 
   protected blocksOf(kind: ContentKind): FixedBlock[] {
     return blocksOf(this.store.config(), kind).filter((block) => isVisibleTo(block, this.activeTeacher.teacher().id));
+  }
+
+  /** Die aktiven Lehrer des Zeitraums in seiner Reihenfolge, danach die übrigen */
+  protected teachersOf(period: ReportPeriodEntry): Teacher[] {
+    return byPeriodOrder(this.store.config().teachers, period.teacherIds);
+  }
+
+  /** Ort im oben gewählten Berichtszeitraum; ein neuer Zeitraum übernimmt ihn aus dem vorigen. */
+  protected locationOf(teacher: Teacher): string {
+    return locationIn(teacher, this.windowsPeriodId());
   }
 
   /** Gemeinsame Varianten und die eigenen des gewählten Lehrers */

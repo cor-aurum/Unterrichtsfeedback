@@ -15,6 +15,7 @@ import {
   ImageAlign,
   instrumentOf,
   Lesson,
+  locationIn,
   logoSize,
   memberNames,
   PdfLayout,
@@ -342,8 +343,9 @@ function recipient(
   period: ReportPeriodEntry,
   fill: (text: string) => string = (text) => text,
 ): Recipient {
-  const fillAll = (text: string) => fill(text).replace(/\{zeitraum\}/gi, period.name);
   const teacher = teacherOf(student, config, period.id);
+  const fillAll = (text: string) =>
+    fill(text).replace(/\{zeitraum\}/gi, period.name).replace(/\{ort\}/gi, locationIn(teacher, period.id));
   const own = configForTeacher(config, teacher.id);
   return { config: withConfigTexts(own, fillAll), student: withStudentTexts(student, fillAll), teacher, period };
 }

@@ -13,9 +13,11 @@ import {
   groupTeacherOf,
   instrumentOf,
   isTeachingDay,
+  locationOn,
   NO_TEACHING_TEXT,
   Student,
   Teacher,
+  teachersInOrderOn,
   teachingWindowsOn,
   today,
 } from '../model';
@@ -712,9 +714,10 @@ export class CalendarPage {
       this.pdf.exportAppointmentList(this.config(), this.eventDays(from, to), period, action);
       return;
     }
-    const teachers = this.config().teachers.map((teacher) => ({
+    const teachers = teachersInOrderOn(this.config(), from).map((teacher) => ({
       name: teacher.name,
-      location: teacher.location,
+      // Der Ort am ersten Tag; meist liegt der Zeitraum der Liste in einem Berichtszeitraum.
+      location: locationOn(teacher, this.config(), from),
       windowsByDate: Object.fromEntries(daysBetween(from, to).map((date) => [date, teachingWindowsOn(teacher, this.config(), date)])),
       days: this.scheduleDays(teacher, from, to, true),
     }));
@@ -750,7 +753,7 @@ export class CalendarPage {
           date,
           entry: {
             time: `${appointment.start}–${endTime(appointment)}`,
-            name: [names.get(appointment.groupId!) ?? 'Gruppe', teacher.location.trim(), teacher.name].filter((p) => p).join(' · '),
+            name: [names.get(appointment.groupId!) ?? 'Gruppe', locationOn(teacher, config, date), teacher.name].filter((p) => p).join(' · '),
             startMinutes: startMinutes(appointment),
             durationMinutes: appointment.durationMinutes,
           },
@@ -787,12 +790,12 @@ export class CalendarPage {
         ...config.teachers.filter((t) => entries.get(t.id)!.length > 0).map((t) => t.id),
         ...shared.flatMap((appointment) => appointment.teacherIds),
       ]);
-      const teachers = config.teachers.filter((t) => involved.has(t.id));
+      const teachers = teachersInOrderOn(config, date).filter((t) => involved.has(t.id));
       return {
         date,
         columns: teachers.map((teacher) => ({
           name: teacher.name,
-          location: teacher.location.trim(),
+          location: locationOn(teacher, config, date),
           teachingWindows: teachingWindowsOn(teacher, config, date),
           entries: entries.get(teacher.id)!,
         })),

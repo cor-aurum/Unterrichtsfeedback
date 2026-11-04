@@ -1,40 +1,41 @@
 import { computed, Injectable } from '@angular/core';
 import {
+  APP_LOGO_PATH,
   BlockContent,
   BlockImage,
   BlockPosition,
   BlockVariant,
+  CalendarPdfTexts,
   CalendarSettings,
   ContentKind,
-  CalendarPdfTexts,
   DEFAULT_CALENDAR_PDF_TEXTS,
   DEFAULT_PDF_LAYOUT,
   defaultCalendarSettings,
-  defaultTeachingWindows,
   defaultInstrument,
+  defaultTeachingWindows,
   FeedbackConfig,
   FixedBlock,
-  APP_LOGO_PATH,
-  LEGACY_APP_LOGO_PATH,
   Instrument,
+  isVisibleTo,
+  LEGACY_APP_LOGO_PATH,
+  locationIn,
   LOGO_HEIGHT_LIMITS,
+  newId,
   PdfLayout,
   PdfLogo,
   Period,
   ReportPeriodEntry,
   schoolHalfYear,
-  today,
-  newId,
   Section,
   SectionScope,
   SectionType,
+  standardWindowsFor,
   Teacher,
   TeachingWindow,
-  WindowsOwner,
   teachingWindowsFor,
   TimeWindow,
-  standardWindowsFor,
-  isVisibleTo,
+  today,
+  WindowsOwner,
 } from './model';
 import { addDays, daysBetween } from './calendar/appointments';
 import { saveFile } from './save-file';
@@ -127,6 +128,7 @@ export class ConfigStore {
         location: '',
         teachingWindows: defaultTeachingWindows(config.calendar),
         periodWindows: {},
+        periodLocations: {},
       });
       if (joinPeriodsOf === null) return;
       config.reportPeriods
@@ -146,6 +148,14 @@ export class ConfigStore {
    * Lehrer.
    * Der letzte Lehrer bleibt immer erhalten.
    */
+  /** Ort des Lehrers in einem Berichtszeitraum; die anderen Zeiträume behalten ihren. */
+  setTeacherLocation(teacherId: string, periodId: string, location: string): void {
+    this.mutate((config) => {
+      const teacher = config.teachers.find((t) => t.id === teacherId);
+      if (teacher) teacher.periodLocations[periodId] = location;
+    });
+  }
+
   removeTeacher(teacherId: string): void {
     this.mutate((config) => {
       if (config.teachers.length <= 1) return;
@@ -178,6 +188,7 @@ export class ConfigStore {
         periodWindows: Object.fromEntries(
           Object.entries(original.periodWindows).map(([periodId, windows]) => [periodId, copyWindows(windows)]),
         ),
+        periodLocations: { ...original.periodLocations },
       };
       config.teachers.splice(config.teachers.findIndex((t) => t.id === teacherId) + 1, 0, copy);
       config.reportPeriods.filter((period) => period.teacherIds.includes(teacherId)).forEach((period) => period.teacherIds.push(id));
@@ -367,6 +378,7 @@ export class ConfigStore {
         instrumentId: instrument.id,
         teachingWindows: setup.teachingWindows,
         periodWindows: {},
+        periodLocations: {},
       });
       if (isHexColor(setup.themeColor)) config.themeColor = setup.themeColor.toLowerCase();
       config.reportPeriods = [
@@ -386,6 +398,8 @@ export class ConfigStore {
       // Die Lehrer behalten ihre Unterrichtszeiten aus dem spätesten Zeitraum; ändern lassen sie sich danach je Zeitraum.
       const latest = [...config.reportPeriods].sort((a, b) => a.to.localeCompare(b.to)).at(-1);
       config.teachers.forEach((teacher) => (teacher.periodWindows[id] = copyWindows(teachingWindowsFor(teacher, latest?.id ?? null))));
+      // Ebenso ihren Ort; meist bleibt er gleich.
+      config.teachers.forEach((teacher) => (teacher.periodLocations[id] = locationIn(teacher, latest?.id ?? null)));
       // Gemeinsame Zeiten übernimmt der neue Zeitraum ebenso.
       const shared = latest?.sharedWindows ? { sharedWindows: copyWindows(latest.sharedWindows) } : {};
       config.reportPeriods.push({ id, ...period, ...shared });
@@ -407,6 +421,17 @@ export class ConfigStore {
     this.mutate((config) => {
       const period = config.reportPeriods.find((p) => p.id === periodId);
       if (period) Object.assign(period, change);
+    });
+  }
+
+  /** Verschiebt einen aktiven Lehrer in der Reihenfolge des Zeitraums. */
+  moveReportPeriodTeacher(periodId: string, teacherId: string, offset: -1 | 1): void {
+    this.mutate((config) => {
+      const ids = config.reportPeriods.find((p) => p.id === periodId)?.teacherIds;
+      const from = ids?.indexOf(teacherId) ?? -1;
+      const to = from + offset;
+      if (!ids || from < 0 || to < 0 || to >= ids.length) return;
+      [ids[from], ids[to]] = [ids[to], ids[from]];
     });
   }
 
@@ -720,8 +745,9 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       instrumentId: typeof t.instrumentId === 'string' ? t.instrumentId : null,
       location: typeof t.location === 'string' ? t.location : '',
       teachingWindows: parseTeachingWindows(t.teachingWindows),
-      // Ältere Lehrer haben noch keine Zeiten je Berichtszeitraum; dort gelten die allgemeinen.
+      // Ältere Lehrer haben noch keine Zeiten und Orte je Berichtszeitraum; dort gelten die allgemeinen.
       periodWindows: parsePeriodWindows(t.periodWindows),
+      periodLocations: parsePeriodLocations(t.periodLocations),
     }));
   }
   const legacyWindows = (config.calendar as { teachingWindows?: unknown } | undefined)?.teachingWindows;
@@ -732,7 +758,13 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
     location: '',
     teachingWindows: legacyWindows === undefined ? defaultTeachingWindows() : parseTeachingWindows(legacyWindows),
     periodWindows: {},
+    periodLocations: {},
   }];
+}
+
+function parsePeriodLocations(data: unknown): Record<string, string> {
+  if (!data || typeof data !== 'object') return {};
+  return Object.fromEntries(Object.entries(data).filter(([, location]) => typeof location === 'string'));
 }
 
 function parsePeriodWindows(data: unknown): Record<string, TeachingWindow[]> {
@@ -933,6 +965,7 @@ function defaultConfig(): FeedbackConfig {
         location: '',
         teachingWindows: defaultTeachingWindows(),
         periodWindows: {},
+        periodLocations: {},
       },
     ],
     instruments: [instrument],

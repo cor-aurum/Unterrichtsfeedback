@@ -142,16 +142,44 @@
                 @if (store.config().teachers.length > 1) {
                   <div class="period-teachers">
                     <span class="choice-label">Aktive Lehrer</span>
-                    @for (teacher of store.config().teachers; track teacher.id) {
-                      <label [title]="locked(period) ? lockedText : ''">
-                        <input
-                          type="checkbox"
-                          [checked]="period.teacherIds.includes(teacher.id)"
-                          [disabled]="locked(period)"
-                          (change)="store.toggleReportPeriodTeacher(period.id, teacher.id)"
-                        />
-                        {{ teacher.name }}
-                      </label>
+                    <ul>
+                      @for (teacher of teachersOf(period); track teacher.id; let first = $first) {
+                        @let index = period.teacherIds.indexOf(teacher.id);
+                        <li [class.inactive]="index < 0">
+                          <label [title]="locked(period) ? lockedText : ''">
+                            <input
+                              type="checkbox"
+                              [checked]="index >= 0"
+                              [disabled]="locked(period)"
+                              (change)="store.toggleReportPeriodTeacher(period.id, teacher.id)"
+                            />
+                            {{ teacher.name }}
+                            @if (first && index === 0 && period.teacherIds.length > 1) {
+                              <span class="lead muted small">steht vorne</span>
+                            }
+                          </label>
+                          @if (index >= 0 && period.teacherIds.length > 1) {
+                            <button
+                              class="icon"
+                              [disabled]="index === 0 || locked(period)"
+                              (click)="store.moveReportPeriodTeacher(period.id, teacher.id, -1)"
+                              title="Nach vorne"
+                            >↑</button>
+                            <button
+                              class="icon"
+                              [disabled]="index === period.teacherIds.length - 1 || locked(period)"
+                              (click)="store.moveReportPeriodTeacher(period.id, teacher.id, 1)"
+                              title="Nach hinten"
+                            >↓</button>
+                          }
+                        </li>
+                      }
+                    </ul>
+                    @if (period.teacherIds.length > 1) {
+                      <p class="muted small">
+                        In dieser Reihenfolge stehen die Lehrer des Zeitraums in Auswahllisten, Filtern und
+                        Kalender-PDFs – den ersten, z. B. die Leitung, also immer vorne.
+                      </p>
                     }
                   </div>
                 }
@@ -369,7 +397,7 @@
         </p>
 
         <label class="windows-period">
-          Unterrichtszeiten für
+          Ort und Unterrichtszeiten für
           <select (change)="windowsPeriodId.set(valueOf($event))">
             @for (period of store.config().reportPeriods; track period.id) {
               <option [value]="period.id" [selected]="period.id === windowsPeriodId()">{{ periodLabel(period) }}</option>
@@ -411,11 +439,11 @@
                 />
               </label>
               <label>
-                Ort
+                Ort in „{{ windowsPeriodName() }}“
                 <input
                   type="text"
-                  [value]="teacher.location"
-                  (change)="store.updateTeacher(teacher.id, { location: valueOf($event) })"
+                  [value]="locationOf(teacher)"
+                  (change)="store.setTeacherLocation(teacher.id, windowsPeriodId(), valueOf($event))"
                   placeholder="z. B. Raum 3, Musikschule Mitte"
                 />
               </label>

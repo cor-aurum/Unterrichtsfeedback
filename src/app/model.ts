@@ -125,7 +125,7 @@ export interface Period {
 export interface ReportPeriodEntry extends Period {
   id: string;
   name: string;
-  /** Lehrer, die in diesem Zeitraum unterrichten */
+  /** Lehrer, die in diesem Zeitraum unterrichten; der erste (z. B. die Leitung) steht überall vorne */
   teacherIds: string[];
   /**
    * Gemeinsame Unterrichtszeiten für alle Lehrer im Zeitraum. Fehlen sie, hat jeder Lehrer eigene
@@ -150,7 +150,30 @@ export function activeTeachersOn(config: FeedbackConfig, date: string): Teacher[
   const periods = config.reportPeriods.filter((period) => containsDate(period, date));
   if (periods.length === 0) return config.teachers;
   const ids = new Set(periods.flatMap((period) => period.teacherIds));
-  return config.teachers.filter((teacher) => ids.has(teacher.id));
+  return teachersInOrderOn(config, date).filter((teacher) => ids.has(teacher.id));
+}
+
+/** Die Lehrer des Zeitraums in seiner Reihenfolge */
+export function periodTeachers(config: FeedbackConfig, period: ReportPeriodEntry): Teacher[] {
+  return byPeriodOrder(config.teachers, period.teacherIds).filter((teacher) => period.teacherIds.includes(teacher.id));
+}
+
+/**
+ * Alle Lehrer: zuerst die der Berichtszeiträume am Tag in deren Reihenfolge, danach die übrigen in der allgemeinen
+ * (Konfiguration → Lehrer).
+ */
+export function teachersInOrderOn(config: FeedbackConfig, date: string): Teacher[] {
+  const ids = config.reportPeriods.filter((period) => containsDate(period, date)).flatMap((period) => period.teacherIds);
+  return byPeriodOrder(config.teachers, ids);
+}
+
+/** Zuerst die Lehrer aus `ids` in deren Reihenfolge, danach die übrigen in ihrer bisherigen */
+export function byPeriodOrder(teachers: Teacher[], ids: string[]): Teacher[] {
+  const rank = (teacher: Teacher) => {
+    const index = ids.indexOf(teacher.id);
+    return index < 0 ? ids.length : index;
+  };
+  return [...teachers].sort((a, b) => rank(a) - rank(b));
 }
 
 export function containsDate(period: Period, date: string): boolean {
@@ -296,8 +319,10 @@ export interface Teacher {
   name: string;
   /** ID eines Instruments aus `FeedbackConfig.instruments`; immer über `teacherInstrument` auswerten. */
   instrumentId: string | null;
-  /** Freitext, z. B. „Raum 3, Musikschule Mitte“ */
+  /** Freitext, z. B. „Raum 3, Musikschule Mitte“; gilt in Berichtszeiträumen ohne eigenen (`periodLocations`) */
   location: string;
+  /** Ort je Berichtszeitraum (Schlüssel: ID des Zeitraums); immer über `locationIn` oder `locationOn` auswerten */
+  periodLocations: Record<string, string>;
   /** Standard-Unterrichtszeiten für Berichtszeiträume ohne eigene (`periodWindows`) */
   teachingWindows: TeachingWindow[];
   /** Eigene Unterrichtszeiten je Berichtszeitraum (Schlüssel: ID des Zeitraums) */
@@ -328,6 +353,19 @@ export function teachingWindowsOn(teacher: Teacher, config: FeedbackConfig, date
   return (period.sharedWindows ?? teachingWindowsFor(teacher, period.id))
     .filter((window) => window.weekday === day)
     .sort((a, b) => a.from.localeCompare(b.from));
+}
+
+/** Ort des Lehrers im Berichtszeitraum; ohne eigenen (oder ohne Zeitraum) sein allgemeiner */
+export function locationIn(teacher: Teacher, periodId: string | null): string {
+  const own = periodId !== null && Object.hasOwn(teacher.periodLocations, periodId);
+  return (own ? teacher.periodLocations[periodId!] : teacher.location).trim();
+}
+
+/** Ort des Lehrers an einem Tag: der des Berichtszeitraums, in dem der Tag liegt (wie bei `teachingWindowsOn`) */
+export function locationOn(teacher: Teacher, config: FeedbackConfig, date: string): string {
+  const periods = config.reportPeriods.filter((period) => containsDate(period, date));
+  const period = periods.find((p) => p.teacherIds.includes(teacher.id)) ?? periods[0];
+  return locationIn(teacher, period?.id ?? null);
 }
 
 export function teacherInstrument(teacher: Teacher, config: FeedbackConfig): Instrument {
@@ -418,7 +456,7 @@ export const PLACEHOLDERS = [
   { key: '{lehrervorname}', description: 'Vorname des Lehrers' },
   { key: '{lehrernachname}', description: 'Nachname des Lehrers' },
   { key: '{lehrerinstrument}', description: 'Instrument des Lehrers' },
-  { key: '{ort}', description: 'Ort des Lehrers' },
+  { key: '{ort}', description: 'Ort des Lehrers im Berichtszeitraum' },
   { key: '{titel}', description: 'Überschrift im PDF' },
   { key: '{datum}', description: 'Datum des Exports' },
   { key: '{zeitraum}', description: 'Name des Berichtszeitraums, z. B. „1. Halbjahr 2026/27“' },

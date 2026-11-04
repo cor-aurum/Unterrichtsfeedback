@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
+import { locationOn } from '../model';
 import { ReportPeriod } from '../report-period';
 import { isNativeApp, saveFile } from '../save-file';
 import { storedSignal } from '../stored-signal';
@@ -86,7 +87,7 @@ export class CalendarTablePanel {
     ];
   }
 
-  /** Einzel- und Gruppenunterricht stehen im Raum des Lehrers, in dessen Kalender sie stehen. */
+  /** Einzel- und Gruppenunterricht stehen im Raum des Lehrers, in dessen Kalender sie stehen, an diesem Tag. */
   private appointmentRow({ date, appointment }: Occurrence): CalendarRow {
     const teacher = this.groupsStore.calendarTeacherOf(appointment);
     return {
@@ -96,7 +97,7 @@ export class CalendarTablePanel {
       start: appointment.start,
       end: endTime(appointment),
       durationMinutes: appointment.durationMinutes,
-      location: teacher.location.trim(),
+      location: locationOn(teacher, this.config(), date),
       teachers: [teacher.name],
     };
   }
@@ -131,7 +132,7 @@ export class CalendarTablePanel {
               start: part.start,
               end: part.end,
               durationMinutes: minutesOf(part.end) - minutesOf(part.start),
-              location: teacher.location.trim(),
+              location: locationOn(teacher, this.config(), date),
               teachers: [teacher.name],
             },
           ];

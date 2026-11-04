@@ -2,6 +2,7 @@ import { Component, computed, effect, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ActiveTeacher } from './active-teacher';
 import { ConfigStore } from './config.store';
+import { byPeriodOrder } from './model';
 import { ReportPeriod } from './report-period';
 import { ServerSync } from './sync/server-sync';
 import { isNativeApp } from './save-file';
@@ -16,7 +17,10 @@ import { WelcomeDialog } from './welcome/welcome-dialog';
 export class App {
   private readonly configStore = inject(ConfigStore);
   private readonly theme = this.configStore.theme;
-  protected readonly teachers = computed(() => this.configStore.config().teachers);
+  /** Die Lehrer des gewählten Zeitraums zuerst, in seiner Reihenfolge */
+  protected readonly teachers = computed(() =>
+    byPeriodOrder(this.configStore.config().teachers, this.reportPeriod.period().teacherIds),
+  );
   /** Erster Start: Die Begrüßung legt den eigenen Lehrer an oder spielt eine Sicherung ein. */
   protected readonly setupPending = this.configStore.setupPending;
   protected readonly activeTeacher = inject(ActiveTeacher);
