@@ -2,7 +2,7 @@
   @if (student(); as current) {
     <header class="student-head">
       <div class="grow">
-        <h1>{{ current.name }}</h1>
+        <h1>{{ fullNames().get(current.id) ?? current.name }}</h1>
         @if (remaining() > 0) {
           <p class="status">Du kannst noch <strong>{{ remaining() }}</strong> {{ remaining() === 1 ? 'Termin' : 'Termine' }} wählen.</p>
         } @else {
@@ -57,7 +57,7 @@
     <div class="names">
       @for (person of planning.students(); track person.id) {
         <button class="name" [class.complete]="isDone(person)" (click)="choose(person)">
-          <span class="person">{{ shortName(person) }}</span>
+          <span class="person">{{ shortNames().get(person.id) }}</span>
           <span class="count">{{ countText(person) }}</span>
         </button>
       } @empty {
