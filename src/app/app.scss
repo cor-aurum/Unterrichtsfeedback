@@ -135,6 +135,36 @@
   margin-bottom: 1rem;
 }
 
+// Unaufdringlich: eine schmale Zeile, die man ausblenden kann; sie kommt erst bei der nächsten Version wieder.
+.update-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0.4rem 0.75rem;
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  background: var(--primary-light);
+  font-size: 0.9rem;
+
+  button {
+    margin-left: auto;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    text-decoration: underline;
+    font: inherit;
+    font-size: 0.85rem;
+  }
+}
+
+.app-version {
+  display: block;
+  margin-top: 0.5rem;
+}
+
 main {
   flex: 1;
   width: 100%;

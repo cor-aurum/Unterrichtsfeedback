@@ -50,6 +50,13 @@
       Der Abgleich mit dem Server wartet auf dich. <a routerLink="/export">Zu Export &amp; Sicherung</a>
     </p>
   }
+  @if (update.offer(); as offer) {
+    <p class="update-hint">
+      Version {{ offer.version }} der App ist da.
+      <a [href]="offer.url" target="_blank" rel="noopener">Neuerungen und Download</a>
+      <button type="button" class="link" (click)="update.dismiss()" aria-label="Hinweis ausblenden">Ausblenden</button>
+    </p>
+  }
   <router-outlet />
 </main>
 
@@ -77,5 +84,7 @@
   }
   @if (!nativeApp) {
     <a class="apk" [href]="apkUrl">Android-App herunterladen (APK)</a>
+  } @else if (appVersion) {
+    <span class="app-version">Version {{ appVersion }}</span>
   }
 </footer>

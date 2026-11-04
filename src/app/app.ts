@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ActiveTeacher } from './active-teacher';
+import { appVersion, AppUpdate } from './app-update';
 import { ConfigStore } from './config.store';
 import { byPeriodOrder } from './model';
 import { ReportPeriod } from './report-period';
@@ -39,6 +40,9 @@ export class App {
     return login ? new URL(login.url).host : '';
   });
   protected readonly nativeApp = isNativeApp;
+  /** Hinweis auf eine neuere Android-App */
+  protected readonly update = inject(AppUpdate);
+  protected readonly appVersion = appVersion;
   /** Neueste APK aus den GitHub-Releases (siehe .github/workflows/android.yml) */
   protected readonly apkUrl =
     'https://github.com/cor-aurum/Unterrichtsfeedback/releases/latest/download/Unterrichtsfeedback.apk';

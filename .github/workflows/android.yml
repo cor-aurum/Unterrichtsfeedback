@@ -30,10 +30,6 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
-
-      - run: npx cap sync android
-
       - name: Versionsnummer bestimmen
         id: version
         run: |
@@ -43,6 +39,11 @@ jobs:
             NAME="0.0.0-test.${GITHUB_RUN_NUMBER}"
           fi
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      # Die App kennt ihre Version, um auf neuere Releases hinzuweisen (src/app/app-update.ts).
+      - run: npm run build -- --define "APP_VERSION='${{ steps.version.outputs.name }}'"
+
+      - run: npx cap sync android
 
       - name: Signaturschlüssel bereitstellen
         env:
