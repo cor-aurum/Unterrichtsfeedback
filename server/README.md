@@ -1,0 +1,177 @@
+# unterricht-feedback-server
+
+Server für die App Unterrichtsfeedback. Er speichert die Daten aller Lehrer an einer Stelle, gleicht sie zwischen
+Geräten ab und regelt, wer welche Personen sehen darf. Er ersetzt die frühere Ordner-Synchronisation (lokaler
+Ordner bzw. Nextcloud per WebDAV).
+
+- Ein einzelnes Programm ohne Abhängigkeiten; alle Daten liegen in einer SQLite-Datei.
+- Die App arbeitet weiter auch offline und gleicht ab, sobald der Server erreichbar ist.
+- Spricht nur HTTP; HTTPS übernimmt ein Reverse-Proxy (Caddy, nginx, Traefik …).
+
+## Wer sieht was?
+
+- **Alle Lehrer** sehen und ändern die Konfiguration (Textbausteine, feste Inhalte, Berichtszeiträume …), die
+  Lehrer und die allgemeinen Termine. Jeder Lehrer kann neue Berichtszeiträume anlegen und neue Lehrer einladen.
+- **Personen, Gruppen, Stunden und Termine** eines Berichtszeitraums sehen und ändern nur die Lehrer, die in diesem
+  Zeitraum eingetragen sind (in der App: Konfiguration → Allgemein → Berichtszeiträume → *Aktive Lehrer*).
+- Lehrer eintragen oder austragen dürfen nur Lehrer, die selbst eingetragen sind. Wer einen Zeitraum neu anlegt,
+  muss sich selbst eintragen.
+- Personen werden nie automatisch zusammengeführt. Wer zwei gleiche Personen sehen kann (gleicher Name, passendes
+  Geburtsdatum), bekommt in der App unter *Personen* einen Vorschlag zum Zusammenführen; die Apps der anderen Lehrer
+  übernehmen die Zusammenführung beim nächsten Abgleich.
+
+## Programm holen
+
+Fertige Programme für Linux (amd64, arm64, armv7), Windows und macOS baut GitHub Actions bei jedem Push nach
+`server/` (unter *Actions* als Artefakte) und hängt sie bei einem Versions-Tag (`v1.2.0`) an den Release.
+
+Selbst bauen (Go 1.26 oder neuer, kein C-Compiler nötig):
+
+```sh
+cd server
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o unterricht-feedback-server .
+```
+
+## Einrichten unter Linux
+
+```sh
+sudo useradd --system --home /var/lib/unterricht-feedback --create-home unterricht-feedback
+sudo install -m 755 unterricht-feedback-server-linux-amd64 /usr/local/bin/unterricht-feedback-server
+```
+
+`/etc/systemd/system/unterricht-feedback.service`:
+
+```ini
+[Unit]
+Description=Unterrichtsfeedback-Server
+After=network.target
+
+[Service]
+User=unterricht-feedback
+WorkingDirectory=/var/lib/unterricht-feedback
+Environment=UF_DB=/var/lib/unterricht-feedback/daten.db
+Environment=UF_PUBLIC_URL=https://feedback.example.de
+Environment=UF_LISTEN=127.0.0.1:8080
+# Nur Browser von dieser Adresse dürfen zugreifen (die Android-App ist davon nicht betroffen); „*“ erlaubt alle.
+Environment=UF_ALLOW_ORIGIN=*
+ExecStart=/usr/local/bin/unterricht-feedback-server serve
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/unterricht-feedback
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now unterricht-feedback
+```
+
+### Reverse-Proxy
+
+Der Server lauscht nur auf `127.0.0.1`; von außen ist er allein über den Proxy erreichbar. Der Proxy muss auf
+demselben Rechner laufen: Nur bei Anfragen von dort wertet die Bremse bei Fehlversuchen `X-Forwarded-For` aus, und
+zwar den Eintrag, den der Proxy selbst anhängt. Caddy setzt ihn von sich aus, bei nginx sorgt
+`$proxy_add_x_forwarded_for` dafür. Ohne diese Angabe gilt für alle Anfragen über den Proxy eine gemeinsame Bremse.
+
+Caddy (`/etc/caddy/Caddyfile`, holt das Zertifikat selbst):
+
+```
+feedback.example.de {
+	reverse_proxy 127.0.0.1:8080
+}
+```
+
+nginx:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name feedback.example.de;
+    # ssl_certificate … (z. B. mit certbot)
+
+    client_max_body_size 30m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+## Der erste Lehrer
+
+Den ersten Lehrer lädt man auf dem Server ein, jeden weiteren laden Lehrer in der App ein
+(Konfiguration → Lehrer → *Einladungscode erzeugen*):
+
+```sh
+sudo -u unterricht-feedback env UF_DB=/var/lib/unterricht-feedback/daten.db \
+  UF_PUBLIC_URL=https://feedback.example.de unterricht-feedback-server invite
+```
+
+Der Code (`UF1.…`) enthält die Adresse des Servers. Der Lehrer wählt in der App beim ersten Start *Mit Server
+verbinden …*, fügt ihn ein, wählt Benutzername und Passwort und richtet sich danach wie gewohnt ein. Codes gelten einmal
+und 14 Tage.
+
+Ein so erzeugter Code gehört zu keinem Lehrer: Das Konto bekommt die Lehrer-ID der App, die ihn einlöst. Hat jemand
+die App bisher ohne Server benutzt, löst er den Code unter *Export & Sicherung → Server* ein; seine vorhandenen Daten
+landen dann auf dem leeren Server, und er ist dort derselbe Lehrer wie bisher.
+
+## Passwort vergessen
+
+```sh
+sudo -u unterricht-feedback env UF_DB=/var/lib/unterricht-feedback/daten.db \
+  UF_PUBLIC_URL=https://feedback.example.de unterricht-feedback-server reset-code --user anna
+```
+
+Den Code fügt der Lehrer in der App unter *Passwort vergessen?* ein und vergibt ein neues Passwort; alle seine
+Geräte werden dabei abgemeldet. Reset-Codes gelten einmal und zwei Tage. Benutzernamen zeigt `accounts`.
+
+## Kalender-Abo
+
+Jeder Lehrer kann in der App (Kalender → Kalender-Abo) eine Abo-Adresse für Google-, Apple- oder Outlook-Kalender
+einrichten: `https://feedback.example.de/api/kalender/<Schlüssel>.ics`. Den Kalender erzeugt die App bei jedem
+Abgleich und schickt ihn mit; der Server liefert ihn nur aus. Er ist also so aktuell wie der letzte Abgleich eines
+Geräts dieses Lehrers.
+
+Kalender-Apps können sich nicht anmelden, deshalb ist die Adresse selbst der Schlüssel (256 Bit Zufall). Wer sie
+kennt, sieht die Termine mit den Namen der Personen. Eine neue Adresse in der App macht die alte sofort ungültig. Die
+Adresse steht in den Zugriffsprotokollen des Proxys; wer sie dort nicht haben will, schließt `/api/kalender/` vom
+Protokoll aus.
+
+## Sicherung
+
+Alle Daten stehen in der SQLite-Datei. Eine konsistente Kopie im laufenden Betrieb:
+
+```sh
+sqlite3 /var/lib/unterricht-feedback/daten.db ".backup '/sicherung/daten-$(date +%F).db'"
+```
+
+Ohne `sqlite3` den Dienst kurz anhalten und die Datei (samt `daten.db-wal`, falls vorhanden) kopieren.
+
+## Schnittstelle
+
+Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
+
+| Methode und Pfad          | Zweck                                                                 |
+|---------------------------|-----------------------------------------------------------------------|
+| `POST /api/redeem`        | Einladung einlösen: `{code, username, password, teacherId}` → `{token, username, teacherId}`; `teacherId` gilt nur bei Codes ohne Lehrer |
+| `POST /api/login`         | Anmelden: `{username, password}` → wie oben                            |
+| `POST /api/reset`         | Neues Passwort mit Reset-Code: `{code, password}` → wie oben           |
+| `POST /api/logout`        | Abmelden                                                               |
+| `GET /api/me`             | Eigenes Konto                                                          |
+| `GET /api/accounts`       | Welche Lehrer schon ein Konto haben                                   |
+| `POST /api/invites`       | Einladungscode für einen Lehrer ohne Konto: `{teacherId}` → `{code, expiresAt}` |
+| `GET /api/docs`           | Dokumente, die man sehen darf: `[{name, version}]`                     |
+| `GET/PUT/DELETE /api/docs/{name}` | Dokument lesen, schreiben, löschen                            |
+| `GET /api/merges`         | Zusammengeführte Personen: `[{from, into}]`                            |
+| `POST /api/merges`        | Zwei Personen zusammenführen: `{from, into}`                           |
+| `GET /api/feed`           | Eigenes Kalender-Abo: `{url, updatedAt}`; `url` leer ohne Abo          |
+| `PUT /api/feed`           | Kalender (iCalendar) für das Abo senden                                |
+| `POST/DELETE /api/feed/address` | Neue Abo-Adresse (die alte gilt nicht mehr) bzw. Abo beenden     |
+| `GET /api/kalender/{Schlüssel}.ics` | Der Kalender für die Kalender-App, ohne Anmeldung            |
+
+Angemeldet wird mit `Authorization: Bearer <token>`. Fehler kommen als `{error: "…"}` mit einem Text für die App.

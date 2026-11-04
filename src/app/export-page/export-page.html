@@ -131,128 +131,81 @@
 </section>
 
 <section class="card">
-  <h2>Synchronisation</h2>
+  <h2>Server</h2>
   <p class="muted">
-    Bei jeder Änderung schreibt die App dieselben Dateien wie in der Sicherung in einen Ordner:
-    @if (sync.localFoldersSupported) {
-      @if (nativeApp) {
-        in einen Ordner auf dem Gerät, z. B. der Nextcloud-App, oder
-      } @else {
-        in einen eigenen Ordner auf diesem Rechner, z. B. im Nextcloud-Sync-Ordner, oder
+    Mit einem Unterrichtsfeedback-Server teilen sich mehrere Lehrer und Geräte die Daten. Die Daten bleiben auch auf
+    diesem Gerät, die App funktioniert also offline weiter und gleicht ab, sobald der Server erreichbar ist. Personen
+    und ihre Stunden sieht jeder Lehrer nur in den Berichtszeiträumen, in denen er eingetragen ist.
+  </p>
+  @if (sync.legacyNotice()) {
+    <p class="message warning">
+      Die Synchronisation über einen Ordner oder eine Nextcloud gibt es nicht mehr; sie wurde auf diesem Gerät beendet.
+      Die Daten hier sind unverändert. Verbinde dich mit dem Server, um sie wieder mit anderen Geräten abzugleichen.
+    </p>
+  }
+
+  @switch (sync.status()) {
+    @case ('off') {
+      <app-server-login-panel [teacherId]="activeTeacher.teacher().id" (connected)="connected($event)" />
+    }
+    @case ('reconnect') {
+      <p class="message warning">
+        Die Anmeldung bei {{ serverName() }} ist abgelaufen. Bitte das Passwort für „{{ sync.login()?.username }}“
+        erneut eingeben.
+      </p>
+      <form class="row actions-row" (submit)="reconnect($event)">
+        <input name="password" type="password" required autocomplete="current-password" aria-label="Passwort" />
+        <button type="submit">Anmelden</button>
+        <button type="button" class="secondary" (click)="disconnectServer()">Abmelden</button>
+      </form>
+      @if (loginError(); as text) {
+        <p class="message error">{{ text }}</p>
       }
     }
-    direkt per WebDAV in deine Nextcloud.
-    @if (nativeApp) {
-      Für eine Nextcloud empfiehlt sich WebDAV, siehe <a routerLink="/hilfe">Hilfe</a>.
-    } @else {
-      Für WebDAV muss die Nextcloud Zugriffe von dieser Seite erlauben, siehe <a routerLink="/hilfe">Hilfe</a>.
-    }
-  </p>
-
-  @if (webDavFormOpen()) {
-    <form class="webdav" (submit)="connectWebDav($event)">
-      <label>
-        Nextcloud- oder WebDAV-Adresse
-        <input name="url" type="url" required placeholder="https://cloud.example.de" [value]="webDav().url" />
-      </label>
-      <div class="webdav-row">
-        <label>
-          Benutzername
-          <input name="user" type="text" required autocomplete="username" [value]="webDav().user" />
-        </label>
-        <label>
-          App-Passwort
-          <input name="password" type="password" required autocomplete="current-password" [value]="webDav().password" />
-        </label>
-      </div>
-      <label>
-        Ordner
-        <input name="folder" type="text" placeholder="Unterrichtsfeedback" [value]="webDav().folder" />
-      </label>
-      <p class="muted small">
-        Lege das App-Passwort in der Nextcloud unter Einstellungen → Sicherheit an, nicht dein Login-Passwort. Es
-        wird auf diesem Gerät gespeichert; du kannst es in der Nextcloud jederzeit widerrufen. Gibt es den Ordner
-        noch nicht, wird er angelegt.
+    @case ('initial') {
+      <p class="message warning">
+        Auf {{ serverName() }} und auf diesem Gerät liegen schon Daten. Welche sollen gelten?
       </p>
-      @if (webDavError(); as error) {
-        <p class="message error">{{ error }}</p>
+      <div class="row actions-row">
+        <button (click)="loadFromServer()">Daten vom Server übernehmen</button>
+        <button class="secondary" (click)="overwriteServer()">Server mit den Daten dieses Geräts überschreiben</button>
+        <button class="secondary" (click)="disconnectServer()">Abmelden</button>
+      </div>
+    }
+    @case ('conflict') {
+      <p class="message warning">
+        Diese Daten wurden hier und auf einem anderen Gerät geändert:
+        @for (name of sync.conflicts(); track name; let last = $last) {
+          <strong>{{ fileLabel(name) }}</strong>{{ last ? '.' : ',' }}
+        }
+        Alle anderen Änderungen werden weiter abgeglichen, sobald du entschieden hast.
+      </p>
+      <div class="row actions-row">
+        <button (click)="resolveConflicts('server')">Fassung vom Server übernehmen</button>
+        <button class="secondary" (click)="resolveConflicts('local')">Meine Fassung behalten</button>
+      </div>
+    }
+    @default {
+      @if (sync.status() === 'error') {
+        <p class="message error">Abgleich fehlgeschlagen: {{ sync.error() }}</p>
+      } @else {
+        <p class="sync-state">
+          ✓ Verbunden mit {{ serverName() }} als „{{ sync.login()?.username }}“
+          @if (sync.lastSync(); as time) {
+            <span class="muted">(zuletzt abgeglichen {{ time.toLocaleTimeString('de-DE') }})</span>
+          }
+        </p>
+        @if (sync.lastPull(); as time) {
+          <p class="muted small">Änderungen von anderen Geräten zuletzt übernommen um {{ time.toLocaleTimeString('de-DE') }}.</p>
+        }
       }
       <div class="row actions-row">
-        <button type="submit" [disabled]="connecting()">{{ connecting() ? 'Verbinde …' : 'Verbinden' }}</button>
-        <button type="button" class="secondary" (click)="webDavFormOpen.set(false)">Abbrechen</button>
+        <button [class.secondary]="sync.status() !== 'error'" (click)="sync.retry()">
+          {{ sync.status() === 'error' ? 'Erneut versuchen' : 'Jetzt abgleichen' }}
+        </button>
+        <button class="secondary" (click)="loadFromServer()">Daten vom Server neu laden</button>
+        <button class="secondary" (click)="disconnectServer()">Abmelden</button>
       </div>
-    </form>
-  } @else {
-    @switch (sync.status()) {
-      @case ('off') {
-        <div class="row actions-row">
-          @if (sync.localFoldersSupported) {
-            <button (click)="sync.connect()">Ordner wählen</button>
-          }
-          <button [class.secondary]="sync.localFoldersSupported" (click)="openWebDavForm()">
-            Nextcloud/WebDAV einrichten
-          </button>
-        </div>
-      }
-      @case ('reconnect') {
-        <p class="message warning">
-          Der Zugriff auf „{{ sync.folderName() }}“ muss erneut erlaubt werden.
-        </p>
-        <div class="row actions-row">
-          <button (click)="sync.reconnect()">Zugriff erlauben</button>
-          <button class="secondary" (click)="disconnectFolder()">Synchronisation beenden</button>
-        </div>
-      }
-      @case ('initial') {
-        <p class="message warning">
-          In „{{ sync.folderName() }}“ liegen schon Daten, z. B. von einem anderen Gerät. Welche sollen gelten?
-        </p>
-        <div class="row actions-row">
-          <button (click)="loadFromFolder()">Daten aus dem Ordner übernehmen</button>
-          <button class="secondary" (click)="overwriteFolder()">Ordner mit den Daten dieses Geräts überschreiben</button>
-          <button class="secondary" (click)="disconnectFolder()">Synchronisation beenden</button>
-        </div>
-      }
-      @case ('conflict') {
-        <p class="message warning">
-          Diese Daten wurden hier und auf einem anderen Gerät geändert:
-          @for (name of sync.conflicts(); track name; let last = $last) {
-            <strong>{{ fileLabel(name) }}</strong>{{ last ? '.' : ',' }}
-          }
-          Alle anderen Änderungen werden weiter abgeglichen, sobald du entschieden hast.
-        </p>
-        <div class="row actions-row">
-          <button (click)="resolveConflicts('folder')">Fassung aus dem Ordner übernehmen</button>
-          <button class="secondary" (click)="resolveConflicts('local')">Meine Fassung behalten</button>
-        </div>
-      }
-      @default {
-        @if (sync.status() === 'error') {
-          <p class="message error">Synchronisation fehlgeschlagen: {{ sync.error() }}</p>
-        } @else {
-          <p class="sync-state">
-            ✓ Synchronisiert mit „{{ sync.folderName() }}“
-            @if (sync.lastSync(); as time) {
-              <span class="muted">(zuletzt abgeglichen {{ time.toLocaleTimeString('de-DE') }})</span>
-            }
-          </p>
-          @if (sync.lastPull(); as time) {
-            <p class="muted small">Änderungen von anderen Geräten zuletzt übernommen um {{ time.toLocaleTimeString('de-DE') }}.</p>
-          }
-        }
-        <div class="row actions-row">
-          @if (sync.status() === 'error') {
-            <button (click)="sync.retry()">Erneut versuchen</button>
-          }
-          <button class="secondary" (click)="loadFromFolder()">Daten aus dem Ordner laden</button>
-          @if (sync.webDavSettings()) {
-            <button class="secondary" (click)="openWebDavForm()">Zugangsdaten ändern</button>
-          } @else {
-            <button class="secondary" (click)="sync.connect()">Anderen Ordner wählen</button>
-          }
-          <button class="secondary" (click)="disconnectFolder()">Synchronisation beenden</button>
-        </div>
-      }
     }
   }
 </section>
@@ -264,7 +217,7 @@
     Vorlage zurück; danach startet die App mit der Begrüßung wie beim ersten Mal. Erstelle vorher eine
     Datensicherung, wenn du die Daten noch brauchst.
     @if (sync.status() !== 'off') {
-      Die Synchronisation mit „{{ sync.folderName() }}“ wird dabei beendet; die Dateien im Ordner bleiben erhalten.
+      Du wirst dabei vom Server abgemeldet; die Daten auf dem Server bleiben erhalten.
     }
   </p>
   <div class="row">

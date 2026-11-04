@@ -129,7 +129,7 @@
           </p>
         }
 
-        @for (section of config().sections; track section.id) {
+        @for (section of sectionsFor(student); track section.id) {
           <fieldset>
             <legend>
               {{ section.title }}

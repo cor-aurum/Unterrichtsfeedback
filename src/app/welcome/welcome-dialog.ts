@@ -8,6 +8,8 @@ import { WEEKDAY_NAMES } from '../calendar/appointments';
 import { ConfigStore, isPeriod } from '../config.store';
 import { newId, ReportPeriodEntry, schoolHalfYear, TeachingWindow, today } from '../model';
 import { ReportPeriod } from '../report-period';
+import { Connected, ServerLoginPanel } from '../sync/server-login-panel';
+import { ServerSync } from '../sync/server-sync';
 import { DEFAULT_THEME_COLOR } from '../theme';
 
 /** Ein Wochentag in der Begrüßung: angehakt mit einem Zeitfenster */
@@ -30,6 +32,7 @@ const COLOR_PRESETS = [DEFAULT_THEME_COLOR, '#d32f2f', '#c2185b', '#7b1fa2', '#3
  */
 @Component({
   selector: 'app-welcome-dialog',
+  imports: [ServerLoginPanel],
   templateUrl: './welcome-dialog.html',
   styleUrl: './welcome-dialog.scss',
 })
@@ -54,6 +57,23 @@ export class WelcomeDialog {
   protected readonly teachers = computed(() => this.configStore.config().teachers);
   /** Gewählter Lehrer; `new` legt einen neuen an */
   protected readonly chosenTeacherId = signal<string>('new');
+
+  // --- Server ---
+  private readonly sync = inject(ServerSync);
+  /**
+   * - `none`: ohne Server einrichten
+   * - `login`: Einladungscode einlösen oder anmelden
+   * - `setup`: verbunden, der Server ist noch leer: wie gewohnt einrichten (erster Lehrer)
+   * - `teacher`: verbunden, der eigene Lehrer fehlt noch in den Daten: Name und Instrument angeben
+   */
+  protected readonly serverStep = signal<'none' | 'login' | 'setup' | 'teacher'>('none');
+  protected readonly serverBusy = signal(false);
+  /** Der Lehrer dieser frischen App; ihn bekommt ein Konto aus einer Einladung, die an keinen Lehrer gebunden ist */
+  protected readonly ownTeacherId = computed(() => this.configStore.config().teachers[0].id);
+  protected readonly serverName = computed(() => {
+    const login = this.sync.login();
+    return login ? new URL(login.url).host : '';
+  });
 
   constructor() {
     // Nur die Hilfe ist vor der Einrichtung erreichbar: Wer von dort weiternavigiert, landet wieder im Dialog.
@@ -163,6 +183,56 @@ export class WelcomeDialog {
     }
   }
 
+  /**
+   * Angemeldet: Daten vom Server übernehmen. Ist der Server noch leer, richtet man sich wie gewohnt ein (die Daten
+   * gehen dann an den Server); kennt er den eigenen Lehrer, ist die Einrichtung erledigt; sonst fehlen nur Name und
+   * Instrument.
+   */
+  protected async serverConnected({ login }: Connected): Promise<void> {
+    this.serverBusy.set(true);
+    this.error.set(null);
+    try {
+      await this.sync.connect(login, 'load');
+    } finally {
+      this.serverBusy.set(false);
+    }
+    if (this.sync.status() === 'error') {
+      this.error.set(`Die Daten ließen sich nicht laden: ${this.sync.error()}`);
+      return;
+    }
+    if (this.sync.serverEmpty()) {
+      this.serverStep.set('setup');
+      return;
+    }
+    if (this.teachers().some((t) => t.id === login.teacherId)) {
+      this.activeTeacher.select(login.teacherId);
+      this.configStore.setupPending.set(false);
+      return;
+    }
+    this.serverStep.set('teacher');
+  }
+
+  /**
+   * Neuer Lehrer auf einem Server mit Daten: Er legt sich mit der ID seines Kontos an. In Berichtszeiträume trägt ihn
+   * ein anderer Lehrer ein; selbst darf er nur neue anlegen.
+   */
+  protected createOwnTeacher(event: Event): void {
+    event.preventDefault();
+    const login = this.sync.login();
+    if (!login) return;
+    const form = new FormData(event.target as HTMLFormElement);
+    const name = String(form.get('name') ?? '').trim();
+    const instrument = String(form.get('instrument') ?? '').trim();
+    if (!name || !instrument) {
+      this.error.set('Bitte gib deinen Namen und dein Instrument an.');
+      return;
+    }
+    this.configStore.addTeacher(name, { instrument, id: login.teacherId, joinPeriodsOf: null });
+    this.activeTeacher.select(login.teacherId);
+    this.error.set(null);
+    this.configStore.setupPending.set(false);
+  }
+
   /** Wählt den eigenen Lehrer aus der Datei oder legt ihn an; ein neuer ist im gewählten Zeitraum aktiv. */
   protected chooseTeacher(event: Event): void {
     event.preventDefault();
@@ -175,7 +245,7 @@ export class WelcomeDialog {
         this.error.set('Bitte gib deinen Namen und dein Instrument an.');
         return;
       }
-      teacherId = this.configStore.addTeacher(name, instrument);
+      teacherId = this.configStore.addTeacher(name, { instrument });
       const period = this.selectedPeriod.period();
       if (!period.teacherIds.includes(teacherId)) this.configStore.toggleReportPeriodTeacher(period.id, teacherId);
     }

@@ -1,25 +1,24 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { StudentLabelPipe } from '../student-label.pipe';
 import { RouterLink } from '@angular/router';
+import { ActiveTeacher } from '../active-teacher';
 import { BackupService } from '../backup';
-import { FolderSync } from '../sync/folder-sync';
-import { WebDavSettings } from '../sync/sync-folder';
-import { GENERAL_FILE, GROUPS_FILE, SHARED_FILE } from '../sync/sync-files';
+import { Connected, ServerLoginPanel } from '../sync/server-login-panel';
+import { ServerSync } from '../sync/server-sync';
+import { GENERAL_FILE, SHARED_FILE } from '../sync/sync-files';
 import { ConfigStore } from '../config.store';
 import { PdfExport } from '../pdf-export';
 import { labelOf, ReportPeriod } from '../report-period';
-import { isNativeApp, safeFileName } from '../save-file';
+import { isNativeApp } from '../save-file';
+import { StudentLabelPipe } from '../student-label.pipe';
 import { StudentsStore } from '../students.store';
 import { GroupsStore } from '../groups.store';
 import { Group, groupLabel, Student } from '../model';
 
 type Scope = 'all' | 'single';
 
-const EMPTY_WEBDAV: WebDavSettings = { url: '', user: '', password: '', folder: 'Unterrichtsfeedback' };
-
 @Component({
   selector: 'app-export-page',
-  imports: [RouterLink, StudentLabelPipe],
+  imports: [RouterLink, StudentLabelPipe, ServerLoginPanel],
   templateUrl: './export-page.html',
   styleUrl: './export-page.scss',
 })
@@ -29,11 +28,8 @@ export class ExportPage {
   protected readonly store = inject(StudentsStore);
   protected readonly nativeApp = isNativeApp;
   protected readonly backup = inject(BackupService);
-  protected readonly sync = inject(FolderSync);
-  protected readonly webDavFormOpen = signal(false);
-  protected readonly webDavError = signal<string | null>(null);
-  protected readonly connecting = signal(false);
-  protected readonly webDav = signal<WebDavSettings>(EMPTY_WEBDAV);
+  protected readonly sync = inject(ServerSync);
+  protected readonly activeTeacher = inject(ActiveTeacher);
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
   protected readonly reportPeriod = inject(ReportPeriod);
   protected readonly labelOf = labelOf;
@@ -135,57 +131,62 @@ export class ExportPage {
     }
   }
 
-  protected async loadFromFolder(): Promise<void> {
-    if (confirm('Alle Personen, Stunden und die Konfiguration auf diesem Gerät werden durch den Ordnerinhalt ersetzt. Fortfahren?')) {
-      await this.sync.loadFromFolder();
-    }
+  protected readonly serverName = computed(() => {
+    const login = this.sync.login();
+    return login ? new URL(login.url).host : '';
+  });
+  protected readonly loginError = signal<string | null>(null);
+
+  /** Eingeloggt: abgleichen; liegen auf beiden Seiten Daten, fragt die App, welche gelten. */
+  protected connected({ login }: Connected): void {
+    this.sync.connect(login);
   }
 
-  protected async overwriteFolder(): Promise<void> {
-    if (confirm('Die Dateien im Ordner werden durch die Daten auf diesem Gerät ersetzt. Fortfahren?')) {
-      await this.sync.overwriteFolder();
-    }
-  }
-
-  protected openWebDavForm(): void {
-    this.webDav.set(this.sync.webDavSettings() ?? EMPTY_WEBDAV);
-    this.webDavError.set(null);
-    this.webDavFormOpen.set(true);
-  }
-
-  protected async connectWebDav(event: Event): Promise<void> {
+  protected async reconnect(event: Event): Promise<void> {
     event.preventDefault();
-    const form = new FormData(event.target as HTMLFormElement);
-    const value = (key: string) => String(form.get(key) ?? '').trim();
-    const settings = { url: value('url'), user: value('user'), password: value('password'), folder: value('folder') };
-    this.webDav.set(settings);
-    this.connecting.set(true);
-    this.webDavError.set(null);
+    const password = String(new FormData(event.target as HTMLFormElement).get('password') ?? '');
+    this.loginError.set(null);
     try {
-      await this.sync.connectWebDav(settings);
-      this.webDavFormOpen.set(false);
+      await this.sync.reconnect(password);
     } catch (e) {
-      this.webDavError.set(e instanceof Error ? e.message : String(e));
-    } finally {
-      this.connecting.set(false);
+      this.loginError.set(e instanceof Error ? e.message : String(e));
     }
   }
 
-  protected resolveConflicts(keep: 'folder' | 'local'): void {
+  protected async loadFromServer(): Promise<void> {
+    if (confirm('Alle Personen, Stunden und die Konfiguration auf diesem Gerät werden durch die Daten vom Server ersetzt. Fortfahren?')) {
+      await this.sync.loadFromServer();
+    }
+  }
+
+  protected async overwriteServer(): Promise<void> {
+    if (confirm('Die Daten auf dem Server werden durch die Daten auf diesem Gerät ersetzt, soweit du sie ändern darfst. Fortfahren?')) {
+      await this.sync.overwriteServer();
+    }
+  }
+
+  protected resolveConflicts(keep: 'server' | 'local'): void {
     const text =
-      keep === 'folder'
+      keep === 'server'
         ? 'Die hier gemachten Änderungen an diesen Daten gehen verloren. Fortfahren?'
         : 'Die Änderungen des anderen Geräts an diesen Daten gehen verloren. Fortfahren?';
     if (confirm(text)) this.sync.resolveConflicts(keep);
   }
 
-  /** Verständlicher Name einer Sync-Datei */
+  /** Verständlicher Name einer Datei auf dem Server, z. B. „Anna Schmidt, 1. Halbjahr 2026/27“ */
   protected fileLabel(name: string): string {
     if (name === GENERAL_FILE) return 'Allgemeine Konfiguration';
-    if (name === GROUPS_FILE) return 'Gruppen';
     if (name === SHARED_FILE) return 'Allgemeine Termine';
-    const teacher = this.config().teachers.find((t) => name === `lehrer-${safeFileName(t.name)}.json`);
-    return teacher ? `Lehrer ${teacher.name}` : name;
+    const config = this.config();
+    const teacherName = (id: string) => config.teachers.find((t) => t.id === id)?.name ?? 'unbekannter Lehrer';
+    const teacher = /^lehrer-(.+)\.json$/.exec(name);
+    if (teacher) return `Lehrer ${teacherName(teacher[1])}`;
+    const period = /^zeitraum_([^_]*)_(.+)\.json$/.exec(name);
+    if (period) {
+      const periodName = config.reportPeriods.find((p) => p.id === period[1])?.name ?? 'ohne Berichtszeitraum';
+      return `${teacherName(period[2])}, ${periodName}`;
+    }
+    return name;
   }
 
   /**
@@ -211,9 +212,12 @@ export class ExportPage {
     location.reload();
   }
 
-  protected disconnectFolder(): void {
-    if (confirm('Ordner-Synchronisation beenden? Die Dateien im Ordner bleiben erhalten.')) this.sync.disconnect();
+  protected disconnectServer(): void {
+    if (confirm('Vom Server abmelden? Die Daten bleiben auf dem Server und auf diesem Gerät, werden aber nicht mehr abgeglichen.')) {
+      this.sync.disconnect();
+    }
   }
+
 
   protected exportPdf(action: 'open' | 'share'): void {
     const students = this.studentsToExport();

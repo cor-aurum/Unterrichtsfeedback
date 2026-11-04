@@ -121,8 +121,8 @@
                 </span>
                 <button
                   class="icon"
-                  title="Löschen"
-                  [disabled]="store.config().reportPeriods.length <= 1"
+                  [title]="locked(period) ? lockedText : 'Löschen'"
+                  [disabled]="store.config().reportPeriods.length <= 1 || locked(period)"
                   (click)="removePeriod(period)"
                 >
                   ✕
@@ -143,10 +143,11 @@
                   <div class="period-teachers">
                     <span class="choice-label">Aktive Lehrer</span>
                     @for (teacher of store.config().teachers; track teacher.id) {
-                      <label>
+                      <label [title]="locked(period) ? lockedText : ''">
                         <input
                           type="checkbox"
                           [checked]="period.teacherIds.includes(teacher.id)"
+                          [disabled]="locked(period)"
                           (change)="store.toggleReportPeriodTeacher(period.id, teacher.id)"
                         />
                         {{ teacher.name }}
@@ -158,7 +159,7 @@
             }
           </ul>
           <div>
-            <button class="secondary" (click)="store.addReportPeriod()">+ Berichtszeitraum</button>
+            <button class="secondary" (click)="addPeriod()">+ Berichtszeitraum</button>
           </div>
           <p class="muted small">
             Der markierte Zeitraum gilt auf diesem Gerät: Im PDF stehen nur Personen mit mindestens einer Stunde in
@@ -178,7 +179,8 @@
         <p class="muted group-hint">
           Erscheinen bei jeder Person: „Am Anfang“ unter der Überschrift, „Am Ende“ nach der letzten Stunde.
           Dazwischen, vor den Stunden, steht der allgemeine Teil mit den Abschnitten, die dafür eingestellt
-          sind. Mit Varianten lässt sich ein Inhalt je Instrument oder Lehrer austauschen; ist der Standardinhalt
+          sind. Mit Varianten lässt sich ein Inhalt je Instrument oder Zeitraum austauschen, mit „Nur für mich“
+          nur für deine eigenen Personen; ist der Standardinhalt
           leer, erscheint der Block nur bei den Personen, auf die eine Variante passt.
         </p>
         <ng-container *ngTemplateOutlet="blocksPanel; context: { $implicit: 'single' }" />
@@ -194,8 +196,8 @@
       @case ('groupBlocks') {
         <h2 class="tab-title">Feste Inhalte im Gruppen-PDF</h2>
         <p class="muted group-hint">
-          Wie die festen Inhalte bei Personen, aber für das Gruppen-PDF. Varianten je Lehrer richten sich nach dem
-          Lehrer der Gruppe. {{ groupPlaceholderHint }}
+          Wie die festen Inhalte bei Personen, aber für das Gruppen-PDF. Eigene Varianten („Nur für mich“) richten
+          sich nach dem Lehrer der Gruppe. {{ groupPlaceholderHint }}
         </p>
         <ng-container *ngTemplateOutlet="blocksPanel; context: { $implicit: 'group' }" />
       }
@@ -419,6 +421,25 @@
               </label>
             </div>
 
+            @if (sync.login()) {
+              <div class="account">
+                @if (accounts().get(teacher.id); as username) {
+                  <span class="muted small">Konto auf dem Server: <strong>{{ username }}</strong></span>
+                } @else {
+                  <button class="secondary" (click)="invite(teacher)">Einladungscode erzeugen</button>
+                  @if (invites()[teacher.id]; as invite) {
+                    <textarea class="invite-code" readonly rows="2" [value]="invite.code" (focus)="selectAll($event)"></textarea>
+                    <span class="muted small">
+                      Gültig bis {{ invite.expires }}, einmal. {{ teacher.name }} fügt ihn beim ersten Start der App unter
+                      „Einladungscode“ ein. Personen sieht er erst in Berichtszeiträumen, in denen du ihn unter
+                      „Allgemein“ als aktiven Lehrer einträgst.
+                    </span>
+                    <button class="secondary" (click)="copy(invite.code)">Kopieren</button>
+                  }
+                }
+              </div>
+            }
+
             <h3>Unterrichtszeiten <span class="muted">· {{ windowsPeriodName() }}</span></h3>
             @if (windowsPeriodShared()) {
               <p class="muted small inherit-hint">
@@ -520,8 +541,12 @@
 
 <!-- Abschnitte für Einzelunterricht (kind = 'single') oder Gruppen (kind = 'group') -->
 <ng-template #sectionsPanel let-kind>
+    <p class="muted small own-hint">
+      „Nur für mich“ macht einen Abschnitt zu einem eigenen von {{ activeTeacher.teacher().name }}: Er erscheint nur
+      bei {{ kind === 'group' ? 'dessen Gruppen' : 'dessen Personen' }}, andere Lehrer sehen ihn nicht.
+    </p>
     @for (section of sectionsOf(kind); track section.id; let first = $first, last = $last) {
-      <section class="card section">
+      <section class="card section" [class.own]="!!section.ownerId">
         <div class="row">
           <span class="type">{{ section.type === 'checklist' ? 'Textbausteine' : 'Freitext' }}</span>
           <input
@@ -531,10 +556,14 @@
             (change)="store.renameSection(section.id, valueOf($event))"
             aria-label="Titel des Abschnitts"
           />
-          <button class="icon" [disabled]="first" (click)="store.moveSection(section.id, -1)" title="Nach oben">↑</button>
-          <button class="icon" [disabled]="last" (click)="store.moveSection(section.id, 1)" title="Nach unten">↓</button>
+          <button class="icon" [disabled]="first" (click)="store.moveSection(section.id, -1, activeTeacher.teacher().id)" title="Nach oben">↑</button>
+          <button class="icon" [disabled]="last" (click)="store.moveSection(section.id, 1, activeTeacher.teacher().id)" title="Nach unten">↓</button>
           <button class="icon" (click)="removeSection(section)" title="Abschnitt löschen">✕</button>
         </div>
+        <label class="own-toggle">
+          <input type="checkbox" [checked]="!!section.ownerId" (change)="store.setSectionOwner(section.id, ownerFor($event))" />
+          Nur für mich ({{ activeTeacher.teacher().name }})
+        </label>
 
         <label class="scope">
       Im PDF
@@ -612,8 +641,12 @@
 
 <!-- Feste Inhalte für Einzelunterricht (kind = 'single') oder Gruppen (kind = 'group') -->
 <ng-template #blocksPanel let-kind>
+    <p class="muted small own-hint">
+      „Nur für mich“ macht einen Inhalt zu einem eigenen von {{ activeTeacher.teacher().name }}: Er erscheint nur im
+      PDF {{ kind === 'group' ? 'seiner Gruppen' : 'seiner Personen' }}, andere Lehrer sehen ihn nicht.
+    </p>
     @for (block of blocksOf(kind); track block.id; let first = $first, last = $last) {
-      <section class="card section">
+      <section class="card section" [class.own]="!!block.ownerId">
         <div class="row block-head">
           <span class="type">{{ block.type === 'image' ? 'Bild' : 'Fester Text' }}</span>
           <select
@@ -625,10 +658,14 @@
             <option value="start">Am Anfang</option>
             <option value="end">Am Ende</option>
           </select>
-          <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1)" title="Nach oben">↑</button>
-          <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1)" title="Nach unten">↓</button>
+          <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1, activeTeacher.teacher().id)" title="Nach oben">↑</button>
+          <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1, activeTeacher.teacher().id)" title="Nach unten">↓</button>
           <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
         </div>
+        <label class="own-toggle">
+          <input type="checkbox" [checked]="!!block.ownerId" (change)="store.setBlockOwner(block.id, ownerFor($event))" />
+          Nur für mich ({{ activeTeacher.teacher().name }})
+        </label>
 
         @if (block.variants.length > 0) {
           <p class="variant-label">Standard (für alle anderen {{ kind === 'group' ? 'Gruppen' : 'Personen' }})</p>
@@ -642,12 +679,23 @@
           (error)="showError($event)"
         />
 
-        @for (variant of block.variants; track variant.id) {
-          <div class="variant">
+        @for (variant of variantsOf(block); track variant.id) {
+          <div class="variant" [class.own]="!!variant.ownerId">
             <div class="row">
               <p class="variant-label grow">Variante für</p>
               <button class="icon" (click)="store.removeVariant(block.id, variant.id)" title="Variante löschen">✕</button>
             </div>
+            @if (!block.ownerId) {
+              <label class="own-toggle">
+                <input
+                  type="checkbox"
+                  [checked]="!!variant.ownerId"
+                  (change)="store.setVariantOwner(block.id, variant.id, ownerFor($event))"
+                />
+                Nur für mich ({{ activeTeacher.teacher().name }}) – gilt nur für meine
+                {{ kind === 'group' ? 'Gruppen' : 'Personen' }}, andere sehen sie nicht
+              </label>
+            }
             <div class="instrument-choice">
               <span class="choice-label">Instrumente</span>
               @for (instrument of store.config().instruments; track instrument.id) {
@@ -658,19 +706,6 @@
                     (change)="store.toggleVariantCondition(block.id, variant.id, 'instrumentIds', instrument.id)"
                   />
                   {{ instrument.name }}
-                </label>
-              }
-            </div>
-            <div class="instrument-choice">
-              <span class="choice-label">Lehrer</span>
-              @for (teacher of store.config().teachers; track teacher.id) {
-                <label>
-                  <input
-                    type="checkbox"
-                    [checked]="variant.teacherIds.includes(teacher.id)"
-                    (change)="store.toggleVariantCondition(block.id, variant.id, 'teacherIds', teacher.id)"
-                  />
-                  {{ teacher.name }}
                 </label>
               }
             </div>
@@ -701,7 +736,7 @@
         }
 
         <button class="secondary add-variant" (click)="store.addVariant(block.id)">
-          + Variante für bestimmte Instrumente, Lehrer oder Zeiträume
+          + Variante für bestimmte Instrumente oder Zeiträume
         </button>
       </section>
     }

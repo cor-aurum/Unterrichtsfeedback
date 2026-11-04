@@ -1,14 +1,15 @@
-import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
+import { Component, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
-import { GroupsStore } from '../groups.store';
 import { Teacher, today } from '../model';
 import { ReportPeriod } from '../report-period';
 import { isNativeApp, openFile, safeFileName, saveFile } from '../save-file';
 import { storedSignal } from '../stored-signal';
-import { addDays, daysBetween, minutesOf, mondayOf, startMinutes, timeOf } from './appointments';
-import { CalendarStore } from './calendar.store';
-import { CalendarEvent, toICalendar } from './ical';
+import { FeedState, serverApi } from '../sync/server-folder';
+import { ServerSync } from '../sync/server-sync';
+import { addDays, daysBetween, mondayOf } from './appointments';
+import { CalendarEvents } from './calendar-events';
+import { toICalendar } from './ical';
 
 /** Längster Zeitraum, damit wöchentliche Termine nicht zu Tausenden Einträgen werden */
 const MAX_DAYS = 2 * 366;
@@ -24,8 +25,7 @@ const ALL_TEACHERS = 'all';
   styleUrl: './ical-export-panel.scss',
 })
 export class IcalExportPanel {
-  private readonly calendar = inject(CalendarStore);
-  private readonly groupsStore = inject(GroupsStore);
+  private readonly events = inject(CalendarEvents);
   private readonly config = inject(ConfigStore).config;
   private readonly activeTeacher = inject(ActiveTeacher);
   private readonly reportPeriod = inject(ReportPeriod);
@@ -43,6 +43,77 @@ export class IcalExportPanel {
   protected readonly includeBlockers = storedSignal<boolean>('feedback.icalBlockers', () => true, (data) => data !== false);
   protected readonly message = signal<string | null>(null);
 
+  // --- Abo über den Server ---
+  protected readonly sync = inject(ServerSync);
+  protected readonly feed = signal<FeedState | null>(null);
+  protected readonly feedError = signal<string | null>(null);
+  protected readonly feedBusy = signal(false);
+
+  constructor() {
+    effect(() => {
+      const login = this.sync.login();
+      this.feed.set(null);
+      if (login) untracked(() => this.loadFeed());
+    });
+  }
+
+  private async loadFeed(): Promise<void> {
+    await this.feedAction(async (login) => this.feed.set(await serverApi.feed(login)));
+  }
+
+  /** Richtet das Abo ein; mit `replace` bekommt es eine neue Adresse und die alte gilt nicht mehr. */
+  protected async newFeedAddress(replace: boolean): Promise<void> {
+    const text =
+      'Die bisherige Adresse gilt danach nicht mehr: Kalender, die sie abonniert haben, bekommen keine Termine mehr ' +
+      'und müssen die neue abonnieren. Neue Adresse erzeugen?';
+    if (replace && !confirm(text)) return;
+    await this.feedAction(async (login) => {
+      this.feed.set(await serverApi.newFeedAddress(login));
+      // Damit das Abo nicht leer ist, falls noch kein Abgleich den Kalender geschickt hat
+      await this.sync.publishFeed(true);
+      this.feed.set(await serverApi.feed(login));
+    });
+  }
+
+  protected async endFeed(): Promise<void> {
+    if (!confirm('Abo beenden? Kalender, die die Adresse abonniert haben, bekommen keine Termine mehr.')) return;
+    await this.feedAction(async (login) => {
+      await serverApi.endFeed(login);
+      this.feed.set({ url: '' });
+    });
+  }
+
+  private async feedAction(action: (login: NonNullable<ReturnType<ServerSync['login']>>) => Promise<void>): Promise<void> {
+    const login = this.sync.login();
+    if (!login) return;
+    this.feedBusy.set(true);
+    this.feedError.set(null);
+    try {
+      await action(login);
+    } catch (e) {
+      this.feedError.set(e instanceof Error ? e.message : String(e));
+    } finally {
+      this.feedBusy.set(false);
+    }
+  }
+
+  /** Dieselbe Adresse mit webcal://: Ein Klick öffnet die Kalender-App mit dem Abo. */
+  protected webcal(url: string): string {
+    return url.replace(/^https?:/, 'webcal:');
+  }
+
+  protected copy(text: string): void {
+    navigator.clipboard?.writeText(text).catch(() => undefined);
+  }
+
+  protected selectAll(event: Event): void {
+    (event.target as HTMLInputElement).select();
+  }
+
+  protected formatTime(iso: string): string {
+    return new Date(iso).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
   protected valueOf(event: Event): string {
     return (event.target as HTMLInputElement).value;
   }
@@ -59,7 +130,8 @@ export class IcalExportPanel {
     }
     this.message.set(null);
     const teachers = this.selectedTeachers();
-    const events = teachers.flatMap((teacher) => this.eventsOf(teacher, from, to, teachers.length > 1));
+    const options = { withTeacher: teachers.length > 1, blockers: this.includeBlockers() };
+    const events = teachers.flatMap((teacher) => this.events.of(teacher, from, to, options));
     const name = teachers.length === 1 ? `Unterricht ${teachers[0].name}` : 'Unterricht';
     const file = new Blob([toICalendar(name, events)], { type: 'text/calendar' });
     const fileName = `${safeFileName(name)}_${from}_${to}.ics`;
@@ -70,44 +142,6 @@ export class IcalExportPanel {
     const id = this.teacherId();
     return id === ALL_TEACHERS ? this.teachers() : this.teachers().filter((t) => t.id === id);
   }
-
-  /** Bei mehreren Lehrern steht der Lehrer im Titel, damit man die Termine im Kalender auseinanderhält. */
-  private eventsOf(teacher: Teacher, from: string, to: string, withTeacher: boolean): CalendarEvent[] {
-    const names = this.groupsStore.ownerNames();
-    const suffix = withTeacher ? ` (${teacher.name})` : '';
-    const lessons = this.calendar
-      .occurrences(from, to, this.groupsStore.calendarFilter(teacher))
-      .map(({ date, appointment }) => ({
-        uid: `${appointment.id}-${date}@unterrichtsfeedback`,
-        start: `${date}T${appointment.start}`,
-        end: endOf(date, startMinutes(appointment) + appointment.durationMinutes),
-        summary: (names.get(appointment.studentId ?? appointment.groupId ?? '') ?? 'Unterricht') + suffix,
-        location: teacher.location.trim() || undefined,
-        description: `Unterricht bei ${teacher.name}`,
-      }));
-    const shared = this.calendar.sharedOccurrences(from, to, teacher.id).map(({ date, appointment }) => ({
-      // Dieselbe UID bei allen Lehrern: Wer mehrere Lehrer in einen Kalender übernimmt, hat den Termin nur einmal.
-      uid: `${appointment.id}-${date}@unterrichtsfeedback`,
-      start: `${date}T${appointment.start}`,
-      end: endOf(date, minutesOf(appointment.start) + appointment.durationMinutes),
-      summary: appointment.title,
-      location: appointment.location || undefined,
-    }));
-    if (!this.includeBlockers()) return [...lessons, ...shared];
-    const blockedLabel = this.config().calendarPdf.blocked;
-    const blockers = this.calendar.blockersOf(teacher.id, from, to).map((blocker) => ({
-      uid: `${blocker.id}@unterrichtsfeedback`,
-      start: blocker.from,
-      end: blocker.to,
-      summary: (blocker.title ? `${blockedLabel}: ${blocker.title}` : blockedLabel) + suffix,
-    }));
-    return [...lessons, ...shared, ...blockers];
-  }
-}
-
-/** Ende eines Termins; über Mitternacht hinaus endet er um 24:00. */
-function endOf(date: string, endMinutes: number): string {
-  return endMinutes >= 24 * 60 ? `${date}T24:00` : `${date}T${timeOf(endMinutes)}`;
 }
 
 function maxDate(a: string, b: string): string {

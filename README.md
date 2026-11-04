@@ -1,8 +1,12 @@
 # Unterrichtsfeedback
 
 Angular-App zum Erfassen von Feedback für Schülerinnen und Schüler im Einzelunterricht. Sie läuft
-komplett im Browser, ohne Backend: Die Daten liegen im Local Storage, das Feedback wird als PDF
-exportiert.
+komplett im Browser: Die Daten liegen im Local Storage, das Feedback wird als PDF exportiert.
+
+Optional gleichen mehrere Lehrer und Geräte ihre Daten über einen eigenen Server ab. Er liegt im
+Ordner `server/` (Go); Betrieb, Einladungscodes und Schnittstelle beschreibt
+[`server/README.md`](server/README.md). Der Workflow `.github/workflows/server.yml` baut fertige
+Binaries für Linux, Windows und macOS; bei einem Tag wie `v1.2.0` hängen sie am GitHub-Release.
 
 ## Entwicklung
 

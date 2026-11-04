@@ -24,6 +24,7 @@ import {
   teacherOf,
   today,
 } from '../model';
+import { DuplicatePair, PersonMerger } from '../person-merger';
 import { ReportPeriod } from '../report-period';
 import { safeFileName, saveFile } from '../save-file';
 import { sortedLessons, StudentsStore } from '../students.store';
@@ -54,6 +55,7 @@ export class PeoplePage {
   private readonly activeTeacher = inject(ActiveTeacher);
   private readonly router = inject(Router);
   protected readonly reportPeriod = inject(ReportPeriod);
+  protected readonly merger = inject(PersonMerger);
 
   // Filter der Personenliste; außer dem Lehrerfilter gelten sie nur bis zum Neuladen.
   protected readonly search = signal('');
@@ -243,6 +245,40 @@ export class PeoplePage {
   }
 
   protected readonly formatShortDate = formatShortDate;
+
+  // --- Doppelte Personen ---
+
+  /** z. B. „Anna Berg (geb. 03.05.2015) · Klavier · 12 Stunden“ */
+  protected duplicateText(student: Student): string {
+    const count = student.lessons.length === 1 ? '1 Stunde' : `${student.lessons.length} Stunden`;
+    return `${this.store.label(student)} · ${this.instrumentOf(student).name} · ${count}`;
+  }
+
+  protected mergeDuplicate({ keep, drop }: DuplicatePair): void {
+    const text =
+      `${this.store.label(drop)} in ${this.store.label(keep)} aufgehen lassen? Stunden, Termine, Gruppen und ` +
+      'Berichtszeiträume beider Einträge gehören dann zu einer Person.';
+    if (confirm(text)) this.merger.merge(keep.id, drop.id);
+  }
+
+  /** Andere Personen, die man von Hand mit dieser zusammenführen kann, nach Namen sortiert */
+  protected mergeCandidates(student: Student): Student[] {
+    return this.store
+      .allStudents()
+      .filter((s) => s.id !== student.id)
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  }
+
+  /** Die gewählte Person geht in der angezeigten auf; diese behält Name und ID. */
+  protected mergeManually(student: Student, select: HTMLSelectElement): void {
+    const drop = this.store.allStudents().find((s) => s.id === select.value);
+    select.value = '';
+    if (!drop) return;
+    const text =
+      `${this.store.label(drop)} in ${this.store.label(student)} aufgehen lassen? Das lässt sich nicht rückgängig ` +
+      'machen; Stunden, Termine, Gruppen und Berichtszeiträume gehören dann zu einer Person.';
+    if (confirm(text)) this.merger.merge(student.id, drop.id);
+  }
 
   /** Für die Liste, z. B. „2. Halbjahr 25/26, 1. Halbjahr 26/27“; leer bei nur einem Zeitraum */
   protected periodsLineOf(student: Student): string {

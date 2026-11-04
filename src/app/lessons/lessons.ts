@@ -12,12 +12,14 @@ import { TeacherFilter } from '../teacher-filter';
 import { ConfigStore } from '../config.store';
 import { ReportPeriod } from '../report-period';
 import {
+  configForTeacher,
   doubleLessonDates,
   formatDate,
   Group,
   groupLabel,
   Instrument,
   instrumentOf,
+  isActiveIn,
   isTeachingDay,
   Lesson,
   lessonTime,
@@ -27,7 +29,6 @@ import {
   Student,
   Teacher,
   today,
-  isActiveIn,
 } from '../model';
 import { sortedLessons, StudentsStore } from '../students.store';
 
@@ -127,6 +128,11 @@ export class Lessons {
 
   protected teacherOf(student: Student): Teacher {
     return this.store.teacherOf(student);
+  }
+
+  /** Gemeinsame Abschnitte und die eigenen des Lehrers der Person */
+  protected sectionsFor(student: Student): Section[] {
+    return configForTeacher(this.config(), this.teacherOf(student).id).sections;
   }
 
   protected removeLesson(student: Student, lesson: Lesson): void {

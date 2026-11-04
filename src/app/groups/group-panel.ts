@@ -7,6 +7,7 @@ import { lessonStartAt } from '../calendar/lesson-start';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
 import {
+  configForTeacher,
   formatDate,
   Group,
   GROUP_PLACEHOLDERS,
@@ -52,6 +53,8 @@ export class GroupPanel {
   protected readonly members = computed(() => memberNames(this.group(), this.studentsStore.students()));
   protected readonly teachers = computed(() => this.config().teachers);
   protected readonly groupTeacherId = computed(() => groupTeacherOf(this.group(), this.config()).id);
+  /** Gemeinsame Gruppen-Abschnitte und die eigenen des Lehrers der Gruppe */
+  protected readonly sections = computed(() => configForTeacher(this.config(), this.groupTeacherId()).groupSections);
   /** Lehrer des Zeitraums der Gruppe; ihr bisheriger bleibt wählbar */
   protected readonly groupTeachers = computed(() => this.reportPeriod.teachersWith(this.groupTeacherId()));
   protected readonly lessons = computed(() => sortedLessons(this.group()).reverse());

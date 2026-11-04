@@ -76,7 +76,7 @@
       <a routerLink="/export">Export &amp; Sicherung</a>, nicht in den PDFs der einzelnen Personen.
     </p>
 
-    @for (section of config().groupSections; track section.id) {
+    @for (section of sections(); track section.id) {
       <fieldset>
         <legend>
           {{ section.title }}

@@ -66,12 +66,15 @@ export class GroupPlanningPage {
   });
 
   // --- Zuordnen ---
+  /** Links nur Personen ohne Gruppe oder alle des Zeitraums */
+  protected readonly listKind = signal<'unassigned' | 'all'>('unassigned');
+  protected readonly listed = computed(() => (this.listKind() === 'all' ? this.students() : this.unassigned()));
   protected readonly selected = signal(new Set<string>());
   /** ID der Zielgruppe oder `new` */
   protected readonly target = signal('new');
   protected readonly newGroupName = signal('');
   protected readonly allSelected = computed(
-    () => this.unassigned().length > 0 && this.unassigned().every((s) => this.selected().has(s.id)),
+    () => this.listed().length > 0 && this.listed().every((s) => this.selected().has(s.id)),
   );
 
   protected toggle(studentId: string): void {
@@ -83,12 +86,12 @@ export class GroupPlanningPage {
   }
 
   protected selectAll(checked: boolean): void {
-    this.selected.set(new Set(checked ? this.unassigned().map((s) => s.id) : []));
+    this.selected.set(new Set(checked ? this.listed().map((s) => s.id) : []));
   }
 
   /** Ordnet die ausgewählten Personen der Zielgruppe zu; bei „Neue Gruppe“ entsteht sie dabei. */
   protected assign(): void {
-    const ids = this.unassigned().filter((s) => this.selected().has(s.id)).map((s) => s.id);
+    const ids = this.listed().filter((s) => this.selected().has(s.id)).map((s) => s.id);
     if (ids.length === 0) return;
     const count = ids.length === 1 ? '1 Person' : `${ids.length} Personen`;
     if (this.target() === 'new') {
@@ -103,6 +106,47 @@ export class GroupPlanningPage {
     }
     this.selected.set(new Set());
     this.newGroupName.set('');
+  }
+
+  protected showList(kind: 'unassigned' | 'all'): void {
+    this.listKind.set(kind);
+    this.selected.set(new Set());
+  }
+
+  /** z. B. „A, Band“; leer ohne Gruppe */
+  protected groupsText(student: Student): string {
+    return this.groupsStore
+      .groupsOf(student.id)
+      .map((group) => this.label(group))
+      .join(', ');
+  }
+
+  // --- Gruppe mit allen Schülern eines Lehrers ---
+  protected readonly wholeTeacherId = linkedSignal(() => this.defaultTeacherId());
+
+  /** Alle Personen des Lehrers im Zeitraum in eine neue Gruppe; sie heißt wie der Lehrer und steht in seinem Kalender. */
+  protected createTeacherGroup(): void {
+    const teacher = this.reportPeriod.teachers().find((t) => t.id === this.wholeTeacherId()) ?? this.activeTeacher.teacher();
+    const memberIds = this.studentsStore
+      .students()
+      .filter((s) => this.studentsStore.teacherOf(s).id === teacher.id)
+      .map((s) => s.id);
+    if (memberIds.length === 0) {
+      this.message.set(`${teacher.name} hat in „${this.reportPeriod.period().name}“ keine Personen.`);
+      return;
+    }
+    const name = this.uniqueName(teacher.name);
+    this.groupsStore.createGroups([{ name, teacherId: teacher.id, memberIds }]);
+    const count = memberIds.length === 1 ? '1 Person' : `${memberIds.length} Personen`;
+    this.message.set(`Gruppe „${name}“ mit ${count} angelegt.`);
+  }
+
+  /** Der Name oder, wenn es ihn im Zeitraum schon gibt, „Name (2)“, „Name (3)“ … */
+  private uniqueName(name: string): string {
+    const used = new Set(this.groupsStore.groups().map((g) => g.name.trim().toLowerCase()));
+    let candidate = name;
+    for (let i = 2; used.has(candidate.toLowerCase()); i++) candidate = `${name} (${i})`;
+    return candidate;
   }
 
   // --- Gruppen ---

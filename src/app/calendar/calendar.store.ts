@@ -116,6 +116,11 @@ export class CalendarStore {
     this.appointments.update((list) => list.filter((a) => ownerOf(a) !== ownerId));
   }
 
+  /** Nach dem Zusammenführen zweier Personen gehören ihre Termine der verbleibenden. */
+  replaceStudent(from: string, into: string): void {
+    this.appointments.update((list) => list.map((a) => (a.studentId === from ? { ...a, studentId: into } : a)));
+  }
+
   /**
    * Alle Termine zwischen `from` und `to` (jeweils einschließlich), nach Tag und Uhrzeit sortiert.
    * Mit `filter` nur bestimmte Termine, z. B. die im Kalender eines Lehrers (`GroupsStore.calendarFilter`).

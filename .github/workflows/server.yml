@@ -1,0 +1,97 @@
+# Testet den Server und baut fertige Programme (statisch, ohne Abhängigkeiten) für Linux, Windows und macOS.
+# Bei jedem Push mit Änderungen unter server/ stehen sie unter „Actions“ als Artefakte bereit; ein Tag wie v1.2.0
+# hängt sie außerdem an den GitHub-Release (wie die Android-App).
+name: Server bauen
+
+on:
+  push:
+    branches: [master, main]
+    tags: ['v*']
+    paths: ['server/**', '.github/workflows/server.yml']
+  pull_request:
+    paths: ['server/**', '.github/workflows/server.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Formatierung prüfen
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+
+      - run: go vet ./...
+
+      - run: go test ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: linux, goarch: arm, goarm: '7' }
+          - { goos: windows, goarch: amd64, ext: .exe }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Versionsnummer bestimmen
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # CGO aus: Die SQLite-Anbindung ist reines Go, das Programm läuft so auf jedem System dieser Art.
+      - name: Bauen
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          name="unterricht-feedback-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm && format('v{0}', matrix.goarm) || '' }}${{ matrix.ext }}"
+          go build -trimpath -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }}" -o "../dist/$name" .
+          echo "BINARY=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY }}
+          path: dist/${{ env.BINARY }}
+          if-no-files-found: error
+
+      # Den Release legt an, wer zuerst fertig ist (dieser Workflow oder der der Android-App); die anderen hängen
+      # ihre Dateien nur an.
+      - name: An den Release hängen
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --title "Unterrichtsfeedback ${{ steps.version.outputs.version }}" --generate-notes ||
+            true
+          gh release upload "$GITHUB_REF_NAME" "../dist/$BINARY" --clobber

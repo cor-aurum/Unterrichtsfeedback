@@ -80,8 +80,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp "$RUNNER_TEMP/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk" "$RUNNER_TEMP/Unterrichtsfeedback.apk"
+          # Hat der Server-Workflow den Release schon angelegt, werden die APKs nur angehängt.
           gh release create "$GITHUB_REF_NAME" \
             "$RUNNER_TEMP/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk" \
             "$RUNNER_TEMP/Unterrichtsfeedback.apk" \
             --title "Unterrichtsfeedback ${{ steps.version.outputs.name }}" \
-            --generate-notes
+            --generate-notes ||
+          gh release upload "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/Unterrichtsfeedback-${{ steps.version.outputs.name }}.apk" \
+            "$RUNNER_TEMP/Unterrichtsfeedback.apk" \
+            --clobber

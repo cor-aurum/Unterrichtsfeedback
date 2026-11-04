@@ -1,17 +1,20 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
+import { Component, computed, effect, inject, linkedSignal, signal } from '@angular/core';
+import { ActiveTeacher } from '../active-teacher';
 import { blocksOf, ConfigStore, sectionsOf } from '../config.store';
 import {
   APP_LOGO,
+  BlockVariant,
   CalendarPdfTexts,
-  DEFAULT_CALENDAR_PDF_TEXTS,
   ContentKind,
+  DEFAULT_CALENDAR_PDF_TEXTS,
   DEFAULT_PDF_LAYOUT,
   defaultInstrument,
   FixedBlock,
   GROUP_PLACEHOLDERS,
   ImageAlign,
   Instrument,
+  isVisibleTo,
   LOGO_HEIGHT_LIMITS,
   PdfLogo,
   PLACEHOLDERS,
@@ -27,6 +30,8 @@ import { InstrumentSelect } from '../instrument-select';
 import { TeachingWindowsEditor } from './teaching-windows-editor';
 import { labelOf, ReportPeriod } from '../report-period';
 import { storedSignal } from '../stored-signal';
+import { serverApi } from '../sync/server-folder';
+import { ServerSync } from '../sync/server-sync';
 import { DEFAULT_THEME_COLOR, isHexColor } from '../theme';
 
 const CONFIG_TABS = [
@@ -70,7 +75,9 @@ type LogoSlot = (typeof LOGO_SLOTS)[number];
 })
 export class ConfigEditor {
   protected readonly store = inject(ConfigStore);
+  protected readonly sync = inject(ServerSync);
   protected readonly reportPeriod = inject(ReportPeriod);
+  protected readonly activeTeacher = inject(ActiveTeacher);
   protected readonly tabs = CONFIG_TABS;
   /** Zuletzt geöffneter Bereich; gilt nur auf diesem Gerät. */
   protected readonly tab = storedSignal<ConfigTab>('feedback.configTab', () => 'general', (data) =>
@@ -144,11 +151,74 @@ export class ConfigEditor {
     return teacherInstrument(teacher, this.store.config()).id;
   }
 
+  /** Mit Server darf man Lehrer nur in Zeiträume eintragen, in denen man selbst aktiv ist. */
   protected addTeacher(input: HTMLInputElement): void {
     const name = input.value.trim();
     if (!name) return;
-    this.store.addTeacher(name);
+    const login = this.sync.login();
+    this.store.addTeacher(name, login ? { joinPeriodsOf: login.teacherId } : {});
     input.value = '';
+  }
+
+  // --- Server: Konten, Einladungen, Rechte ---
+
+  /** Lehrer-ID → Benutzername der Lehrer, die schon ein Konto haben */
+  protected readonly accounts = signal(new Map<string, string>());
+  protected readonly invites = signal<Record<string, { code: string; expires: string }>>({});
+  protected readonly lockedText = 'Ändern darf nur, wer in diesem Berichtszeitraum aktiver Lehrer ist.';
+
+  constructor() {
+    // Konten auf dem Server laden, sobald der Tab „Lehrer“ offen ist
+    effect(() => {
+      if (this.tab() === 'teachers' && this.sync.login()) void this.loadAccounts();
+    });
+  }
+
+  private async loadAccounts(): Promise<void> {
+    const login = this.sync.login();
+    if (!login) return;
+    try {
+      const list = await serverApi.accounts(login);
+      this.accounts.set(new Map(list.map((a) => [a.teacherId, a.username])));
+    } catch {
+      // Offline: Die Knöpfe zum Einladen erscheinen trotzdem; der Server lehnt doppelte Konten ab.
+    }
+  }
+
+  protected async invite(teacher: Teacher): Promise<void> {
+    const login = this.sync.login();
+    if (!login) return;
+    try {
+      const { code, expiresAt } = await serverApi.invite(login, teacher.id);
+      const expires = new Date(expiresAt).toLocaleDateString('de-DE');
+      this.invites.update((all) => ({ ...all, [teacher.id]: { code, expires } }));
+    } catch (e) {
+      this.showError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  protected selectAll(event: Event): void {
+    (event.target as HTMLTextAreaElement).select();
+  }
+
+  protected copy(text: string): void {
+    navigator.clipboard?.writeText(text).catch(() => undefined);
+  }
+
+  /** Mit Server: Zeiträume, in denen man nicht aktiv ist, lassen sich nicht ändern oder löschen. */
+  protected locked(period: ReportPeriodEntry): boolean {
+    const login = this.sync.login();
+    return !!login && !period.teacherIds.includes(login.teacherId);
+  }
+
+  /** Ein neuer Zeitraum enthält mit Server immer den eigenen Lehrer, sonst nähme der Server ihn nicht an. */
+  protected addPeriod(): void {
+    const id = this.store.addReportPeriod();
+    const login = this.sync.login();
+    const period = this.store.config().reportPeriods.find((p) => p.id === id);
+    if (login && period && !period.teacherIds.includes(login.teacherId)) {
+      this.store.toggleReportPeriodTeacher(id, login.teacherId);
+    }
   }
 
   protected setTeacherName(teacher: Teacher, event: Event): void {
@@ -269,12 +339,23 @@ export class ConfigEditor {
     }
   }
 
+  /** Gemeinsame und die eigenen des gewählten Lehrers; die eigenen anderer Lehrer bleiben verborgen. */
   protected sectionsOf(kind: ContentKind): Section[] {
-    return sectionsOf(this.store.config(), kind);
+    return sectionsOf(this.store.config(), kind).filter((section) => isVisibleTo(section, this.activeTeacher.teacher().id));
   }
 
   protected blocksOf(kind: ContentKind): FixedBlock[] {
-    return blocksOf(this.store.config(), kind);
+    return blocksOf(this.store.config(), kind).filter((block) => isVisibleTo(block, this.activeTeacher.teacher().id));
+  }
+
+  /** Gemeinsame Varianten und die eigenen des gewählten Lehrers */
+  protected variantsOf(block: FixedBlock): BlockVariant[] {
+    return block.variants.filter((variant) => isVisibleTo(variant, this.activeTeacher.teacher().id));
+  }
+
+  /** Eigener Abschnitt oder Inhalt des gewählten Lehrers, oder wieder einer für alle */
+  protected ownerFor(event: Event): string | null {
+    return (event.target as HTMLInputElement).checked ? this.activeTeacher.teacher().id : null;
   }
 
   protected async addImage(input: HTMLInputElement, kind: ContentKind = 'single'): Promise<void> {

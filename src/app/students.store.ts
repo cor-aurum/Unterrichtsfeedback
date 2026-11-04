@@ -136,6 +136,38 @@ export class StudentsStore {
     this.mutateStudent(studentId, (student) => (student.instrumentId = instrumentId));
   }
 
+  /**
+   * Führt zwei Einträge derselben Person zusammen: `keepId` bleibt und bekommt die Zeiträume, Stunden und fehlenden
+   * Angaben von `dropId`; bei Widersprüchen gilt `keepId`. Liefert `false`, wenn eine der beiden fehlt.
+   */
+  mergeInto(keepId: string, dropId: string): boolean {
+    const students = this.allStudents();
+    const keep = students.find((s) => s.id === keepId);
+    const drop = students.find((s) => s.id === dropId);
+    if (!keep || !drop || keep === drop) return false;
+    const texts = { ...drop.generalTexts };
+    for (const [section, text] of Object.entries(keep.generalTexts)) if (text.trim()) texts[section] = text;
+    const merged: Student = {
+      ...keep,
+      ...((keep.birthDate ?? drop.birthDate) ? { birthDate: keep.birthDate ?? drop.birthDate } : {}),
+      instrumentId: keep.instrumentId ?? drop.instrumentId,
+      periods: { ...drop.periods, ...keep.periods },
+      generalTexts: texts,
+      lessons: [...keep.lessons, ...drop.lessons.filter((l) => !keep.lessons.some((k) => k.id === l.id))],
+    };
+    this.allStudents.set(students.filter((s) => s !== drop).map((s) => (s === keep ? merged : s)));
+    if (this.selectedStudentId() === dropId) this.selectedStudentId.set(keepId);
+    return true;
+  }
+
+  /** Gibt der Person eine neue ID, z. B. wenn ein anderer Lehrer sie mit einer hier unbekannten zusammengeführt hat. */
+  changeId(from: string, into: string): boolean {
+    if (!this.allStudents().some((s) => s.id === from)) return false;
+    this.allStudents.update((students) => students.map((s) => (s.id === from ? { ...s, id: into } : s)));
+    if (this.selectedStudentId() === from) this.selectedStudentId.set(into);
+    return true;
+  }
+
   removeStudent(studentId: string): void {
     this.allStudents.update((students) => students.filter((s) => s.id !== studentId));
     if (this.selectedStudentId() === studentId) this.selectStudent(null);

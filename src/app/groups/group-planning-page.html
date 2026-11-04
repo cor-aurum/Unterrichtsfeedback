@@ -22,11 +22,28 @@
 
 <div class="planning">
   <section class="card unassigned">
-    <h2>
-      Ohne Gruppe
-      <span class="badge" [class.done]="unassigned().length === 0">{{ unassigned().length }}</span>
-    </h2>
-    @if (unassigned().length === 0) {
+    <div class="list-switch" role="radiogroup" aria-label="Personen anzeigen">
+      <button
+        type="button"
+        role="radio"
+        [attr.aria-checked]="listKind() === 'unassigned'"
+        [class.active]="listKind() === 'unassigned'"
+        (click)="showList('unassigned')"
+      >
+        Ohne Gruppe
+        <span class="badge" [class.done]="unassigned().length === 0">{{ unassigned().length }}</span>
+      </button>
+      <button
+        type="button"
+        role="radio"
+        [attr.aria-checked]="listKind() === 'all'"
+        [class.active]="listKind() === 'all'"
+        (click)="showList('all')"
+      >
+        Alle <span class="badge">{{ students().length }}</span>
+      </button>
+    </div>
+    @if (listed().length === 0) {
       <p class="muted">
         @if (students().length === 0) {
           Noch keine Personen in diesem Zeitraum. <a routerLink="/personen">Personen anlegen</a>
@@ -40,11 +57,20 @@
         Alle auswählen
       </label>
       <ul class="people">
-        @for (student of unassigned(); track student.id) {
+        @for (student of listed(); track student.id) {
           <li>
             <label class="check">
               <input type="checkbox" [checked]="selected().has(student.id)" (change)="toggle(student.id)" />
-              <span class="grow">{{ student | studentLabel }}</span>
+              <span class="grow">
+                {{ student | studentLabel }}
+                @if (listKind() === 'all') {
+                  @if (groupsText(student); as text) {
+                    <span class="groups-line">{{ text }}</span>
+                  } @else {
+                    <span class="groups-line none">ohne Gruppe</span>
+                  }
+                }
+              </span>
               <span class="muted small">{{ ageText(student) }}</span>
             </label>
           </li>
@@ -78,6 +104,18 @@
       <h2 class="grow">Gruppen <span class="badge">{{ groups().length }}</span></h2>
       <input #newName type="text" placeholder="Name der Gruppe" aria-label="Name der neuen Gruppe" (keydown.enter)="addEmptyGroup(newName)" />
       <button class="secondary" (click)="addEmptyGroup(newName)">+ Gruppe</button>
+    </div>
+    <div class="row teacher-group">
+      @if (showTeachers()) {
+        <select aria-label="Lehrer" (change)="wholeTeacherId.set(valueOf($event))">
+          @for (teacher of reportPeriod.teachers(); track teacher.id) {
+            <option [value]="teacher.id" [selected]="teacher.id === wholeTeacherId()">{{ teacher.name }}</option>
+          }
+        </select>
+      }
+      <button class="secondary" (click)="createTeacherGroup()">
+        {{ showTeachers() ? 'Gruppe mit allen Schülern dieses Lehrers' : 'Gruppe mit allen Personen' }}
+      </button>
     </div>
     <div class="group-grid">
       @for (group of groups(); track group.id) {

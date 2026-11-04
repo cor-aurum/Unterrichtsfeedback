@@ -192,6 +192,17 @@ export class GroupsStore {
     this.studentsStore.removeFromPeriod(studentId);
   }
 
+  /** Nach dem Zusammenführen zweier Personen: Mitglied ist die verbleibende. */
+  replaceMember(from: string, into: string): void {
+    this.allGroups.update((groups) =>
+      groups.map((g) =>
+        g.memberIds.includes(from)
+          ? { ...g, memberIds: [...new Set(g.memberIds.map((id) => (id === from ? into : id)))] }
+          : g,
+      ),
+    );
+  }
+
   /** Nach dem Löschen einer Person: Sie ist in keiner Gruppe mehr. */
   removeMember(studentId: string): void {
     this.allGroups.update((groups) =>

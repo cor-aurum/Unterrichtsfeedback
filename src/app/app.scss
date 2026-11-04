@@ -87,6 +87,16 @@
     font-size: 0.9rem;
   }
 
+  // Mit Server steht der Lehrer fest und wird nur angezeigt.
+  .teacher-name {
+    min-width: 0;
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9rem;
+  }
+
   .help {
     flex: none;
     display: flex;
@@ -112,7 +122,8 @@
     }
 
     // Breite 0 als Ausgangspunkt: Beide Auswahlen teilen sich den Platz, statt ihre volle Textbreite zu verlangen.
-    .teacher-select {
+    .teacher-select,
+    .teacher-name {
       flex: 1 1 0;
       width: 0;
       max-width: none;

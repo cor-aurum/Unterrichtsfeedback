@@ -13,8 +13,17 @@ export interface CalendarEvent {
  * iCalendar-Datei (RFC 5545) für den Import in Kalender-Apps. Die Zeiten sind „floating“, also ohne Zeitzone:
  * Der Kalender zeigt sie so, wie sie in der App stehen, auch nach der Zeitumstellung.
  */
-export function toICalendar(calendarName: string, events: CalendarEvent[], now = new Date()): string {
+export function toICalendar(
+  calendarName: string,
+  events: CalendarEvent[],
+  now = new Date(),
+  options: { refreshHours?: number } = {},
+): string {
   const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  // Für ein Abo: wie oft die Kalender-App nachsehen soll (RFC 7986, dazu die ältere Angabe von Outlook)
+  const refresh = options.refreshHours
+    ? [`REFRESH-INTERVAL;VALUE=DURATION:PT${options.refreshHours}H`, `X-PUBLISHED-TTL:PT${options.refreshHours}H`]
+    : [];
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -22,6 +31,7 @@ export function toICalendar(calendarName: string, events: CalendarEvent[], now =
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeText(calendarName)}`,
+    ...refresh,
     ...events.flatMap((event) => eventLines(event, stamp)),
     'END:VCALENDAR',
   ];

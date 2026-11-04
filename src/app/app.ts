@@ -3,7 +3,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ActiveTeacher } from './active-teacher';
 import { ConfigStore } from './config.store';
 import { ReportPeriod } from './report-period';
-import { FolderSync } from './sync/folder-sync';
+import { ServerSync } from './sync/server-sync';
 import { isNativeApp } from './save-file';
 import { WelcomeDialog } from './welcome/welcome-dialog';
 
@@ -25,11 +25,15 @@ export class App {
   protected readonly periods = computed(() =>
     [...this.reportPeriod.periods()].sort((a, b) => a.from.localeCompare(b.from)),
   );
-  /** Startet die Ordner-Synchronisation, falls ein Ordner gewählt ist */
-  protected readonly folderSync = inject(FolderSync);
+  /** Startet den Abgleich mit dem Server, falls die App mit einem verbunden ist */
+  protected readonly serverSync = inject(ServerSync);
   protected readonly syncNeedsAttention = computed(() =>
-    ['reconnect', 'initial', 'conflict', 'error'].includes(this.folderSync.status()),
+    ['reconnect', 'initial', 'conflict', 'error'].includes(this.serverSync.status()),
   );
+  protected readonly serverName = computed(() => {
+    const login = this.serverSync.login();
+    return login ? new URL(login.url).host : '';
+  });
   protected readonly nativeApp = isNativeApp;
   /** Neueste APK aus den GitHub-Releases (siehe .github/workflows/android.yml) */
   protected readonly apkUrl =

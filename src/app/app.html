@@ -24,7 +24,11 @@
         }
       </select>
     }
-    @if (teachers().length > 1) {
+    @if (activeTeacher.fixed()) {
+      <span class="teacher-name" [title]="'Angemeldet als ' + activeTeacher.teacher().name">
+        {{ activeTeacher.teacher().name }}
+      </span>
+    } @else if (teachers().length > 1) {
       <select
         class="teacher-select"
         (change)="activeTeacher.select(valueOf($event))"
@@ -43,7 +47,7 @@
 <main>
   @if (syncNeedsAttention()) {
     <p class="message warning sync-banner">
-      Die Synchronisation wartet auf dich. <a routerLink="/export">Zu Export &amp; Sicherung</a>
+      Der Abgleich mit dem Server wartet auf dich. <a routerLink="/export">Zu Export &amp; Sicherung</a>
     </p>
   }
   <router-outlet />
@@ -56,20 +60,20 @@
 }
 
 <footer class="hint">
-  @if (folderSync.status() === 'ok') {
+  @if (serverSync.status() === 'ok') {
     Die Daten liegen {{ nativeApp ? 'in dieser App' : 'in diesem Browser' }} und werden bei jeder Änderung
-    automatisch mit „{{ folderSync.folderName() }}“ synchronisiert.
-  } @else if (folderSync.status() !== 'off') {
-    Die Synchronisation mit „{{ folderSync.folderName() }}“ ist unterbrochen; Änderungen liegen bis dahin nur
-    {{ nativeApp ? 'in dieser App' : 'in diesem Browser' }}. Unter „Export &amp; Sicherung“ kannst du sie fortsetzen.
+    automatisch mit dem Server {{ serverName() }} abgeglichen.
+  } @else if (serverSync.status() !== 'off') {
+    Der Abgleich mit dem Server {{ serverName() }} ist unterbrochen; Änderungen liegen bis dahin nur
+    {{ nativeApp ? 'in dieser App' : 'in diesem Browser' }}. Unter „Export &amp; Sicherung“ kannst du ihn fortsetzen.
   } @else if (nativeApp) {
     Alle Daten liegen nur in dieser App auf diesem Gerät. Beim Deinstallieren der App gehen sie
-    verloren, deshalb regelmäßig unter „Export &amp; Sicherung“ eine Datensicherung erstellen oder die
-    Synchronisation einrichten.
+    verloren, deshalb regelmäßig unter „Export &amp; Sicherung“ eine Datensicherung erstellen oder dich mit einem
+    Server verbinden.
   } @else {
     Alle Daten liegen nur in diesem Browser (Local Storage) und bleiben auch nach einem Neustart
     erhalten. Beim Löschen der Browserdaten gehen sie verloren, deshalb regelmäßig unter „Export &amp;
-    Sicherung“ eine Datensicherung herunterladen oder die Synchronisation einrichten.
+    Sicherung“ eine Datensicherung herunterladen oder dich mit einem Server verbinden.
   }
   @if (!nativeApp) {
     <a class="apk" [href]="apkUrl">Android-App herunterladen (APK)</a>

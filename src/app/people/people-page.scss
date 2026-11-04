@@ -42,3 +42,40 @@
 .remove-actions {
   margin-top: 1.25rem;
 }
+
+.duplicates {
+  margin-bottom: 1rem;
+
+  h2 {
+    margin-top: 0;
+  }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border, #ddd);
+  }
+
+  .grow {
+    flex: 1 1 16rem;
+    min-width: 0;
+  }
+}
+
+.manual-merge {
+  margin-top: 1.25rem;
+
+  select {
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+}

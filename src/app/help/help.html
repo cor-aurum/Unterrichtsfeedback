@@ -144,6 +144,14 @@
       Zeitraums als CSV – im nächsten Zeitraum liest der Excel-Import diese Datei wieder ein.
     </li>
     <li>
+      <strong>Doppelte Personen:</strong> Mit Server legen Lehrer, die einander in keinem Berichtszeitraum sehen,
+      gleichnamige Personen getrennt an. Sieht ein Lehrer später beide Einträge (gleicher Name, kein abweichendes
+      Geburtsdatum), schlägt die App oben unter <em>Mögliche doppelte Personen</em> vor, sie
+      <kbd>Zusammenführen</kbd> – oder du bestätigst <kbd>Verschiedene Personen</kbd>. Von Hand geht es bei der Person
+      unter <em>Doppelten Eintrag zusammenführen …</em>. Stunden, Termine, Gruppen und Berichtszeiträume gehören dann
+      zu einer Person; die Apps der anderen Lehrer übernehmen das beim nächsten Abgleich.
+    </li>
+    <li>
       <strong>Entfernen oder löschen:</strong> Eine Person, die im gewählten Zeitraum fehlt, übernimmst du mit
       <kbd>In diesen Zeitraum übernehmen</kbd>. <kbd>Aus diesem Zeitraum entfernen</kbd> nimmt sie aus dem Zeitraum
       und seinen Gruppen, ohne etwas zu löschen. <kbd>Person löschen</kbd> löscht sie mit allen Stunden und Terminen.
@@ -157,13 +165,15 @@
     <li>
       <strong>Wer ist noch in keiner Gruppe?</strong> Links stehen alle Personen des gewählten Berichtszeitraums ohne
       Gruppe, mit ihrem Alter (sofern ein Geburtsdatum eingetragen ist). Die Zahl daneben wird grün, sobald alle
-      in einer Gruppe sind.
+      in einer Gruppe sind. Mit <em>Alle</em> schaltest du auf alle Personen des Zeitraums um; unter jeder steht,
+      in welchen Gruppen sie ist.
     </li>
     <li>
       <strong>Zuordnen:</strong> Personen anhaken (oder <em>Alle auswählen</em>), eine Gruppe wählen oder
       <em>Neue Gruppe …</em> mit Namen, dann <kbd>… zuordnen</kbd>. Rechts stehen die Gruppen des Zeitraums mit
       Anzahl, Durchschnittsalter und Altersspanne; dort benennst du sie um, nimmst Mitglieder mit ✕ heraus oder legst
-      mit <kbd>+ Gruppe</kbd> eine leere an. Bei mehreren Lehrern wählst du in jeder Gruppe unter <em>Termine im
+      mit <kbd>+ Gruppe</kbd> eine leere an. <kbd>Gruppe mit allen Schülern dieses Lehrers</kbd> legt eine Gruppe mit
+      allen Personen des gewählten Lehrers im Zeitraum an; sie heißt wie der Lehrer und steht in seinem Kalender. Bei mehreren Lehrern wählst du in jeder Gruppe unter <em>Termine im
       Kalender von</em> den Lehrer; ihre Gruppentermine wandern dann in seinen Kalender. Zur Wahl stehen die Lehrer
       des Berichtszeitraums. Darunter zeigt eine Grafik die Altersverteilung aller Gruppen.
     </li>
@@ -371,6 +381,16 @@
       Die Datei ist eine Momentaufnahme: Exportierst du erneut, werden Termine aktualisiert und neue ergänzt, gelöschte
       Termine musst du im Kalender aber selbst entfernen.
     </li>
+    <li>
+      <strong>Kalender-Abo:</strong> Mit Server gibt es darunter <kbd>Abo einrichten</kbd>. Die Adresse trägst du einmal
+      in deiner Kalender-App ein (Google-Kalender: <em>Weitere Kalender → Per URL</em>; Outlook: <em>Aus dem Internet
+      abonnieren</em>; iPhone: <em>Einstellungen → Kalender → Accounts → Abonnierten Kalender hinzufügen</em>). Danach
+      holt sie sich deine Termine selbst, auch geänderte und gelöschte: Einzel- und Gruppenunterricht, allgemeine
+      Termine und Blocker, von vier Wochen zurück bis zum Ende des Berichtszeitraums. Den Kalender schickt die App bei
+      jedem Abgleich an den Server; wie oft die Kalender-App nachsieht, bestimmt sie selbst (Google-Kalender nur etwa
+      alle 8 bis 24 Stunden). Wer die Adresse kennt, sieht deine Termine ohne Passwort; <kbd>Neue Adresse
+      erzeugen</kbd> macht die alte sofort ungültig.
+    </li>
   </ul>
 </section>
 
@@ -467,15 +487,26 @@
     </li>
     <li>
       <strong>Feste Inhalte</strong> stehen in jedem PDF, zum Beispiel eine Anrede am Anfang, ein Gruß oder
-      ein Logo am Ende. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument, Lehrer oder
+      ein Logo am Ende. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument oder
       Berichtszeitraum austauschen, z. B. einen Gruß in die Sommerferien nur im 2. Halbjahr. Ist bei mehreren
-      Bedingungen etwas angehakt, muss alles passen; die erste passende Variante gilt.
+      Bedingungen etwas angehakt, muss alles passen; die erste passende Variante gilt. Für deine eigenen Personen
+      allein gibt es „Nur für mich“ (siehe unten); Varianten für andere Lehrer legt jeder Lehrer selbst an.
     </li>
     <li>
       <strong>Gruppen-Abschnitte</strong> und <strong>Gruppen-Inhalte</strong> funktionieren genauso, gelten aber für
       Gruppenstunden und das Gruppen-PDF. Dort gibt es zusätzlich die Platzhalter <code>{{ '{gruppe}' }}</code>
       (Name der Gruppe) und <code>{{ '{mitglieder}' }}</code> (Vornamen der Mitglieder, z. B. „Anna und Ben“);
       <code>{{ '{name}' }}</code> und <code>{{ '{vorname}' }}</code> stehen dort für den Gruppennamen.
+    </li>
+    <li>
+      <strong>Eigene Abschnitte und Inhalte:</strong> Mit <em>Nur für mich</em> gehört ein Abschnitt oder fester
+      Inhalt dem gewählten Lehrer (oben in der Leiste). Er erscheint dann nur beim Erfassen und im PDF seiner
+      Personen und Gruppen und ist farbig markiert; andere Lehrer sehen ihn in der Konfiguration nicht. Ohne Haken
+      gilt er wieder für alle. Auch eine <em>Variante</em> eines gemeinsamen Inhalts kann „Nur für mich“ sein: Sie
+      ersetzt den Inhalt nur bei deinen Personen bzw. Gruppen (zusätzlich zu ihren Instrumenten und Zeiträumen) und
+      bleibt für andere Lehrer verborgen. Ältere Varianten mit angehakten Lehrern wurden zu eigenen Varianten dieser
+      Lehrer. Wird ein Lehrer gelöscht, verschwinden auch seine eigenen Abschnitte,
+      Inhalte und Varianten.
     </li>
     <li>
       <strong>Kopf- und Fußzeile:</strong> Hier legst du den Untertitel unter der Überschrift, die Kopfzeile ab
@@ -495,7 +526,8 @@
     <li>
       <strong>Lehrer:</strong> Jeder Lehrer hat einen Namen, ein Instrument, einen Ort und eigene Unterrichtszeiten.
       Jede Person gehört zu einem Lehrer; ihre Termine stehen in seinem Kalender. Gibt es mehrere Lehrer, wählst
-      du oben rechts in der Leiste aus, wer gerade arbeitet. Kalender, „Heute geplant“ und neue Personen richten
+      du oben rechts in der Leiste aus, wer gerade arbeitet. Mit Server bist du immer der Lehrer, als der du dich
+      angemeldet hast; dort steht dann nur dein Name. Kalender, „Heute geplant“ und neue Personen richten
       sich danach; den Lehrer einer Person änderst du unter
       <a routerLink="/personen">Personen</a>. <kbd>⧉</kbd> dupliziert einen
       Lehrer: Die Kopie steht direkt darunter, heißt „… (Kopie)“ und hat dasselbe Instrument, denselben Ort,
@@ -575,22 +607,16 @@
       diese Sicherung alles – darauf weist die App vorher hin.
     </li>
     <li>
-      <strong>Synchronisation:</strong> Die App gleicht dieselben Dateien wie im ZIP mit einem Ordner ab – lokal
-      auf dem Gerät oder direkt per WebDAV in deiner Nextcloud (siehe unten). Eigene Änderungen schreibt sie kurz
-      nach der Eingabe, Änderungen anderer Geräte übernimmt sie beim Start, beim Zurückkehren zur App und alle
-      20 Sekunden. Weil jeder Lehrer je Berichtszeitraum eigene Dateien hat, stören sich Änderungen an verschiedenen Lehrern nicht.
-      Nur wenn dieselben Daten hier und auf einem anderen Gerät geändert wurden, fragt die App, welche Fassung gilt.
-    </li>
-    <li>
-      Verbindest du ein Gerät mit einem Ordner, in dem schon Daten liegen, wählst du einmal: <kbd>Daten aus dem
-      Ordner übernehmen</kbd> (für ein weiteres Gerät richtig) oder den Ordner mit den Daten dieses Geräts
-      überschreiben.
+      <strong>Server:</strong> Über einen Unterrichtsfeedback-Server teilen sich mehrere Lehrer und Geräte die Daten
+      (siehe unten). Eigene Änderungen schickt die App kurz nach der Eingabe, Änderungen anderer übernimmt sie beim
+      Start, beim Zurückkehren zur App und alle 20 Sekunden. Nur wenn dieselben Daten hier und auf einem anderen
+      Gerät geändert wurden, fragt die App, welche Fassung gilt.
     </li>
     <li>
       <strong>Alles zurücksetzen</strong> (ganz unten) löscht auf diesem Gerät alle Personen, Stunden, Gruppen,
       Termine und Blocker und setzt die Konfiguration auf die Vorlage zurück. Zur Sicherheit musst du
-      <code>ZURÜCKSETZEN</code> eintippen. Eine laufende Synchronisation wird vorher beendet; die Dateien im Ordner
-      bleiben erhalten. Exportiere vorher deine Daten, wenn du sie noch brauchst. Danach begrüßt dich die App
+      <code>ZURÜCKSETZEN</code> eintippen. Mit Server wirst du vorher abgemeldet; die Daten auf dem Server bleiben
+      erhalten. Exportiere vorher deine Daten, wenn du sie noch brauchst. Danach begrüßt dich die App
       wie beim ersten Start.
     </li>
     <li>
@@ -601,101 +627,50 @@
     </li>
   </ul>
 
-  <h3>Auf welchen Geräten funktioniert die Synchronisation?</h3>
-  <div class="table-scroll">
-    <table class="devices">
-      <thead>
-        <tr>
-          <th>Gerät</th>
-          <th>Lokaler Ordner</th>
-          <th>Nextcloud per WebDAV</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Windows, macOS, Linux, ChromeOS mit Chrome, Edge, Opera</td>
-          <td>✅ (bei Brave ggf. erst einschalten)</td>
-          <td>✅</td>
-        </tr>
-        <tr>
-          <td>Dieselben Rechner mit Firefox oder Safari</td>
-          <td>❌ Diese Browser erlauben keinen Ordnerzugriff.</td>
-          <td>✅</td>
-        </tr>
-        <tr>
-          <td>Android-App</td>
-          <td>✅ ab Android 7.0</td>
-          <td>✅</td>
-        </tr>
-        <tr>
-          <td>Android im Browser</td>
-          <td>❌ Chrome bietet den Ordnerzugriff nur auf Rechnern an.</td>
-          <td>✅</td>
-        </tr>
-        <tr>
-          <td>iPhone, iPad im Browser</td>
-          <td>❌ Alle Browser dort nutzen die Technik von Safari.</td>
-          <td>✅</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  <p>
-    WebDAV setzt voraus, dass die Nextcloud Zugriffe von dieser Seite erlaubt (siehe unten). Ohne Synchronisation
-    sicherst du mit <kbd>Daten exportieren</kbd> und <kbd>Daten importieren</kbd> (ZIP).
-  </p>
-
-  <h3>Lokaler Ordner</h3>
+  <h3>Mit einem Server arbeiten</h3>
   <ul>
     <li>
-      <strong>Am Rechner:</strong> Wähle einen eigenen Ordner innerhalb des Sync-Ordners des
-      Nextcloud-Desktop-Clients. Der Client lädt die Dateien hoch. Nach einem Neustart des Browsers musst du den
-      Zugriff einmal erneut erlauben.
+      <strong>Einladungscode:</strong> Jeder Lehrer braucht ein Konto. Den Code für den ersten Lehrer erzeugt die
+      Administration auf dem Server; weitere Lehrer lädt jeder Lehrer selbst ein: <a routerLink="/konfiguration">Konfiguration</a>
+      → Lehrer → Lehrer anlegen → <kbd>Einladungscode erzeugen</kbd>. Der Code enthält die Adresse des Servers, gilt
+      einmal und 14 Tage.
     </li>
     <li>
-      <strong>In der Android-App, Ordner auf dem Gerät oder der SD-Karte:</strong> funktioniert immer. Den obersten
-      Ordner des internen Speichers und den Ordner „Download“ selbst lässt Android nicht zu, nur einen Unterordner.
+      <strong>Einlösen:</strong> Beim ersten Start der App <kbd>Mit Server verbinden …</kbd> wählen (oder später unter
+      <a routerLink="/export">Export &amp; Sicherung</a> → <em>Server</em>), den Code einfügen, Benutzername und
+      Passwort vergeben. Ist der Server noch leer, richtest du dich wie gewohnt ein; sonst übernimmt die App die Daten
+      vom Server und fragt nur noch nach deinem Namen und Instrument, falls dich noch niemand angelegt hat.
     </li>
     <li>
-      <strong>In der Android-App, Nextcloud:</strong> Nimm besser direkt WebDAV. Ein Ordner der Nextcloud-App
-      funktioniert nur eingeschränkt: Die Nextcloud-App kennt Änderungen anderer Geräte erst, wenn sie den Ordner
-      selbst aktualisiert hat.
+      <strong>Weitere Geräte:</strong> Auf demselben Weg mit <em>Anmelden</em>, Benutzername und Passwort.
+    </li>
+    <li>
+      <strong>Wer sieht was?</strong> Konfiguration, Lehrer und allgemeine Termine sehen alle. Personen, Gruppen,
+      Stunden und Termine eines Berichtszeitraums sehen nur die Lehrer, die dort als aktive Lehrer eingetragen sind.
+      Berichtszeiträume anlegen dürfen alle; ändern, wer dort mitmacht, oder einen Zeitraum löschen dürfen nur
+      dessen Lehrer.
+    </li>
+    <li>
+      <strong>Passwort vergessen?</strong> Die Administration erzeugt auf dem Server einen Reset-Code. Den fügst du
+      unter <em>Passwort vergessen?</em> ein und vergibst ein neues Passwort; alle deine Geräte werden abgemeldet.
+    </li>
+    <li>
+      Die Daten bleiben zusätzlich auf jedem Gerät. Die App funktioniert offline weiter und gleicht ab, sobald der
+      Server wieder erreichbar ist.
     </li>
   </ul>
-
-  <h3>Nextcloud per WebDAV</h3>
-  <ol>
-    <li>
-      <strong>Einmalig, durch die Administration der Nextcloud (nur für die Webseite):</strong> Die App <em>WebAppPassword</em> aus dem
-      Nextcloud-App-Store installieren und in den Verwaltungseinstellungen unter <em>WebAppPassword</em> bei den
-      erlaubten Origins für WebDAV eintragen:
-      @if (origin) {
-        <code>{{ origin }}</code> für diese Webseite
-      } @else {
-        die Adresse der Webseite (nur Protokoll und Server, z. B. <code>https://name.github.io</code>)
-      }. Ohne diesen Schritt blockiert der Browser die Zugriffe. Für die Android-App ist dieser Schritt nicht
-      nötig.
-    </li>
-    <li>
-      In der Nextcloud unter <em>Persönliche Einstellungen → Sicherheit</em> ein <strong>App-Passwort</strong>
-      anlegen. Nimm nicht dein Login-Passwort.
-    </li>
-    <li>
-      Unter <a routerLink="/export">Export &amp; Sicherung</a> → <kbd>Nextcloud/WebDAV einrichten</kbd> die Adresse
-      der Nextcloud (z. B. <code>https://cloud.example.de</code>), Benutzername, App-Passwort und Ordner eintragen.
-      Andere WebDAV-Server gibst du mit ihrer vollständigen WebDAV-Adresse an.
-    </li>
-  </ol>
   <p class="muted">
-    Das App-Passwort wird in diesem Browser bzw. in der App auf diesem Gerät gespeichert. Wer das Gerät benutzt,
-    kommt damit an deine Nextcloud-Dateien. Verlierst du das Gerät, widerrufe das App-Passwort in der Nextcloud.
+    Für die Webseite muss der Server Zugriffe von ihrer Adresse erlauben
+    @if (origin) {
+      (<code>{{ origin }}</code>)
+    }; für die Android-App ist das nicht nötig. Wie man den Server betreibt, steht in <code>server/README.md</code>.
   </p>
 
   <h3>Wichtig auf iPhone und iPad</h3>
   <p>
     Safari löscht die Daten einer Webseite, wenn sie sieben Tage lang nicht benutzt wurde. Füge die Seite deshalb
     über <em>Teilen → Zum Home-Bildschirm</em> hinzu und öffne sie von dort – dann gilt diese Regel nicht.
-    Richte zusätzlich die Synchronisation ein oder sichere regelmäßig.
+    Verbinde dich zusätzlich mit einem Server oder sichere regelmäßig.
   </p>
 </section>
 
@@ -703,8 +678,8 @@
   <h2>Wo sind meine Daten?</h2>
   <p>
     Deine Daten liegen <strong>nur in diesem Browser bzw. in dieser App auf diesem Gerät</strong>. Sie
-    werden nirgendwohin hochgeladen – außer du richtest die Synchronisation ein; dann liegt eine Kopie in dem
-    gewählten Ordner, z. B. in deiner Nextcloud. Das heißt auch:
+    werden nirgendwohin hochgeladen – außer du verbindest dich mit einem Server; dann liegt eine Kopie dort, und
+    die anderen Lehrer sehen sie, soweit sie im selben Berichtszeitraum eingetragen sind. Ohne Server heißt das:
   </p>
   <ul>
     <li>Ein anderer Browser, die Android-App oder ein anderes Gerät sieht deine Daten nicht.</li>

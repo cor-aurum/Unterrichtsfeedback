@@ -34,6 +34,7 @@ import {
   teachingWindowsFor,
   TimeWindow,
   standardWindowsFor,
+  isVisibleTo,
 } from './model';
 import { addDays, daysBetween } from './calendar/appointments';
 import { saveFile } from './save-file';
@@ -108,12 +109,16 @@ export class ConfigStore {
   }
 
   /**
-   * Ein neuer Lehrer ist in allen laufenden und künftigen Berichtszeiträumen aktiv. Ohne Instrument gilt das
-   * Standardinstrument, ein unbekanntes wird angelegt. Gibt die ID des Lehrers zurück.
+   * Legt einen Lehrer an und liefert seine ID. Ohne Instrument gilt das Standardinstrument, ein unbekanntes wird
+   * angelegt. Er ist in allen laufenden und künftigen Berichtszeiträumen aktiv; mit `joinPeriodsOf` nur in denen,
+   * in denen dieser Lehrer aktiv ist (mit Server darf man nur dort Lehrer eintragen), mit `null` in keinem.
    */
-  addTeacher(name: string, instrumentName?: string): string {
+  addTeacher(
+    name: string,
+    options: { instrument?: string; id?: string; joinPeriodsOf?: string | null } = {},
+  ): string {
+    const { instrument: instrumentName, id = newId(), joinPeriodsOf } = options;
     const instrumentId = instrumentName ? this.ensureInstruments([instrumentName]).get(instrumentName.trim().toLowerCase()) : null;
-    const id = newId();
     this.mutate((config) => {
       config.teachers.push({
         id,
@@ -123,7 +128,11 @@ export class ConfigStore {
         teachingWindows: defaultTeachingWindows(config.calendar),
         periodWindows: {},
       });
-      config.reportPeriods.filter((period) => period.to >= today()).forEach((period) => period.teacherIds.push(id));
+      if (joinPeriodsOf === null) return;
+      config.reportPeriods
+        .filter((period) => period.to >= today())
+        .filter((period) => joinPeriodsOf === undefined || period.teacherIds.includes(joinPeriodsOf))
+        .forEach((period) => period.teacherIds.push(id));
     });
     return id;
   }
@@ -133,7 +142,8 @@ export class ConfigStore {
   }
 
   /**
-   * Entfernt den Lehrer auch aus allen Varianten. Personen dieses Lehrers gehören danach zum ersten Lehrer.
+   * Entfernt auch seine eigenen Abschnitte, Inhalte und Varianten. Personen dieses Lehrers gehören danach zum ersten
+   * Lehrer.
    * Der letzte Lehrer bleibt immer erhalten.
    */
   removeTeacher(teacherId: string): void {
@@ -141,9 +151,13 @@ export class ConfigStore {
       if (config.teachers.length <= 1) return;
       config.teachers = config.teachers.filter((t) => t.id !== teacherId);
       config.reportPeriods.forEach((period) => (period.teacherIds = period.teacherIds.filter((id) => id !== teacherId)));
-      [...config.blocks, ...config.groupBlocks]
-        .flatMap((block) => block.variants)
-        .forEach((variant) => (variant.teacherIds = variant.teacherIds.filter((id) => id !== teacherId)));
+      // Seine eigenen Abschnitte und Inhalte sieht sonst niemand.
+      const notHis = <T extends { ownerId?: string }>(list: T[]) => list.filter((entry) => entry.ownerId !== teacherId);
+      config.sections = notHis(config.sections);
+      config.groupSections = notHis(config.groupSections);
+      config.blocks = notHis(config.blocks);
+      config.groupBlocks = notHis(config.groupBlocks);
+      [...config.blocks, ...config.groupBlocks].forEach((block) => (block.variants = notHis(block.variants)));
     });
   }
 
@@ -289,6 +303,11 @@ export class ConfigStore {
     this.mutateSection(sectionId, (section) => (section.showTitle = showTitle));
   }
 
+  /** `ownerId` null: Der Abschnitt gilt für alle Lehrer. */
+  setSectionOwner(sectionId: string, ownerId: string | null): void {
+    this.mutateSection(sectionId, (section) => setOwner(section, ownerId));
+  }
+
   removeSection(sectionId: string): void {
     this.mutate((config) => {
       config.sections = config.sections.filter((s) => s.id !== sectionId);
@@ -296,10 +315,11 @@ export class ConfigStore {
     });
   }
 
-  moveSection(sectionId: string, offset: -1 | 1): void {
+  /** Mit `teacherId` rückt der Abschnitt an den nächsten, den dieser Lehrer sieht. */
+  moveSection(sectionId: string, offset: -1 | 1, teacherId?: string): void {
     this.mutate((config) => {
-      move(config.sections, sectionId, offset);
-      move(config.groupSections, sectionId, offset);
+      move(config.sections, sectionId, offset, teacherId);
+      move(config.groupSections, sectionId, offset, teacherId);
     });
   }
 
@@ -484,6 +504,11 @@ export class ConfigStore {
     this.mutateBlock(blockId, (block) => (block.position = position));
   }
 
+  /** `ownerId` null: Der Inhalt gilt für alle Lehrer. */
+  setBlockOwner(blockId: string, ownerId: string | null): void {
+    this.mutateBlock(blockId, (block) => setOwner(block, ownerId));
+  }
+
   removeBlock(blockId: string): void {
     this.mutate((config) => {
       config.blocks = config.blocks.filter((b) => b.id !== blockId);
@@ -491,28 +516,37 @@ export class ConfigStore {
     });
   }
 
-  moveBlock(blockId: string, offset: -1 | 1): void {
+  /** Mit `teacherId` rückt der Inhalt an den nächsten, den dieser Lehrer sieht. */
+  moveBlock(blockId: string, offset: -1 | 1, teacherId?: string): void {
     this.mutate((config) => {
-      move(config.blocks, blockId, offset);
-      move(config.groupBlocks, blockId, offset);
+      move(config.blocks, blockId, offset, teacherId);
+      move(config.groupBlocks, blockId, offset, teacherId);
     });
   }
 
   addVariant(blockId: string): void {
     this.mutateBlock(blockId, (block) =>
-      block.variants.push({ id: newId(), instrumentIds: [], teacherIds: [], periodIds: [], text: '' }),
+      block.variants.push({ id: newId(), instrumentIds: [], periodIds: [], text: '' }),
     );
+  }
+
+  /** `ownerId` null: Die Variante gilt wieder für alle Lehrer, auf die ihre Bedingungen passen. */
+  setVariantOwner(blockId: string, variantId: string, ownerId: string | null): void {
+    this.mutateBlock(blockId, (block) => {
+      const variant = block.variants.find((v) => v.id === variantId);
+      if (variant) setOwner(variant, ownerId);
+    });
   }
 
   removeVariant(blockId: string, variantId: string): void {
     this.mutateBlock(blockId, (block) => (block.variants = block.variants.filter((v) => v.id !== variantId)));
   }
 
-  /** Hakt ein Instrument, einen Lehrer oder einen Berichtszeitraum einer Variante an oder ab. */
+  /** Hakt ein Instrument oder einen Berichtszeitraum einer Variante an oder ab. */
   toggleVariantCondition(
     blockId: string,
     variantId: string,
-    list: 'instrumentIds' | 'teacherIds' | 'periodIds',
+    list: 'instrumentIds' | 'periodIds',
     id: string,
   ): void {
     this.mutateBlock(blockId, (block) => {
@@ -568,11 +602,26 @@ export function blocksOf(config: FeedbackConfig, kind: ContentKind): FixedBlock[
   return kind === 'group' ? config.groupBlocks : config.blocks;
 }
 
-function move<T extends { id: string }>(list: T[], id: string, offset: -1 | 1): void {
+/** Tauscht mit dem Nachbarn; mit `teacherId` mit dem nächsten, den dieser Lehrer sieht. */
+function move<T extends { id: string; ownerId?: string }>(list: T[], id: string, offset: -1 | 1, teacherId?: string): void {
   const from = list.findIndex((entry) => entry.id === id);
-  const to = from + offset;
-  if (from < 0 || to < 0 || to >= list.length) return;
+  if (from < 0) return;
+  let to = from + offset;
+  while (teacherId && to >= 0 && to < list.length && !isVisibleTo(list[to], teacherId)) to += offset;
+  if (to < 0 || to >= list.length) return;
   [list[from], list[to]] = [list[to], list[from]];
+}
+
+function setOwner(entry: { ownerId?: string }, ownerId: string | null): void {
+  if (ownerId) {
+    entry.ownerId = ownerId;
+  } else {
+    delete entry.ownerId;
+  }
+}
+
+function parseOwner(data: { ownerId?: unknown }): { ownerId?: string } {
+  return typeof data.ownerId === 'string' && data.ownerId ? { ownerId: data.ownerId } : {};
 }
 
 export function parseConfig(data: unknown): FeedbackConfig {
@@ -764,19 +813,32 @@ function parseBlock(data: Partial<FixedBlock>): FixedBlock {
     type: data.type,
     position: data.position === 'end' ? 'end' : 'start',
     ...parseContent(data),
-    variants: Array.isArray(data.variants) ? data.variants.map(parseVariant) : [],
+    variants: Array.isArray(data.variants) ? data.variants.flatMap(parseVariants) : [],
+    ...parseOwner(data),
   };
 }
 
-function parseVariant(data: Partial<BlockVariant>): BlockVariant {
-  return {
+/**
+ * Ältere Varianten kennen noch keine Zeiträume, manche haben noch angehakte Lehrer statt eines Besitzers. Sie werden
+ * zu eigenen Varianten dieser Lehrer, bei mehreren je eine Kopie an derselben Stelle; die Kopien bekommen feste IDs,
+ * damit jedes Gerät dieselben erzeugt.
+ */
+function parseVariants(data: Partial<BlockVariant> & { teacherIds?: unknown }): BlockVariant[] {
+  const ids = (list: unknown) => (Array.isArray(list) ? list.filter((id): id is string => typeof id === 'string') : []);
+  const variant: BlockVariant = {
     id: typeof data?.id === 'string' ? data.id : newId(),
-    instrumentIds: Array.isArray(data?.instrumentIds) ? data.instrumentIds.filter((id) => typeof id === 'string') : [],
-    // Ältere Varianten kennen nur Instrumente, dann auch Lehrer, aber noch keine Zeiträume.
-    teacherIds: Array.isArray(data?.teacherIds) ? data.teacherIds.filter((id) => typeof id === 'string') : [],
-    periodIds: Array.isArray(data?.periodIds) ? data.periodIds.filter((id) => typeof id === 'string') : [],
+    instrumentIds: ids(data?.instrumentIds),
+    periodIds: ids(data?.periodIds),
     ...parseContent(data),
+    ...parseOwner(data ?? {}),
   };
+  const teacherIds = ids(data?.teacherIds);
+  if (variant.ownerId || teacherIds.length === 0) return [variant];
+  return teacherIds.map((teacherId, index) => ({
+    ...variant,
+    id: index === 0 ? variant.id : `${variant.id}-${teacherId}`,
+    ownerId: teacherId,
+  }));
 }
 
 function parseContent(data: Partial<BlockContent>): BlockContent {
@@ -801,6 +863,7 @@ function parseSection(data: Partial<Section>): Section {
     items: items
       .filter((item) => typeof item?.text === 'string')
       .map((item) => ({ id: typeof item.id === 'string' ? item.id : newId(), text: item.text })),
+    ...parseOwner(data),
   };
 }
 

@@ -4,25 +4,26 @@ import {
   BlockContent,
   BlockImage,
   BlockPosition,
-  ImageAlign,
-  FeedbackConfig,
-  FixedBlock,
+  configForTeacher,
   contentFor,
+  FeedbackConfig,
   fillPlaceholders,
+  FixedBlock,
   formatLongDate,
   Group,
   groupLabel,
+  ImageAlign,
   instrumentOf,
-  memberNames,
-  teacherOf,
   Lesson,
   logoSize,
+  memberNames,
   PdfLayout,
   PdfLogo,
   ReportPeriodEntry,
   Section,
   Student,
   Teacher,
+  teacherOf,
   TeachingWindow,
   today,
 } from './model';
@@ -343,7 +344,8 @@ function recipient(
 ): Recipient {
   const fillAll = (text: string) => fill(text).replace(/\{zeitraum\}/gi, period.name);
   const teacher = teacherOf(student, config, period.id);
-  return { config: withConfigTexts(config, fillAll), student: withStudentTexts(student, fillAll), teacher, period };
+  const own = configForTeacher(config, teacher.id);
+  return { config: withConfigTexts(own, fillAll), student: withStudentTexts(student, fillAll), teacher, period };
 }
 
 function withConfigTexts(config: FeedbackConfig, fill: (text: string) => string): FeedbackConfig {

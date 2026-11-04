@@ -21,6 +21,8 @@ export interface Section {
   /** Nur Freitext: Titel im PDF vor den Text setzen („Titel: Text“) */
   showTitle: boolean;
   items: ChecklistItem[];
+  /** Eigener Abschnitt dieses Lehrers (siehe `isVisibleTo`); fehlt bei gemeinsamen */
+  ownerId?: string;
 }
 
 export type BlockPosition = 'start' | 'end';
@@ -41,14 +43,15 @@ export interface BlockContent {
 }
 
 /**
- * Ersetzt den Inhalt eines festen Blocks für bestimmte Personen oder Berichtszeiträume. Alle gewählten
- * Bedingungen müssen passen; eine leere Liste bedeutet „egal“.
+ * Ersetzt den Inhalt eines festen Blocks für bestimmte Instrumente, Berichtszeiträume oder (als eigene Variante)
+ * die Personen eines Lehrers. Alle gewählten Bedingungen müssen passen; eine leere Liste bedeutet „egal“.
  */
 export interface BlockVariant extends BlockContent {
   id: string;
   instrumentIds: string[];
-  teacherIds: string[];
   periodIds: string[];
+  /** Eigene Variante dieses Lehrers (siehe `isVisibleTo`): gilt nur für seine Personen und Gruppen */
+  ownerId?: string;
 }
 
 /** Für wen und wann ein fester Block geschrieben wird */
@@ -59,13 +62,14 @@ export interface VariantContext {
 }
 
 function variantMatches(variant: BlockVariant, context: VariantContext): boolean {
+  if (variant.ownerId && variant.ownerId !== context.teacher.id) return false;
   const conditions: [string[], string][] = [
     [variant.instrumentIds, context.instrument.id],
-    [variant.teacherIds, context.teacher.id],
     [variant.periodIds, context.periodId],
   ];
   const chosen = conditions.filter(([ids]) => ids.length > 0);
-  return chosen.length > 0 && chosen.every(([ids, id]) => ids.includes(id));
+  // Eine eigene Variante ohne weitere Bedingung gilt für alle Personen ihres Lehrers.
+  return (chosen.length > 0 || !!variant.ownerId) && chosen.every(([ids, id]) => ids.includes(id));
 }
 
 /**
@@ -78,10 +82,34 @@ export interface FixedBlock extends BlockContent {
   type: 'text' | 'image';
   position: BlockPosition;
   variants: BlockVariant[];
+  /** Eigener Inhalt dieses Lehrers (siehe `isVisibleTo`); fehlt bei gemeinsamen */
+  ownerId?: string;
 }
 
 export function contentFor(block: FixedBlock, context: VariantContext): BlockContent {
   return block.variants.find((variant) => variantMatches(variant, context)) ?? block;
+}
+
+/**
+ * Abschnitte und feste Inhalte gelten für alle Lehrer oder gehören einem (`ownerId`). Eigene gelten nur für die
+ * Personen und Gruppen ihres Lehrers; andere Lehrer sehen sie weder beim Erfassen noch in der Konfiguration.
+ */
+export function isVisibleTo(entry: { ownerId?: string }, teacherId: string): boolean {
+  return !entry.ownerId || entry.ownerId === teacherId;
+}
+
+/** Die Konfiguration, wie sie für einen Lehrer gilt: ohne die eigenen Abschnitte und Inhalte anderer Lehrer */
+export function configForTeacher(config: FeedbackConfig, teacherId: string): FeedbackConfig {
+  const visible = <T extends { ownerId?: string }>(list: T[]) => list.filter((entry) => isVisibleTo(entry, teacherId));
+  const visibleBlocks = (blocks: FixedBlock[]) =>
+    visible(blocks).map((block) => ({ ...block, variants: visible(block.variants) }));
+  return {
+    ...config,
+    sections: visible(config.sections),
+    blocks: visibleBlocks(config.blocks),
+    groupSections: visible(config.groupSections),
+    groupBlocks: visibleBlocks(config.groupBlocks),
+  };
 }
 
 /** Zeitraum als ISO-Daten, jeweils einschließlich */

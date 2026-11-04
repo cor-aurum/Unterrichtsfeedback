@@ -22,7 +22,7 @@ export class Help {
     { id: 'daten', title: 'Wo sind meine Daten?' },
   ];
   protected readonly placeholders = PLACEHOLDERS;
-  /** Adresse dieser Webseite für die Freigabe in der Nextcloud; in der App unbekannt */
+  /** Adresse dieser Webseite, die der Server erlauben muss (`--allow-origin`); in der App unbekannt */
   protected readonly origin = isNativeApp ? null : location.origin;
 
   /** Die App nutzt Hash-Routing; Sprungmarken in der URL gehen deshalb nicht, gescrollt wird direkt. */

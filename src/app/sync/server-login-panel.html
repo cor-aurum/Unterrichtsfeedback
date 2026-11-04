@@ -1,0 +1,95 @@
+<div class="modes" role="tablist" aria-label="Anmelden">
+  <button type="button" role="tab" [class.active]="mode() === 'invite'" [attr.aria-selected]="mode() === 'invite'" (click)="setMode('invite')">
+    Einladungscode
+  </button>
+  <button type="button" role="tab" [class.active]="mode() === 'login'" [attr.aria-selected]="mode() === 'login'" (click)="setMode('login')">
+    Anmelden
+  </button>
+  <button type="button" role="tab" [class.active]="mode() === 'reset'" [attr.aria-selected]="mode() === 'reset'" (click)="setMode('reset')">
+    Passwort vergessen?
+  </button>
+</div>
+
+<form (submit)="submit($event)">
+  @switch (mode()) {
+    @case ('invite') {
+      <p class="muted small">
+        Den Einladungscode bekommst du von einem anderen Lehrer oder vom Betreiber des Servers. Du wählst dabei deinen
+        Benutzernamen und dein Passwort.
+      </p>
+    }
+    @case ('login') {
+      <p class="muted small">Du hast schon ein Konto, z. B. auf einem anderen Gerät.</p>
+    }
+    @case ('reset') {
+      <p class="muted small">
+        Den Reset-Code erzeugt der Betreiber des Servers. Danach bist du auf allen anderen Geräten abgemeldet.
+      </p>
+    }
+  }
+
+  @if (mode() === 'login') {
+    <label>
+      Serveradresse
+      <input name="url" type="text" required inputmode="url" autocomplete="url" placeholder="https://feedback.example.de" />
+    </label>
+  } @else {
+    <label>
+      {{ mode() === 'invite' ? 'Einladungscode' : 'Reset-Code' }}
+      <textarea
+        name="code"
+        rows="2"
+        required
+        placeholder="UF1.…"
+        [value]="codeText()"
+        (input)="setCode(valueOf($event))"
+      ></textarea>
+    </label>
+    @if (code(); as packed) {
+      <p class="muted small server">Server: {{ packed.server }}</p>
+    }
+  }
+
+  @if (mode() !== 'reset') {
+    <label>
+      Benutzername
+      <input
+        name="username"
+        type="text"
+        required
+        minlength="3"
+        maxlength="40"
+        autocomplete="username"
+        autocapitalize="none"
+        [placeholder]="mode() === 'invite' ? 'z. B. anna.schmidt' : ''"
+      />
+    </label>
+  }
+  <label>
+    {{ mode() === 'login' ? 'Passwort' : 'Neues Passwort (mindestens 8 Zeichen)' }}
+    <input
+      name="password"
+      type="password"
+      required
+      [attr.minlength]="mode() === 'login' ? null : 8"
+      [autocomplete]="mode() === 'login' ? 'current-password' : 'new-password'"
+    />
+  </label>
+  @if (mode() !== 'login') {
+    <label>
+      Passwort wiederholen
+      <input name="repeat" type="password" required autocomplete="new-password" />
+    </label>
+  }
+
+  @if (error(); as text) {
+    <p class="message error">{{ text }}</p>
+  }
+  <button type="submit" [disabled]="busy()">
+    @if (busy()) {
+      Verbinde …
+    } @else {
+      {{ mode() === 'invite' ? 'Konto anlegen und verbinden' : mode() === 'reset' ? 'Passwort setzen und verbinden' : 'Anmelden' }}
+    }
+  </button>
+</form>

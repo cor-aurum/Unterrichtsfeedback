@@ -42,3 +42,50 @@
     }
   </div>
 </section>
+
+@if (sync.login()) {
+  <section class="card">
+    <h2>Kalender-Abo</h2>
+    <p class="muted small">
+      Statt einer Datei bekommt deine Kalender-App eine Adresse, unter der sie deine Termine selbst abholt – auch
+      später geänderte: Einzel- und Gruppenunterricht, allgemeine Termine und Blocker, von vier Wochen zurück bis zum
+      Ende des Berichtszeitraums (mindestens acht Wochen voraus). Der Server bekommt sie bei jedem Abgleich eines
+      deiner Geräte. Wie oft die Kalender-App nachsieht, bestimmt sie selbst: Apple-Kalender lässt sich auf wenige
+      Minuten stellen, Outlook sieht alle paar Stunden nach, Google-Kalender nur etwa alle 8 bis 24 Stunden.
+    </p>
+    @if (feed(); as state) {
+      @if (state.url) {
+        <div class="row feed-url">
+          <input type="text" readonly [value]="state.url" (focus)="selectAll($event)" aria-label="Abo-Adresse" />
+          <button class="secondary" (click)="copy(state.url)">Kopieren</button>
+        </div>
+        <p class="muted small">
+          In Google-Kalender: <em>Weitere Kalender → Per URL</em>; in Outlook: <em>Kalender hinzufügen → Aus dem
+          Internet abonnieren</em>; am iPhone: <em>Einstellungen → Kalender → Accounts → Abonnierten Kalender
+          hinzufügen</em>. Auf dem Rechner öffnet
+          <a [href]="webcal(state.url)">Im Kalender abonnieren</a> die Kalender-App direkt.
+          @if (state.updatedAt) {
+            Zuletzt aktualisiert: {{ formatTime(state.updatedAt) }}.
+          }
+        </p>
+        <p class="message warning small">
+          Wer die Adresse kennt, sieht deine Termine mit den Namen der Personen – ohne Passwort. Gib sie nicht weiter.
+          Ist sie in falsche Hände geraten, erzeuge eine neue.
+        </p>
+        <div class="row actions">
+          <button class="secondary" [disabled]="feedBusy()" (click)="newFeedAddress(true)">Neue Adresse erzeugen</button>
+          <button class="secondary" [disabled]="feedBusy()" (click)="endFeed()">Abo beenden</button>
+        </div>
+      } @else {
+        <div class="row actions">
+          <button [disabled]="feedBusy()" (click)="newFeedAddress(false)">Abo einrichten</button>
+        </div>
+      }
+    } @else if (!feedError()) {
+      <p class="muted small">Wird geladen …</p>
+    }
+    @if (feedError(); as text) {
+      <p class="message error">{{ text }}</p>
+    }
+  </section>
+}

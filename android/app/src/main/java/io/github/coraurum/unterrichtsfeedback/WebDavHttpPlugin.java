@@ -18,8 +18,9 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 /**
- * WebDAV-Anfragen aus der App direkt über Android statt über die WebView. So gilt keine CORS-Sperre, und
- * WebDAV-Methoden wie PROPFIND und MKCOL sind möglich (die eingebaute HTTP-Klasse von Java kennt sie nicht).
+ * HTTP-Anfragen aus der App direkt über Android statt über die WebView, heute für den Unterrichtsfeedback-Server
+ * (früher WebDAV). So gilt keine CORS-Sperre, und auch Methoden wie PROPFIND sind möglich (die eingebaute
+ * HTTP-Klasse von Java kennt sie nicht). Der Name bleibt, damit die App das Plugin weiter findet.
  */
 @CapacitorPlugin(name = "WebDavHttp")
 public class WebDavHttpPlugin extends Plugin {

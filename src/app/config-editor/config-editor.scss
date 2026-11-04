@@ -456,3 +456,41 @@ code {
   gap: 0.4rem 1rem;
 }
 
+/* Konto auf dem Server und Einladungscode je Lehrer */
+.account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+
+  .invite-code {
+    flex: 1 1 100%;
+    min-height: 0;
+    font-family: monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+  }
+}
+
+/* Eigene Abschnitte und Inhalte eines Lehrers */
+.own-hint {
+  margin: 0 0 0.75rem;
+}
+
+.own-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.section.own,
+.variant.own {
+  border-left: 4px solid var(--primary, #f57115);
+}
+
+.variant.own {
+  padding-left: 0.6rem;
+}

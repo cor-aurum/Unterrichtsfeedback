@@ -27,7 +27,8 @@ interface LegacyBackup {
 
 /**
  * Sicherung aller erfassten Daten als ZIP mit einer allgemeinen Konfiguration, einer Datei je Lehrer und einer je
- * Lehrer und Berichtszeitraum (siehe `sync-files.ts`). Dieselben Dateien schreibt auch die Ordner-Synchronisation.
+ * Lehrer und Berichtszeitraum (siehe `sync-files.ts`). Dieselben Dateien, nach IDs benannt, gleicht die App mit dem
+ * Server ab.
  * Die Sicherung eines Zeitraums enthält Personen, Gruppen und Termine nur aus diesem.
  */
 @Injectable({ providedIn: 'root' })
@@ -46,12 +47,13 @@ export class BackupService {
     blockers: this.calendarStore.blockers(),
     sharedAppointments: this.calendarStore.sharedAppointments(),
   }));
-  readonly files = computed(() => toSyncFiles(this.data()));
+  /** Dateien für den Server, benannt nach den IDs (siehe `FileNaming`) */
+  readonly files = computed(() => toSyncFiles(this.data(), 'ids'));
 
   /** Ohne `periodId` alles, sonst nur den Berichtszeitraum, z. B. für einen neuen Lehrer */
   async exportToFile(periodId?: string): Promise<void> {
     const { zipSync, strToU8 } = await import('fflate');
-    const files = periodId ? toPeriodBackupFiles(this.data(), periodId) : this.files();
+    const files = periodId ? toPeriodBackupFiles(this.data(), periodId) : toSyncFiles(this.data());
     const entries = Object.fromEntries([...files].map(([name, content]) => [name, strToU8(content)]));
     const zip = zipSync(entries, { level: 6 });
     const period = this.configStore.config().reportPeriods.find((p) => p.id === periodId);

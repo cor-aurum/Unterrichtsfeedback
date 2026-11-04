@@ -50,7 +50,47 @@
         }
         <button type="submit" class="start">Los geht’s</button>
       </form>
+    } @else if (serverStep() === 'login') {
+      <p class="muted">
+        Arbeitest du mit anderen Lehrern über einen Unterrichtsfeedback-Server? Löse deinen Einladungscode ein oder
+        melde dich mit deinem Konto an.
+      </p>
+      <app-server-login-panel [teacherId]="ownTeacherId()" (connected)="serverConnected($event)" />
+      @if (serverBusy()) {
+        <p class="muted small">Daten werden vom Server geladen …</p>
+      }
+      @if (error(); as message) {
+        <p class="message error">{{ message }}</p>
+      }
+      <button type="button" class="secondary" (click)="serverStep.set('none')">Zurück, ohne Server einrichten</button>
+    } @else if (serverStep() === 'teacher') {
+      <p class="muted">
+        Verbunden mit {{ serverName() }}. Wie heißt du, und welches Instrument unterrichtest du? Personen siehst du,
+        sobald dich ein anderer Lehrer in einem Berichtszeitraum als aktiven Lehrer einträgt.
+      </p>
+      <form (submit)="createOwnTeacher($event)">
+        <div class="fields">
+          <label>
+            Dein Name
+            <input name="name" type="text" required autocomplete="name" placeholder="z. B. Anna Schmidt" />
+          </label>
+          <label>
+            Dein Instrument
+            <input name="instrument" type="text" required placeholder="z. B. Klavier" />
+          </label>
+        </div>
+        @if (error(); as message) {
+          <p class="message error">{{ message }}</p>
+        }
+        <button type="submit" class="start">Los geht’s</button>
+      </form>
     } @else {
+      @if (serverStep() === 'setup') {
+        <p class="message">
+          Verbunden mit {{ serverName() }}. Du bist die erste Lehrkraft dort – richte dich jetzt wie gewohnt ein; alles
+          wird auf dem Server gespeichert.
+        </p>
+      }
       <p class="muted">
         Mit dieser App hältst du nach jeder Stunde fest, wie es lief, und machst daraus ein PDF als Rückmeldung.
         Erzähl kurz etwas über dich; alles lässt sich später unter „Konfiguration“ ändern. Wie alles funktioniert,
@@ -151,10 +191,18 @@
         <button type="submit" class="start">Los geht’s</button>
       </form>
 
+      @if (serverStep() === 'none') {
       <div class="restore">
         <p class="muted small">
-          Du hast die App schon auf einem anderen Gerät benutzt oder kommst in einem Berichtszeitraum neu dazu? Spiele
-          eine Sicherung (ZIP, auch die eines Berichtszeitraums) oder eine exportierte Konfiguration (JSON) ein.
+          Du hast einen <strong>Einladungscode</strong> oder ein Konto auf einem Unterrichtsfeedback-Server?
+        </p>
+        <button type="button" (click)="serverStep.set('login')">Mit Server verbinden …</button>
+      </div>
+      <div class="restore">
+        <p class="muted small">
+          Ohne Server: Du hast die App schon auf einem anderen Gerät benutzt oder kommst in einem Berichtszeitraum neu
+          dazu? Spiele eine Sicherung (ZIP, auch die eines Berichtszeitraums) oder eine exportierte Konfiguration (JSON)
+          ein.
         </p>
         <button type="button" class="secondary" [disabled]="importing()" (click)="fileInput.click()">
           {{ importing() ? 'Wird eingespielt …' : 'Sicherung einspielen …' }}
@@ -167,6 +215,7 @@
           (change)="restore(fileInput)"
         />
       </div>
+      }
     }
   </section>
 </div>

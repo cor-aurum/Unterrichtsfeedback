@@ -7,6 +7,29 @@
   <p class="message import-message">{{ text }}</p>
 }
 
+@if (merger.duplicates().length > 0) {
+  <section class="card duplicates">
+    <h2>Mögliche doppelte Personen</h2>
+    <p class="muted small">
+      Gleicher Name und kein abweichendes Geburtsdatum – vielleicht hat ein anderer Lehrer dieselbe Person angelegt.
+    </p>
+    <ul>
+      @for (pair of merger.duplicates(); track pair.keep.id + pair.drop.id) {
+        <li>
+          <span class="grow">
+            {{ duplicateText(pair.keep) }}<br />
+            {{ duplicateText(pair.drop) }}
+          </span>
+          <span class="row wrap-actions">
+            <button (click)="mergeDuplicate(pair)">Zusammenführen</button>
+            <button class="secondary" (click)="merger.dismiss(pair)">Verschiedene Personen</button>
+          </span>
+        </li>
+      }
+    </ul>
+  </section>
+}
+
 <div class="people-layout">
   <div class="column">
     <section class="card">
@@ -219,6 +242,23 @@
           }
         </div>
       }
+
+      <details class="manual-merge">
+        <summary>Doppelten Eintrag zusammenführen …</summary>
+        <p class="muted small">
+          Gibt es {{ student.name }} doppelt, wähle den anderen Eintrag. Er geht in diesem auf; Stunden, Termine,
+          Gruppen und Berichtszeiträume bleiben erhalten.
+        </p>
+        <div class="row wrap-actions">
+          <select #mergeSelect aria-label="Eintrag, der in dieser Person aufgeht">
+            <option value="">Person wählen …</option>
+            @for (other of mergeCandidates(student); track other.id) {
+              <option [value]="other.id">{{ duplicateText(other) }}</option>
+            }
+          </select>
+          <button class="secondary" (click)="mergeManually(student, mergeSelect)">Zusammenführen</button>
+        </div>
+      </details>
 
       <div class="row remove-actions">
         @if (isActive(student)) {
