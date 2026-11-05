@@ -131,8 +131,8 @@
                   <label>
                     <span class="choice-label">Unterrichtszeiten</span>
                     <select (change)="setSharedWindows(period, $event)">
-                      <option value="own" [selected]="!period.sharedWindows">jeder Lehrer eigene (im Tab „Lehrer“)</option>
-                      <option value="shared" [selected]="!!period.sharedWindows">für alle Lehrer gleich</option>
+                      <option value="own" [selected]="!period.sharedWindows">jede Lehrkraft eigene (im Tab „Lehrer:in“)</option>
+                      <option value="shared" [selected]="!!period.sharedWindows">für alle Lehrer:innen gleich</option>
                     </select>
                   </label>
                   @if (period.sharedWindows) {

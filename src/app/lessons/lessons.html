@@ -16,8 +16,8 @@
         (input)="search.set(valueOf($event))"
       />
       @if (teacherFilter.options().length > 1) {
-        <select aria-label="Nach Lehrer filtern" (change)="teacherFilter.set(valueOf($event))">
-          <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer</option>
+        <select aria-label="Nach Lehrer:in filtern" (change)="teacherFilter.set(valueOf($event))">
+          <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer:innen</option>
           @for (teacher of teacherFilter.options(); track teacher.id) {
             <option [value]="teacher.id" [selected]="teacher.id === teacherFilter.teacherId()">Nur {{ teacher.name }}</option>
           }
@@ -98,7 +98,7 @@
         <p class="slot-message">{{ text }}</p>
       }
       <p class="person-link small">
-        <a routerLink="/personen">Name, Instrument, Lehrer und Termine unter „Personen“</a>
+        <a routerLink="/personen">Name, Instrument, Lehrer:in und Termine unter „Personen“</a>
       </p>
     </section>
 

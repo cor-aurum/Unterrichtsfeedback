@@ -44,7 +44,7 @@ const CONFIG_TABS = [
   { id: 'groupBlocks', label: 'Gruppen-Inhalte' },
   { id: 'layout', label: 'Kopf- & Fußzeile' },
   { id: 'instruments', label: 'Instrumente' },
-  { id: 'teachers', label: 'Lehrer' },
+  { id: 'teachers', label: 'Lehrer:innen' },
   { id: 'calendar', label: 'Kalender' },
 ] as const;
 
@@ -135,7 +135,7 @@ export class ConfigEditor {
     const shared = select.value === 'shared';
     const text =
       `Die gemeinsamen Unterrichtszeiten von „${period.name}“ verwerfen? Danach gelten wieder die Zeiten der ` +
-      'einzelnen Lehrer.';
+      'einzelnen Lehrer:innen.';
     if (!shared && period.sharedWindows && !confirm(text)) {
       select.value = 'shared';
       return;
@@ -167,7 +167,7 @@ export class ConfigEditor {
   /** Lehrer-ID → Benutzername der Lehrer, die schon ein Konto haben */
   protected readonly accounts = signal(new Map<string, string>());
   protected readonly invites = signal<Record<string, { code: string; expires: string }>>({});
-  protected readonly lockedText = 'Ändern darf nur, wer in diesem Berichtszeitraum aktiver Lehrer ist.';
+  protected readonly lockedText = 'Ändern darf nur, wer in diesem Berichtszeitraum aktive Lehrkraft ist.';
 
   constructor() {
     // Konten auf dem Server laden, sobald der Tab „Lehrer“ offen ist

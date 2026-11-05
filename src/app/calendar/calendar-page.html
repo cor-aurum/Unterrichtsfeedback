@@ -1,7 +1,7 @@
 <div class="row head">
   <h1 class="grow">Kalender <span class="teacher-name">{{ teacher().name }}</span></h1>
   <button class="secondary" (click)="newBlocker()" title="Zeit blockieren, ohne jemanden einzutragen">+ Blocker</button>
-  <button class="secondary" (click)="newShared()" title="Termin für mehrere Lehrer, z. B. eine Konferenz">
+  <button class="secondary" (click)="newShared()" title="Termin für mehrere Lehrer:innen, z. B. eine Konferenz">
     + Allgemeiner Termin
   </button>
   <button class="secondary" (click)="openSharedImport()" title="Allgemeine Termine aus einer Excel- oder CSV-Datei">
@@ -14,9 +14,9 @@
     class="secondary"
     [disabled]="students().length === 0"
     (click)="openPlanningSetup()"
-    title="Schüler tragen sich am Tablet selbst in freie Zeiten ein"
+    title="Schüler:innen tragen sich am Tablet selbst in freie Zeiten ein"
   >
-    Schüler tragen sich ein …
+    Schüler:innen tragen sich ein …
   </button>
   <button
     class="secondary"
@@ -48,7 +48,7 @@
 @if (students().length === 0 && groups().length === 0) {
   <p class="card muted">
     {{ teacher().name }} hat noch keine Personen. Lege sie unter <a routerLink="/personen">Personen</a> an
-    (oder ordne sie dort diesem Lehrer zu), dann kannst du ihnen Termine geben.
+    (oder ordne sie dort dieser Lehrkraft zu), dann kannst du ihnen Termine geben.
   </p>
 }
 
@@ -66,7 +66,7 @@
     <div class="fields">
       @if (teachers().length > 1) {
         <label>
-          Lehrer
+          Lehrer:innen
           <select (change)="setBlockerDraft({ teacherId: valueOf($event) })">
             @for (t of teachers(); track t.id) {
               <option [value]="t.id" [selected]="t.id === b.teacherId">{{ t.name }}</option>
@@ -124,7 +124,7 @@
     <div class="fields">
       @if (teachers().length > 1) {
         <label>
-          Lehrer (Kalender)
+          Lehrer:innen (Kalender)
           <select [disabled]="draftFollowsLesson(d)" (change)="setDraftTeacher(valueOf($event))">
             @for (t of teachers(); track t.id) {
               <option [value]="t.id" [selected]="t.id === d.calendarTeacherId">{{ t.name }}</option>
@@ -141,7 +141,7 @@
             }
           </optgroup>
           @if (otherStudentsOf(d.calendarTeacherId).length > 0) {
-            <optgroup label="Personen anderer Lehrer (Ausnahme)">
+            <optgroup label="Personen anderer Lehrer:innen (Ausnahme)">
               @for (student of otherStudentsOf(d.calendarTeacherId); track student.id) {
                 <option [value]="'s:' + student.id" [selected]="ownerValue(d) === 's:' + student.id">
                   {{ student | studentLabel }} ({{ teacherName(student) }})
@@ -357,7 +357,7 @@
                   <span class="detail">
                     {{ teacherTag(item.occurrence.appointment) }}{{ instrumentName(student) }}
                     @if (item.occurrence.appointment.teacherId) {
-                      · Schüler von {{ teacherName(student) }}
+                      · Schüler:in von {{ teacherName(student) }}
                     }
                     @if (item.occurrence.appointment.repeat) {
                       · {{ repeatText(item.occurrence.appointment) }}

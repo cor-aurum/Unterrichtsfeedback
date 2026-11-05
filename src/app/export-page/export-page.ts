@@ -178,7 +178,7 @@ export class ExportPage {
     if (name === GENERAL_FILE) return 'Allgemeine Konfiguration';
     if (name === SHARED_FILE) return 'Allgemeine Termine';
     const config = this.config();
-    const teacherName = (id: string) => config.teachers.find((t) => t.id === id)?.name ?? 'unbekannter Lehrer';
+    const teacherName = (id: string) => config.teachers.find((t) => t.id === id)?.name ?? 'unbekannte Lehrkraft';
     const teacher = /^lehrer-(.+)\.json$/.exec(name);
     if (teacher) return `Lehrer ${teacherName(teacher[1])}`;
     const period = /^zeitraum_([^_]*)_(.+)\.json$/.exec(name);

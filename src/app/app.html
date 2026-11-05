@@ -36,8 +36,8 @@
       <select
         class="teacher-select"
         (change)="activeTeacher.select(valueOf($event))"
-        aria-label="Aktiver Lehrer"
-        title="Lehrer, dessen Kalender und Termine angezeigt werden"
+        aria-label="Aktive Lehrkraft"
+        title="Lehrer:innen, deren Kalender und Termine angezeigt werden"
       >
         @for (teacher of teachers(); track teacher.id) {
           <option [value]="teacher.id" [selected]="teacher.id === activeTeacher.teacher().id">{{ teacher.name }}</option>
