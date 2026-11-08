@@ -1,6 +1,7 @@
 import { effect, inject, Injectable, signal, untracked } from '@angular/core';
 import { BackupService } from '../backup';
 import { CalendarFeed } from '../calendar/calendar-feed';
+import { ConfigStore } from '../config.store';
 import { PersonMerger } from '../person-merger';
 import { storedSignal } from '../stored-signal';
 import { ServerError, ServerFolder, ServerLogin, serverApi } from './server-folder';
@@ -34,6 +35,7 @@ export class ServerSync {
   private readonly backup = inject(BackupService);
   private readonly merger = inject(PersonMerger);
   private readonly feed = inject(CalendarFeed);
+  private readonly configStore = inject(ConfigStore);
   /** Prüfsumme des zuletzt gesendeten Abo-Kalenders, damit er nur bei Änderungen erneut geht */
   private readonly publishedFeed = storedSignal<string>('feedback.publishedFeed', () => '');
 
@@ -49,6 +51,8 @@ export class ServerSync {
   readonly lastPull = signal<Date | null>(null);
   /** Nach `loadFromServer`: Der Server hatte noch keine Daten, z. B. für den ersten Lehrer. */
   readonly serverEmpty = signal(false);
+  /** Berichtszeiträume auf dem Server, in denen der angemeldete Lehrer nicht eingetragen ist; mehr erfährt er nicht. */
+  readonly foreignPeriods = signal(0);
   /** Hinweis, wenn auf diesem Gerät noch die frühere Ordner-Synchronisation eingerichtet war */
   readonly legacyNotice = signal(LEGACY_KEYS.some((key) => localStorage.getItem(key) !== null));
 
@@ -181,6 +185,9 @@ export class ServerSync {
     // Erst nach dem Übernehmen: Wer zusammengeführt hat, hat die betroffenen Dateien meist schon geschrieben. Davor
     // wäre die Zusammenführung hier eine eigene Änderung an denselben Dateien und damit ein Konflikt.
     await this.applyMerges();
+    // Mit Server ändert jede Lehrkraft nur eigene feste Inhalte; ältere geänderte gemeinsame Texte werden einmal
+    // zu eigenen Varianten aller Lehrkräfte.
+    if (!this.configStore.config().sharedContentsMigrated) this.configStore.migrateSharedContents();
     await this.writeLocal(remote);
   }
 
@@ -243,6 +250,18 @@ export class ServerSync {
     this.status.set('ok');
     this.error.set(null);
     await this.publishFeed();
+    await this.countForeignPeriods();
+  }
+
+  /** Ältere Server kennen die Zahl nicht; dann bleibt sie 0. */
+  private async countForeignPeriods(): Promise<void> {
+    const login = this.login();
+    if (!login) return;
+    try {
+      this.foreignPeriods.set((await serverApi.me(login)).foreignPeriods ?? 0);
+    } catch {
+      // Beim nächsten Abgleich erneut
+    }
   }
 
   /**

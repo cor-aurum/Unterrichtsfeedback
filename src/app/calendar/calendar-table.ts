@@ -27,7 +27,7 @@ export const CALENDAR_TABLE_HEADER = [
   'Ende',
   'Dauer (Minuten)',
   'Ort',
-  'Lehrer',
+  'Lehrkräfte',
 ];
 
 export function sortRows(rows: CalendarRow[]): CalendarRow[] {

@@ -98,8 +98,8 @@ export class WelcomeDialog {
 
   protected setColor(color: string): void {
     this.color.set(color);
-    // Vorschau: Die App nimmt die Farbe sofort an.
-    this.configStore.setThemeColor(color);
+    // Vorschau: Die App nimmt die Farbe sofort an; sie gehört der eigenen (noch vorläufigen) Lehrkraft.
+    this.configStore.setTeacherColor(this.configStore.config().teachers[0].id, color);
   }
 
   protected updateDay(weekday: number, change: Partial<SetupDay>): void {

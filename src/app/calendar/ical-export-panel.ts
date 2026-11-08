@@ -32,7 +32,7 @@ export class IcalExportPanel {
   protected readonly nativeApp = isNativeApp;
   protected readonly allTeachers = ALL_TEACHERS;
 
-  protected readonly teachers = computed(() => this.config().teachers);
+  protected readonly teachers = this.activeTeacher.visibleTeachers;
   // Über ein `computed`: Der Lehrer ist nach jeder Änderung der Konfiguration ein neues Objekt, die ID bleibt.
   private readonly activeTeacherId = computed(() => this.activeTeacher.teacher().id);
   protected readonly teacherId = linkedSignal(() => this.activeTeacherId());

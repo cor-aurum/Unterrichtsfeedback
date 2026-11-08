@@ -51,39 +51,35 @@ func TestReadAccess(t *testing.T) {
 	}
 }
 
-func TestCheckConfig(t *testing.T) {
-	old := Members{"p1": {"anna", "ben"}, "p2": {"clara"}}
+// Einen Berichtszeitraum lesen und ändern dürfen nur seine Lehrer; einen neuen anlegen darf jeder.
+func TestPeriodConfigAccess(t *testing.T) {
+	members := Members{"p1": {"anna", "ben"}}
+	doc := func(p string) Doc { return Doc{Kind: PeriodConfig, PeriodID: p} }
 	cases := []struct {
-		name    string
-		next    Members
-		teacher string
-		ok      bool
+		doc               Doc
+		teacher           string
+		canRead, canWrite bool
 	}{
-		{"unverändert", Members{"p1": {"ben", "anna"}, "p2": {"clara"}}, "dora", true},
-		{"Mitglied lädt ein", Members{"p1": {"anna", "ben", "dora"}, "p2": {"clara"}}, "anna", true},
-		{"Fremder trägt sich ein", Members{"p1": {"anna", "ben"}, "p2": {"clara", "anna"}}, "anna", false},
-		{"Fremder löscht", Members{"p1": {"anna", "ben"}}, "anna", false},
-		{"Mitglied löscht", Members{"p1": {"anna", "ben"}}, "clara", true},
-		{"neuer Zeitraum mit sich", Members{"p1": {"anna", "ben"}, "p2": {"clara"}, "p3": {"dora"}}, "dora", true},
-		{"neuer Zeitraum ohne sich", Members{"p1": {"anna", "ben"}, "p2": {"clara"}, "p3": {"ben"}}, "dora", false},
+		{doc("p1"), "anna", true, true},
+		{doc("p1"), "clara", false, false},
+		{doc("neu"), "clara", false, true},
 	}
 	for _, c := range cases {
-		err := CheckConfig(old, c.next, c.teacher)
-		if (err == nil) != c.ok {
-			t.Errorf("%s: Fehler %v, erlaubt erwartet: %v", c.name, err, c.ok)
+		if got := CanRead(c.doc, c.teacher, members); got != c.canRead {
+			t.Errorf("%s liest %s: %v", c.teacher, c.doc.PeriodID, got)
+		}
+		if got := CanWrite(c.doc, c.teacher, members); got != c.canWrite {
+			t.Errorf("%s schreibt %s: %v", c.teacher, c.doc.PeriodID, got)
 		}
 	}
-	if err := CheckConfig(Members{}, Members{"p1": {"anna"}}, "anna"); err != nil {
-		t.Errorf("erste Konfiguration: %v", err)
+	if got, err := Parse("berichtszeitraum_p-1.json"); err != nil || got.Kind != PeriodConfig || got.PeriodID != "p-1" {
+		t.Errorf("berichtszeitraum_p-1.json: %+v, %v", got, err)
 	}
-}
-
-func TestMembersOf(t *testing.T) {
-	m, err := MembersOf([]byte(`{"format":"unterricht-feedback/konfiguration","config":{"reportPeriods":[{"id":"p1","teacherIds":["anna"]}]}}`))
-	if err != nil || !m.In("p1", "anna") || m.In("p1", "ben") {
-		t.Fatalf("%v %v", m, err)
+	id, teachers, err := PeriodOf([]byte(`{"period":{"id":"p1","teacherIds":["anna"]}}`))
+	if err != nil || id != "p1" || len(teachers) != 1 {
+		t.Errorf("PeriodOf: %s %v %v", id, teachers, err)
 	}
-	if _, err := MembersOf([]byte(`kein json`)); err == nil {
-		t.Error("ungültige Konfiguration sollte ein Fehler sein")
+	if !HasPeriods([]byte(`{"config":{"reportPeriods":[{"id":"p1"}]}}`)) || HasPeriods([]byte(`{"config":{}}`)) {
+		t.Error("HasPeriods")
 	}
 }

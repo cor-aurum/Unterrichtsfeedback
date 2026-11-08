@@ -181,7 +181,7 @@
     </div>
     @if (!d.id && d.groupId && otherGroups(d).length > 0) {
       <div class="group-choice">
-        <span class="choice-label">Zur selben Zeit auch für diese Gruppen (jeweils im Kalender ihres Lehrers)</span>
+        <span class="choice-label">Zur selben Zeit auch für diese Gruppen (jeweils im Kalender ihrer Lehrkraft)</span>
         @for (group of otherGroups(d); track group.id) {
           <label>
             <input type="checkbox" [checked]="d.extraGroupIds?.includes(group.id)" (change)="toggleExtraGroup(group.id)" />
@@ -234,7 +234,7 @@
       </label>
       <label>
         <input type="radio" name="calendar-view" [checked]="showAll()" (change)="calendarView.set('all')" />
-        Alle Lehrer
+        Alle Lehrkräfte
       </label>
     </div>
   }
@@ -298,7 +298,7 @@
         [class.today]="day.date === today"
         [class.closed]="!day.inPeriod"
         [style.height.px]="gridHeight()"
-        [title]="day.inPeriod ? 'Klicken: neuer Termin zu dieser Uhrzeit' : ''"
+        [title]="day.inPeriod ? 'Klicken: neuer allgemeiner Termin zu dieser Uhrzeit, ziehen: Termin verschieben' : ''"
         (click)="day.inPeriod && newAt(day.date, $event)"
       >
         @for (window of day.windows; track $index) {
@@ -331,6 +331,9 @@
                 [style.left.%]="boxOf(item).left"
                 [style.width.%]="boxOf(item).width"
                 [title]="item.shared.start + '–' + sharedEndTime(item.shared) + ' ' + item.shared.title"
+                [style.transform]="dragTransform(day.date, { kind: 'shared', shared: item.shared })"
+                [class.dragging]="!!dragTransform(day.date, { kind: 'shared', shared: item.shared })"
+                (pointerdown)="startDrag($event, day.date, { kind: 'shared', shared: item.shared })"
                 (click)="editShared(item.shared)"
               >
                 <span class="time">{{ item.shared.start }}–{{ sharedEndTime(item.shared) }}</span>
@@ -350,6 +353,9 @@
                   [style.left.%]="boxOf(item).left"
                   [style.width.%]="boxOf(item).width"
                   [title]="item.occurrence.appointment.start + '–' + endTime(item.occurrence.appointment) + ' ' + student.name"
+                  [style.transform]="dragTransform(day.date, { kind: 'appointment', occurrence: item.occurrence })"
+                  [class.dragging]="!!dragTransform(day.date, { kind: 'appointment', occurrence: item.occurrence })"
+                  (pointerdown)="startDrag($event, day.date, { kind: 'appointment', occurrence: item.occurrence })"
                   (click)="edit(item.occurrence)"
                 >
                   <span class="time">{{ item.occurrence.appointment.start }}–{{ endTime(item.occurrence.appointment) }}</span>
@@ -376,6 +382,9 @@
                   [style.left.%]="boxOf(item).left"
                   [style.width.%]="boxOf(item).width"
                   [title]="item.occurrence.appointment.start + '–' + endTime(item.occurrence.appointment) + ' Gruppe ' + groupLabel(group)"
+                  [style.transform]="dragTransform(day.date, { kind: 'appointment', occurrence: item.occurrence })"
+                  [class.dragging]="!!dragTransform(day.date, { kind: 'appointment', occurrence: item.occurrence })"
+                  (pointerdown)="startDrag($event, day.date, { kind: 'appointment', occurrence: item.occurrence })"
                   (click)="edit(item.occurrence)"
                 >
                   <span class="time">{{ item.occurrence.appointment.start }}–{{ endTime(item.occurrence.appointment) }}</span>
@@ -402,7 +411,7 @@
 <app-lesson-load-panel />
 
 <section class="card">
-  <h2>Termine aller Lehrer als PDF</h2>
+  <h2>Termine aller Lehrkräfte als PDF</h2>
   <div class="row pdf-format" role="radiogroup" aria-label="Darstellung">
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'list'" (change)="pdfFormat.set('list')" />
@@ -410,7 +419,7 @@
     </label>
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'individual'" (change)="pdfFormat.set('individual')" />
-      Liste nur mit Einzelunterricht (je Lehrer eine neue Seite)
+      Liste nur mit Einzelunterricht (je Lehrkraft eine neue Seite)
     </label>
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'events'" (change)="pdfFormat.set('events')" />
@@ -418,11 +427,11 @@
     </label>
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'grid'" (change)="pdfFormat.set('grid')" />
-      Wochenplan als Tabelle (je Lehrer und Woche eine Seite, Querformat)
+      Wochenplan als Tabelle (je Lehrkraft und Woche eine Seite, Querformat)
     </label>
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'day'" (change)="pdfFormat.set('day')" />
-      Tagesplan aller Lehrer (je Tag eine Seite, Querformat)
+      Tagesplan aller Lehrkräfte (je Tag eine Seite, Querformat)
     </label>
   </div>
   <div class="row period">

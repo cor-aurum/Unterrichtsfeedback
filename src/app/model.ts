@@ -128,6 +128,11 @@ export interface ReportPeriodEntry extends Period {
   /** Lehrer, die in diesem Zeitraum unterrichten; der erste (z. B. die Leitung) steht überall vorne */
   teacherIds: string[];
   /**
+   * Nur auf dem Gerät: Vorläufiger Zeitraum, weil die Lehrkraft in keinem eingetragen ist (die App braucht immer
+   * einen). Er geht nicht auf den Server.
+   */
+  placeholder?: boolean;
+  /**
    * Gemeinsame Unterrichtszeiten für alle Lehrer im Zeitraum. Fehlen sie, hat jeder Lehrer eigene
    * (`Teacher.periodWindows`).
    */
@@ -323,6 +328,11 @@ export interface Teacher {
   location: string;
   /** Ort je Berichtszeitraum (Schlüssel: ID des Zeitraums); immer über `locationIn` oder `locationOn` auswerten */
   periodLocations: Record<string, string>;
+  /**
+   * Persönliche Themenfarbe (Hex) für App und PDFs dieser Lehrkraft; fehlt sie, gilt die allgemeine
+   * (`FeedbackConfig.themeColor`). Andere Lehrkräfte beeinflusst sie nicht.
+   */
+  themeColor?: string;
   /** Standard-Unterrichtszeiten für Berichtszeiträume ohne eigene (`periodWindows`) */
   teachingWindows: TeachingWindow[];
   /** Eigene Unterrichtszeiten je Berichtszeitraum (Schlüssel: ID des Zeitraums) */
@@ -391,7 +401,7 @@ export function isActiveIn(student: Student, periodId: string): boolean {
 export interface FeedbackConfig {
   version: 1;
   title: string;
-  /** Themenfarbe (Hex, z. B. #f57115) für App und PDF */
+  /** Themenfarbe (Hex, z. B. #f57115) für Lehrkräfte ohne eigene (`Teacher.themeColor`) */
   themeColor: string;
   pdfLayout: PdfLayout;
   calendar: CalendarSettings;
@@ -409,6 +419,11 @@ export interface FeedbackConfig {
   reportPeriods: ReportPeriodEntry[];
   /** Feste Texte der Kalender-PDFs (Terminlisten, Wochen- und Tagesplan) */
   calendarPdf: CalendarPdfTexts;
+  /**
+   * Mit Server ändert jede Lehrkraft nur eigene Inhalte und Varianten. Früher geänderte gemeinsame Texte wurden dafür
+   * einmal zu eigenen Varianten aller Lehrkräfte (siehe `ConfigStore.migrateSharedContents`).
+   */
+  sharedContentsMigrated?: boolean;
 }
 
 export interface CalendarPdfTexts {
@@ -428,7 +443,7 @@ export const DEFAULT_CALENDAR_PDF_TEXTS: CalendarPdfTexts = {
   listTitle: 'Unterrichtsplan',
   eventListTitle: 'Termine ohne Einzelunterricht',
   individualListTitle: 'Einzelunterricht',
-  dayPlanTitle: 'Tagesplan aller Lehrer',
+  dayPlanTitle: 'Tagesplan aller Lehrkräfte',
   footer: 'Unterrichtsplan',
   noAppointments: 'In diesem Zeitraum sind keine Termine geplant.',
   blocked: 'Blockiert',
@@ -452,11 +467,11 @@ export const PLACEHOLDERS = [
   { key: '{nachname}', description: 'Nachname (alles nach dem ersten Wort)' },
   { key: '{name}', description: 'vollständiger Name' },
   { key: '{instrument}', description: 'Instrument der Person' },
-  { key: '{lehrer}', description: 'vollständiger Name des Lehrers der Person' },
-  { key: '{lehrervorname}', description: 'Vorname des Lehrers' },
-  { key: '{lehrernachname}', description: 'Nachname des Lehrers' },
-  { key: '{lehrerinstrument}', description: 'Instrument des Lehrers' },
-  { key: '{ort}', description: 'Ort des Lehrers im Berichtszeitraum' },
+  { key: '{lehrer}', description: 'vollständiger Name der Lehrkraft der Person' },
+  { key: '{lehrervorname}', description: 'Vorname der Lehrkraft' },
+  { key: '{lehrernachname}', description: 'Nachname der Lehrkraft' },
+  { key: '{lehrerinstrument}', description: 'Instrument der Lehrkraft' },
+  { key: '{ort}', description: 'Ort der Lehrkraft im Berichtszeitraum' },
   { key: '{titel}', description: 'Überschrift im PDF' },
   { key: '{datum}', description: 'Datum des Exports' },
   { key: '{zeitraum}', description: 'Name des Berichtszeitraums, z. B. „1. Halbjahr 2026/27“' },

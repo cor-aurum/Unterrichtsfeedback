@@ -15,6 +15,7 @@ import {
   isTeachingDay,
   locationOn,
   NO_TEACHING_TEXT,
+  ReportPeriodEntry,
   Student,
   Teacher,
   teachersInOrderOn,
@@ -32,10 +33,10 @@ import {
   addDays,
   Appointment,
   daysBetween,
+  daysFrom,
   endTime,
   followsLesson,
   minutesOf,
-  timeOf,
   mondayOf,
   Occurrence,
   ownerOf,
@@ -43,6 +44,7 @@ import {
   repeatEveryText,
   repeatText,
   startMinutes,
+  timeOf,
   weekday,
 } from './appointments';
 import { AutoSchedulePanel } from './auto-schedule-panel';
@@ -123,7 +125,8 @@ export class CalendarPage {
     this.groupsStore.groups().filter((group) => groupTeacherOf(group, this.config()).id === this.teacher().id),
   );
   private readonly inCalendar = computed(() => this.groupsStore.calendarFilter(this.teacher()));
-  protected readonly teachers = computed(() => this.config().teachers);
+  /** Mit Server nur die Lehrkräfte aus gemeinsamen Berichtszeiträumen */
+  protected readonly teachers = this.activeTeacher.visibleTeachers;
   /** Woche des aktiven Lehrers oder aller Lehrer; gilt nur auf diesem Gerät. */
   protected readonly calendarView = storedSignal<'own' | 'all'>('feedback.calendarView', () => 'own', (data) =>
     data === 'all' ? 'all' : 'own',
@@ -135,8 +138,12 @@ export class CalendarPage {
   protected readonly endTime = endTime;
 
   protected readonly today = today();
-  /** Die Woche von heute; liegt heute nicht im Berichtszeitraum, dessen erste Woche (wie das Datum neuer Termine) */
-  protected readonly weekStart = signal(mondayOf(this.defaultDate()));
+  /**
+   * Erster Tag der angezeigten Woche: die Woche von heute; liegt heute nicht im Berichtszeitraum, dessen erste Woche
+   * (wie das Datum neuer Termine). Wochen beginnen am Montag, bei Zeiträumen bis zu einer Woche an deren Beginn
+   * (siehe `weekStartOf`).
+   */
+  protected readonly weekStart = signal(this.weekStartOf(this.defaultDate()));
   /**
    * Die Woche als Zeitraster: je Tag die Einträge mit Beginn und Dauer, sich überschneidende nebeneinander.
    * Ganztägige Blocker stehen über dem Raster.
@@ -222,14 +229,166 @@ export class CalendarPage {
     return this.boxOf({ startMinutes: minutesOf(window.from), durationMinutes: minutesOf(window.to) - minutesOf(window.from), lane: 0, lanes: 1 });
   }
 
-  /** Klick auf eine freie Stelle: neuer Termin zu dieser Uhrzeit (auf 15 Minuten abgerundet) */
+  // --- Verschieben per Ziehen ---
+
+  /** Vorschau des gezogenen Eintrags: Verschiebung auf dem Bildschirm und in Tagen und Minuten */
+  protected readonly dragPreview = signal<{ key: string; dx: number; dy: number; days: number; minutes: number } | null>(
+    null,
+  );
+  private drag: {
+    key: string;
+    date: string;
+    target: DragTarget;
+    startX: number;
+    startY: number;
+    dayRects: DOMRect[];
+    dayIndex: number;
+    active: boolean;
+    timer?: ReturnType<typeof setTimeout>;
+  } | null = null;
+  /** Nach dem Loslassen kommt noch ein Klick; der soll kein Formular öffnen. */
+  private justDragged = false;
+
+  protected dragKey(date: string, target: DragTarget): string {
+    return `${target.kind}:${target.kind === 'appointment' ? target.occurrence.appointment.id : target.shared.id}:${date}`;
+  }
+
+  protected dragTransform(date: string, target: DragTarget): string | null {
+    const preview = this.dragPreview();
+    return preview && preview.key === this.dragKey(date, target) ? `translate(${preview.dx}px, ${preview.dy}px)` : null;
+  }
+
+  /**
+   * Ziehen verschiebt einen Termin auf eine andere Uhrzeit (auf 15 Minuten genau) oder an einen anderen Tag der Woche.
+   * Mit der Maus geht es sofort los, mit dem Finger nach kurzem Halten, damit sich die Seite weiter wischen lässt.
+   */
+  protected startDrag(event: PointerEvent, date: string, target: DragTarget): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const button = event.currentTarget as HTMLElement;
+    const bodies = [...(button.closest('.day-body')?.parentElement?.querySelectorAll<HTMLElement>('.day-body') ?? [])];
+    const dayIndex = bodies.findIndex((body) => body.contains(button));
+    if (dayIndex < 0) return;
+    this.drag = {
+      key: this.dragKey(date, target),
+      date,
+      target,
+      startX: event.clientX,
+      startY: event.clientY,
+      dayRects: bodies.map((body) => body.getBoundingClientRect()),
+      dayIndex,
+      active: false,
+    };
+    if (event.pointerType !== 'mouse') {
+      this.drag.timer = setTimeout(() => this.activateDrag(), 350);
+    }
+    document.addEventListener('pointermove', this.onDragMove);
+    document.addEventListener('pointerup', this.onDragEnd);
+    document.addEventListener('pointercancel', this.cancelDrag);
+    document.addEventListener('touchmove', this.blockScroll, { passive: false });
+  }
+
+  private activateDrag(): void {
+    if (!this.drag) return;
+    this.drag.active = true;
+    navigator.vibrate?.(20);
+  }
+
+  private readonly onDragMove = (event: PointerEvent): void => {
+    const drag = this.drag;
+    if (!drag) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.active) {
+      if (event.pointerType === 'mouse' && Math.hypot(dx, dy) > 4) this.activateDrag();
+      // Mit dem Finger vor dem Halten bewegt: Die Seite wird gewischt, nicht der Termin gezogen.
+      else if (event.pointerType !== 'mouse' && Math.hypot(dx, dy) > 8) this.cancelDrag();
+      if (!this.drag?.active) return;
+    }
+    const minutes = Math.round(dy / PX_PER_MINUTE / 15) * 15;
+    const over = drag.dayRects.findIndex((rect) => event.clientX >= rect.left && event.clientX < rect.right);
+    const dayIndex = over < 0 ? drag.dayIndex : over;
+    this.dragPreview.set({
+      key: drag.key,
+      dx: drag.dayRects[dayIndex].left - drag.dayRects[drag.dayIndex].left,
+      dy: minutes * PX_PER_MINUTE,
+      days: dayIndex - drag.dayIndex,
+      minutes,
+    });
+  };
+
+  private readonly onDragEnd = (): void => {
+    const drag = this.drag;
+    const preview = this.dragPreview();
+    this.cancelDrag();
+    if (!drag?.active) return;
+    this.justDragged = true;
+    // Der Klick nach dem Loslassen kommt gleich; danach gelten Klicks wieder.
+    setTimeout(() => (this.justDragged = false));
+    if (preview && (preview.days !== 0 || preview.minutes !== 0)) this.move(drag.date, drag.target, preview.days, preview.minutes);
+  };
+
+  private readonly cancelDrag = (): void => {
+    clearTimeout(this.drag?.timer);
+    this.drag = null;
+    this.dragPreview.set(null);
+    document.removeEventListener('pointermove', this.onDragMove);
+    document.removeEventListener('pointerup', this.onDragEnd);
+    document.removeEventListener('pointercancel', this.cancelDrag);
+    document.removeEventListener('touchmove', this.blockScroll);
+  };
+
+  /** Solange ein Termin gezogen wird, scrollt die Seite nicht mit. */
+  private readonly blockScroll = (event: TouchEvent): void => {
+    if (this.drag?.active) event.preventDefault();
+  };
+
+  /**
+   * Verschiebt den Termin um Tage und Minuten. Bei einer Serie wandert die ganze Serie (nach Rückfrage); der Termin
+   * einer erfassten Stunde nimmt die Stunde mit, wie beim Speichern im Formular.
+   */
+  private move(date: string, target: DragTarget, days: number, minutes: number): void {
+    const original =
+      target.kind === 'appointment'
+        ? target.occurrence.appointment
+        : this.calendar.sharedAppointments().find((a) => a.id === target.shared.id);
+    if (!original) return;
+    const start = Math.min(Math.max(minutesOf(original.start) + minutes, 0), 24 * 60 - original.durationMinutes);
+    const moved = { date: addDays(original.date, days), start: timeOf(start) };
+    if (original.repeat && !confirm('Das ist eine Terminserie. Die ganze Serie verschieben?')) return;
+    if (target.kind === 'shared') {
+      const { id, ...rest } = original as SharedAppointment;
+      this.calendar.updateShared(id, { ...rest, ...moved });
+      return;
+    }
+    const appointment = original as Appointment;
+    if (!this.isTeachingDay(addDays(date, days))) {
+      this.message.set(this.noLessonText(addDays(date, days)));
+      return;
+    }
+    const { id, ...rest } = appointment;
+    const change = { ...rest, ...moved };
+    const student = rest.studentId ? this.studentsById().get(rest.studentId) : undefined;
+    if (student && !this.confirmClashes(student, change, id)) return;
+    if (rest.lessonId && rest.studentId && !rest.repeat) {
+      this.studentsStore.setLessonTime(rest.studentId, rest.lessonId, change);
+    } else if (rest.lessonId && rest.groupId && !rest.repeat) {
+      this.groupsStore.setLessonTime(rest.groupId, rest.lessonId, change);
+    } else {
+      this.calendar.update(id, change);
+    }
+  }
+
+  /**
+   * Klick auf eine freie Stelle: neuer allgemeiner Termin für alle Lehrkräfte des Berichtszeitraums zu dieser Uhrzeit
+   * (auf 15 Minuten abgerundet). Einzel- und Gruppentermine gibt es über die Knöpfe oben und das + am Tag.
+   */
   protected newAt(date: string, event: MouseEvent): void {
     const target = event.target as HTMLElement;
     if (target.closest('button')) return;
     const body = event.currentTarget as HTMLElement;
     const minutes = this.gridHours().first * 60 + (event.clientY - body.getBoundingClientRect().top) / PX_PER_MINUTE;
     const start = timeOf(Math.floor(minutes / 15) * 15);
-    this.newAppointment(date, false, start);
+    this.newShared(date, start);
   }
   protected readonly weekLabel = computed(() => formatPeriod(this.weekStart(), addDays(this.weekStart(), 6)));
 
@@ -408,12 +567,34 @@ export class CalendarPage {
     this.notice.set(result || null);
   }
 
+  /**
+   * Sieben Tage weiter oder zurück. Liegt der neue Beginn in einem Berichtszeitraum, richtet sich die Woche nach
+   * `weekStartOf`; außerhalb bleibt der Takt, damit die Tage direkt an die bisher gezeigten anschließen.
+   */
   protected moveWeek(weeks: number): void {
-    this.weekStart.update((start) => addDays(start, weeks * 7));
+    this.weekStart.update((start) => {
+      const next = addDays(start, weeks * 7);
+      return this.periodAt(next) ? this.weekStartOf(next) : next;
+    });
   }
 
   protected showToday(): void {
-    this.weekStart.set(mondayOf(this.today));
+    this.weekStart.set(this.weekStartOf(this.today));
+  }
+
+  /**
+   * Die Woche, in der das Datum liegt: von Montag bis Sonntag. Nur ein Berichtszeitraum von höchstens sieben Tagen
+   * (z. B. Mittwoch bis Dienstag) wird ab seinem Beginn gezeigt, damit er ganz auf den Bildschirm passt.
+   */
+  private weekStartOf(date: string): string {
+    const period = this.periodAt(date);
+    return period && daysFrom(period.from, period.to) < 7 ? period.from : mondayOf(date);
+  }
+
+  /** Berichtszeitraum am Tag; der gewählte geht vor, falls sich Zeiträume überschneiden. */
+  private periodAt(date: string): ReportPeriodEntry | undefined {
+    const selected = this.reportPeriod.period();
+    return containsDate(selected, date) ? selected : this.config().reportPeriods.find((p) => containsDate(p, date));
   }
 
   /** Zeiträume für den Sprung an ihren Beginn, nach Beginn sortiert */
@@ -428,7 +609,7 @@ export class CalendarPage {
     select.value = '';
     if (!period) return;
     this.reportPeriod.select(period.id);
-    this.weekStart.set(mondayOf(period.from));
+    this.weekStart.set(this.weekStartOf(period.from));
   }
 
   /**
@@ -484,7 +665,7 @@ export class CalendarPage {
     } else {
       this.calendar.addBlocker(blocker);
     }
-    this.weekStart.set(mondayOf(draft.fromDate));
+    this.weekStart.set(this.weekStartOf(draft.fromDate));
     this.closeForms();
   }
 
@@ -529,9 +710,9 @@ export class CalendarPage {
     return containsDate(period, this.today) ? this.today : period.from;
   }
 
-  protected newShared(date = this.defaultDate()): void {
+  protected newShared(date = this.defaultDate(), start?: string): void {
     this.closeForms();
-    this.sharedDraft.set(newSharedDraft(this.config, date));
+    this.sharedDraft.set(newSharedDraft(this.config, date, start));
   }
 
   /** Nach dem Umwandeln in Gruppentermine kommt ein Hinweis mit. */
@@ -541,6 +722,7 @@ export class CalendarPage {
   }
 
   protected editShared(appointment: SharedAppointment): void {
+    if (this.justDragged) return;
     this.closeForms();
     this.sharedDraft.set({ ...appointment });
   }
@@ -590,6 +772,7 @@ export class CalendarPage {
 
   /** Öffnet den Termin zum Bearbeiten; von hier aus lässt sich die Stunde dieses Tages öffnen. */
   protected edit(occurrence: Occurrence): void {
+    if (this.justDragged) return;
     this.closeForms();
     this.draft.set({ ...occurrence.appointment, calendarTeacherId: this.calendarTeacherOf(occurrence.appointment).id });
     this.openedOccurrence.set(occurrence);
@@ -675,10 +858,10 @@ export class CalendarPage {
     }
     const extra = !id && rest.groupId ? (extraGroupIds ?? []).filter((groupId) => groupId !== rest.groupId) : [];
     this.addForGroups(rest, extra);
-    this.weekStart.set(mondayOf(draft.date));
+    this.weekStart.set(this.weekStartOf(draft.date));
     this.draft.set(null);
     this.noteOtherCalendar(calendarTeacherId);
-    if (extra.length > 0) this.notice.set(`${extra.length + 1} Gruppentermine eingetragen, jeweils im Kalender des Lehrers der Gruppe.`);
+    if (extra.length > 0) this.notice.set(`${extra.length + 1} Gruppentermine eingetragen, jeweils im Kalender der Lehrkraft der Gruppe.`);
   }
 
   /** Derselbe Termin für weitere Gruppen; jede steht im Kalender ihres eigenen Lehrers. */
@@ -724,7 +907,7 @@ export class CalendarPage {
       this.pdf.exportAppointmentList(this.config(), this.eventDays(from, to), period, action);
       return;
     }
-    const teachers = teachersInOrderOn(this.config(), from).map((teacher) => ({
+    const teachers = teachersInOrderOn(this.config(), from).filter((t) => this.activeTeacher.isVisible(t.id)).map((teacher) => ({
       name: teacher.name,
       // Der Ort am ersten Tag; meist liegt der Zeitraum der Liste in einem Berichtszeitraum.
       location: locationOn(teacher, this.config(), from),
@@ -794,13 +977,14 @@ export class CalendarPage {
     const config = this.config();
     return daysBetween(from, to).map((date) => {
       const shared = this.calendar.sharedOccurrences(date, date).map((o) => o.appointment);
-      const entries = new Map(config.teachers.map((t) => [t.id, this.scheduleDays(t, date, date, false)[0]?.entries ?? []]));
+      const visible = this.activeTeacher.visibleTeachers();
+      const entries = new Map(visible.map((t) => [t.id, this.scheduleDays(t, date, date, false)[0]?.entries ?? []]));
       const involved = new Set([
         ...activeTeachersOn(config, date).map((t) => t.id),
-        ...config.teachers.filter((t) => entries.get(t.id)!.length > 0).map((t) => t.id),
+        ...visible.filter((t) => entries.get(t.id)!.length > 0).map((t) => t.id),
         ...shared.flatMap((appointment) => appointment.teacherIds),
       ]);
-      const teachers = teachersInOrderOn(config, date).filter((t) => involved.has(t.id));
+      const teachers = teachersInOrderOn(config, date).filter((t) => involved.has(t.id) && entries.has(t.id));
       return {
         date,
         columns: teachers.map((teacher) => ({
@@ -887,6 +1071,9 @@ export function formatPeriod(from: string, to: string): string {
 
 /** Höhe einer Minute im Wochenraster in Pixeln (eine Stunde = 72 px) */
 const PX_PER_MINUTE = 1.2;
+
+/** Was sich in der Woche ziehen lässt: Einzel- und Gruppentermine und allgemeine Termine */
+type DragTarget = { kind: 'appointment'; occurrence: Occurrence } | { kind: 'shared'; shared: SharedAppointment };
 
 /** Ein Eintrag im Wochenraster */
 type WeekItem = TimeSpan &

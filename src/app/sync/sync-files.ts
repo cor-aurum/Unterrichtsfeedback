@@ -14,6 +14,7 @@ import {
   Section,
   Student,
   Teacher,
+  TeachingWindow,
   teacherOf,
 } from '../model';
 import { safeFileName } from '../save-file';
@@ -36,13 +37,15 @@ export type SyncFiles = Map<string, string>;
 export const GENERAL_FILE = 'konfiguration.json';
 /** Gruppen in älteren Sicherungen; heute stehen sie in der Datei ihres Zeitraums und Lehrers. */
 export const GROUPS_FILE = 'gruppen.json';
-/** Termine für mehrere Lehrer, z. B. Konferenzen */
+/** Termine für mehrere Lehrer außerhalb der Berichtszeiträume; die in einem Zeitraum stehen in dessen Datei. */
 export const SHARED_FILE = 'allgemeine-termine.json';
 // Nur Zeichen, die `safeFileName` erzeugt; so zählen Konfliktkopien der Nextcloud wie
 // „lehrer-Anna (conflicted copy 2026-…).json“ nicht als Lehrerdatei.
 const TEACHER_FILE = /^lehrer-[\p{L}\p{N}_-]+\.json$/u;
 // „zeitraum-<Name>-<Lehrer>.json“ in Sicherungen, „zeitraum_<Zeitraum-ID>_<Lehrer-ID>.json“ auf dem Server
 const PERIOD_FILE = /^zeitraum[-_][\p{L}\p{N}_-]*\.json$/u;
+// „berichtszeitraum-<Name>.json“ in Sicherungen, „berichtszeitraum_<Zeitraum-ID>.json“ auf dem Server
+const REPORT_FILE = /^berichtszeitraum[-_][\p{L}\p{N}_-]*\.json$/u;
 
 /**
  * Wie die Dateien heißen: in Sicherungen lesbar nach Lehrer und Zeitraum, auf dem Server nach den IDs. Der Server
@@ -53,8 +56,11 @@ export type FileNaming = 'readable' | 'ids';
 interface GeneralFile {
   format: 'unterricht-feedback/konfiguration';
   version: 1;
-  /** Ohne Lehrer und ohne Varianten, die nur für einen Lehrer gelten */
-  config: FeedbackConfig;
+  /**
+   * Ohne Lehrer, ohne Varianten, die nur für einen Lehrer gelten, und ohne Berichtszeiträume (eigene Dateien).
+   * Ältere Dateien enthalten die Berichtszeiträume noch.
+   */
+  config: Omit<FeedbackConfig, 'reportPeriods'> & { reportPeriods?: ReportPeriodEntry[] };
   /** Nur in der Sicherung eines Berichtszeitraums: dessen ID */
   period?: string;
 }
@@ -104,6 +110,20 @@ interface PeriodFile {
   appointments: Appointment[];
 }
 
+/**
+ * Ein Berichtszeitraum mit allem, was nur seine Lehrer sehen sollen: Name, Daten, Lehrer, gemeinsame
+ * Unterrichtszeiten, die Unterrichtszeiten und Orte der Lehrer in diesem Zeitraum und seine allgemeinen Termine.
+ * Auf dem Server lesen sie nur die eingetragenen Lehrer; die anderen erfahren nur, dass es ihn gibt.
+ */
+interface ReportFile {
+  format: 'unterricht-feedback/berichtszeitraum';
+  version: 1;
+  period: ReportPeriodEntry;
+  /** Lehrer-ID → Unterrichtszeiten und Ort in diesem Zeitraum (nur, wenn sie eigene haben) */
+  teachers: Record<string, { windows?: TeachingWindow[]; location?: string }>;
+  sharedAppointments: SharedAppointment[];
+}
+
 interface GroupsFile {
   format: 'unterricht-feedback/gruppen';
   version: 1;
@@ -127,7 +147,12 @@ interface TeacherVariant {
 
 export function isSyncFile(name: string): boolean {
   return (
-    name === GENERAL_FILE || name === GROUPS_FILE || name === SHARED_FILE || TEACHER_FILE.test(name) || PERIOD_FILE.test(name)
+    name === GENERAL_FILE ||
+    name === GROUPS_FILE ||
+    name === SHARED_FILE ||
+    TEACHER_FILE.test(name) ||
+    PERIOD_FILE.test(name) ||
+    REPORT_FILE.test(name)
   );
 }
 
@@ -139,13 +164,68 @@ export function toSyncFiles(data: AppData, naming: FileNaming = 'readable'): Syn
   const { config } = data;
   const files: SyncFiles = new Map();
   files.set(GENERAL_FILE, json(generalFile(config)));
-  files.set(SHARED_FILE, json(sharedFile(data.sharedAppointments)));
+  // Vorläufige Zeiträume (siehe `ReportPeriodEntry.placeholder`) gehen nicht auf den Server.
+  const periods = config.reportPeriods.filter((period) => !(naming === 'ids' && period.placeholder));
+  const sharedByPeriod = groupSharedByPeriod(data.sharedAppointments, periods);
+  files.set(SHARED_FILE, json(sharedFile(sharedByPeriod.get('') ?? [])));
+  const reportNames = reportFileNames(periods, naming);
+  for (const period of periods) {
+    files.set(reportNames.get(period.id)!, json(reportFile(config, period, sharedByPeriod.get(period.id) ?? [])));
+  }
   const fileNames = teacherFileNames(config.teachers, naming);
   config.teachers.forEach((teacher, position) =>
     files.set(fileNames.get(teacher.id)!, json(teacherFile(data, teacher, position))),
   );
   for (const { name, file } of periodFiles(data, naming)) files.set(name, json(file));
   return files;
+}
+
+/**
+ * Allgemeine Termine je Berichtszeitraum (Schlüssel: ID; leer: in keinem): der Zeitraum, in dem der (erste) Tag liegt,
+ * bei mehreren der, dessen Lehrer beteiligt sind. So regelt es auch der Server beim Umstellen älterer Daten.
+ */
+function groupSharedByPeriod(appointments: SharedAppointment[], periods: ReportPeriodEntry[]): Map<string, SharedAppointment[]> {
+  const result = new Map<string, SharedAppointment[]>();
+  for (const appointment of appointments) {
+    const containing = periods.filter((period) => containsDate(period, appointment.date));
+    const period =
+      containing.find((p) => p.teacherIds.some((id) => appointment.teacherIds.includes(id))) ?? containing[0];
+    const key = period?.id ?? '';
+    result.set(key, [...(result.get(key) ?? []), appointment]);
+  }
+  return result;
+}
+
+function reportFile(config: FeedbackConfig, period: ReportPeriodEntry, shared: SharedAppointment[]): ReportFile {
+  const teachers: ReportFile['teachers'] = {};
+  for (const teacher of config.teachers) {
+    const windows = teacher.periodWindows[period.id];
+    const hasLocation = Object.hasOwn(teacher.periodLocations, period.id);
+    if (!windows && !hasLocation) continue;
+    teachers[teacher.id] = {
+      ...(windows ? { windows } : {}),
+      ...(hasLocation ? { location: teacher.periodLocations[period.id] } : {}),
+    };
+  }
+  const { placeholder: _p, ...entry } = period;
+  return { format: 'unterricht-feedback/berichtszeitraum', version: 1, period: entry, teachers, sharedAppointments: shared };
+}
+
+/** Lesbar nach dem Namen des Zeitraums, auf dem Server „berichtszeitraum_<ID>.json“ */
+function reportFileNames(periods: ReportPeriodEntry[], naming: FileNaming): Map<string, string> {
+  const names = new Map<string, string>();
+  const used = new Set<string>();
+  for (const period of periods) {
+    if (naming === 'ids') {
+      names.set(period.id, `berichtszeitraum_${period.id}.json`);
+      continue;
+    }
+    let name = `berichtszeitraum-${safeFileName(period.name)}.json`;
+    if (used.has(name)) name = `berichtszeitraum-${safeFileName(period.name)}-${period.id.slice(0, 8)}.json`;
+    used.add(name);
+    names.set(period.id, name);
+  }
+  return names;
 }
 
 /**
@@ -159,9 +239,13 @@ export function toPeriodBackupFiles(data: AppData, periodId: string): SyncFiles 
   const general: GeneralFile = { ...generalFile(data.config), period: periodId };
   files.set(GENERAL_FILE, json(general));
   const shared = data.sharedAppointments.filter((a) => a.date <= period.to && lastDate(a) >= period.from);
-  files.set(SHARED_FILE, json(sharedFile(shared)));
+  files.set(SHARED_FILE, json(sharedFile(shared.filter((a) => !containsDate(period, a.date)))));
   const otherPeriods = new Set(periodFiles(data).filter((entry) => entry.file.periodId !== periodId).map((e) => e.name));
   for (const name of otherPeriods) files.delete(name);
+  const reportNames = reportFileNames(data.config.reportPeriods, 'readable');
+  for (const other of data.config.reportPeriods) {
+    if (other.id !== periodId) files.delete(reportNames.get(other.id)!);
+  }
   return files;
 }
 
@@ -192,12 +276,15 @@ export function fromSyncFiles(files: SyncFiles): AppData {
     .filter(([name]) => isTeacherFile(name))
     .map(([name, content]) => parseTeacherFile(name, content))
     .sort((a, b) => a.position - b.position);
+  const reportFiles = [...files].filter(([name]) => REPORT_FILE.test(name)).map(([name, content]) => parseReportFile(name, content));
 
   const config = parseConfig(
     withOwnEntries(
       {
         ...general.config,
-        teachers: teacherFiles.map((file) => file.teacher),
+        // Ältere Dateien haben die Zeiträume noch in der Konfiguration.
+        reportPeriods: reportFiles.length > 0 ? reportFiles.map((file) => file.period) : general.config!.reportPeriods,
+        teachers: teacherFiles.map((file) => withReportData(file.teacher, reportFiles)),
         blocks: withTeacherVariants(general.config!.blocks ?? [], teacherFiles, 'blocks'),
         ...(general.config!.groupBlocks
           ? { groupBlocks: withTeacherVariants(general.config!.groupBlocks, teacherFiles, 'groupBlocks') }
@@ -222,7 +309,36 @@ export function fromSyncFiles(files: SyncFiles): AppData {
       config.reportPeriods,
     ),
     blockers: parseBlockers(teacherFiles.flatMap((file) => file.blockers)),
-    sharedAppointments: parseSharedFile(files.get(SHARED_FILE), config),
+    sharedAppointments: [
+      ...parseSharedFile(files.get(SHARED_FILE), config),
+      ...parseSharedAppointments(reportFiles.flatMap((file) => file.sharedAppointments), config.reportPeriods),
+    ],
+  };
+}
+
+/** Unterrichtszeiten und Orte des Lehrers aus den Zeitraumdateien; ältere Lehrerdateien enthalten sie selbst. */
+function withReportData(teacher: Teacher, reportFiles: ReportFile[]): Teacher {
+  const periodWindows = { ...(teacher.periodWindows ?? {}) };
+  const periodLocations = { ...(teacher.periodLocations ?? {}) };
+  for (const file of reportFiles) {
+    const entry = file.teachers[teacher.id];
+    if (entry?.windows) periodWindows[file.period.id] = entry.windows;
+    if (entry && typeof entry.location === 'string') periodLocations[file.period.id] = entry.location;
+  }
+  return { ...teacher, periodWindows, periodLocations };
+}
+
+function parseReportFile(name: string, content: string): ReportFile {
+  const file = JSON.parse(content) as Partial<ReportFile>;
+  if (file?.format !== 'unterricht-feedback/berichtszeitraum' || typeof file.period?.id !== 'string') {
+    throw new Error(`„${name}“ ist keine Datei eines Berichtszeitraums dieser App.`);
+  }
+  return {
+    format: file.format,
+    version: 1,
+    period: file.period,
+    teachers: file.teachers && typeof file.teachers === 'object' ? file.teachers : {},
+    sharedAppointments: Array.isArray(file.sharedAppointments) ? file.sharedAppointments : [],
   };
 }
 
@@ -277,11 +393,12 @@ function generalFile(config: FeedbackConfig): GeneralFile {
       variants: block.variants.filter((variant) => !ownerOf(variant, config.teachers)),
     }));
   const blocks = sharedBlocks(config.blocks);
+  const { reportPeriods: _periods, ...rest } = config;
   return {
     format: 'unterricht-feedback/konfiguration',
     version: 1,
     config: {
-      ...config,
+      ...rest,
       teachers: [],
       blocks,
       sections: shared(config.sections),
@@ -329,7 +446,17 @@ function teacherFile(data: AppData, teacher: Teacher, position: number): Teacher
     (blocker) => blocker.teacherId === teacher.id || (position === 0 && !teacherIds.has(blocker.teacherId)),
   );
   const own = ownEntries(config, teacher.id);
-  return { format: 'unterricht-feedback/lehrer', version: 1, position, teacher, variants, ...(own.length ? { own } : {}), blockers };
+  // Unterrichtszeiten und Orte je Zeitraum stehen in den Zeitraumdateien, damit nur dessen Lehrer sie sehen.
+  const { periodWindows: _w, periodLocations: _l, ...withoutPeriods } = teacher;
+  return {
+    format: 'unterricht-feedback/lehrer',
+    version: 1,
+    position,
+    teacher: withoutPeriods as Teacher,
+    variants,
+    ...(own.length ? { own } : {}),
+    blockers,
+  };
 }
 
 /**
@@ -393,7 +520,7 @@ function periodFileNames(files: PeriodFile[], config: FeedbackConfig, naming: Fi
     }
     const period = config.reportPeriods.find((p) => p.id === file.periodId);
     const teacher = config.teachers.find((t) => t.id === file.teacherId);
-    const label = `${period ? safeFileName(period.name) : 'ohne'}-${safeFileName(teacher?.name ?? 'Lehrer')}`;
+    const label = `${period ? safeFileName(period.name) : 'ohne'}-${safeFileName(teacher?.name ?? 'Lehrkraft')}`;
     let name = `zeitraum-${label}.json`;
     if (used.has(name)) name = `zeitraum-${label}-${file.periodId.slice(0, 8)}-${file.teacherId.slice(0, 8)}.json`;
     used.add(name);

@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import type { jsPDF } from 'jspdf';
+import { ActiveTeacher } from './active-teacher';
 import {
   BlockContent,
   BlockImage,
@@ -74,12 +75,19 @@ function pdfColors(theme: Theme): PdfColors {
 @Injectable({ providedIn: 'root' })
 export class PdfExport {
   private readonly reportPeriod = inject(ReportPeriod);
+  private readonly activeTeacher = inject(ActiveTeacher);
+
+  /** Wer das PDF erstellt, bekommt es in seiner persönlichen Farbe. */
+  private personal(config: FeedbackConfig): FeedbackConfig {
+    return { ...config, themeColor: this.activeTeacher.color() };
+  }
 
   /**
    * `open` öffnet das PDF in der Android-App direkt; im Browser wird es in beiden Fällen heruntergeladen.
    * Varianten und {zeitraum} richten sich nach dem Berichtszeitraum dieses Geräts.
    */
   async export(config: FeedbackConfig, students: Student[], fileName: string, action: 'open' | 'share' = 'share'): Promise<void> {
+    config = this.personal(config);
     const prepared = await forPrint(config);
     const period = this.reportPeriod.period();
     return this.exportRecipients(prepared, students.map((student) => recipient(prepared, student, period)), fileName, action);
@@ -96,6 +104,7 @@ export class PdfExport {
     fileName: string,
     action: 'open' | 'share' = 'share',
   ): Promise<void> {
+    config = this.personal(config);
     const prepared = await forPrint(config);
     const period = this.reportPeriod.period();
     const recipients = groups.map((group) => groupRecipient(group, students, prepared, period));
@@ -130,6 +139,7 @@ export class PdfExport {
     range: SchedulePeriod,
     action: 'open' | 'share',
   ): Promise<void> {
+    config = this.personal(config);
     const list = await listDocument(config, config.calendarPdf.listTitle, range);
     teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0, true));
     list.writer.addFooters();
@@ -141,6 +151,7 @@ export class PdfExport {
    * Eintrag nennt seinen Raum (siehe `ScheduleEntry.name`).
    */
   async exportAppointmentList(config: FeedbackConfig, days: ScheduleDay[], range: SchedulePeriod, action: 'open' | 'share'): Promise<void> {
+    config = this.personal(config);
     const list = await listDocument(config, config.calendarPdf.eventListTitle, range);
     writeScheduleDays(list, days, true, () => undefined);
     list.writer.addFooters();
@@ -157,6 +168,7 @@ export class PdfExport {
     range: SchedulePeriod,
     action: 'open' | 'share',
   ): Promise<void> {
+    config = this.personal(config);
     const list = await listDocument(config, config.calendarPdf.individualListTitle, range);
     teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0, false));
     list.writer.addFooters();
@@ -165,6 +177,7 @@ export class PdfExport {
 
   /** Tagesplan im Querformat: je Tag eine Seite mit allen Lehrern als Spalten (siehe `schedule-grid-pdf.ts`). */
   async exportDayGrid(config: FeedbackConfig, days: DayPlan[], range: SchedulePeriod, action: 'open' | 'share'): Promise<void> {
+    config = this.personal(config);
     const [{ jsPDF }, { writeDayGrid }, prepared] = await Promise.all([
       import('jspdf'),
       import('./calendar/schedule-grid-pdf'),
@@ -182,6 +195,7 @@ export class PdfExport {
     range: SchedulePeriod,
     action: 'open' | 'share',
   ): Promise<void> {
+    config = this.personal(config);
     const [{ jsPDF }, { writeScheduleGrid }, prepared] = await Promise.all([
       import('jspdf'),
       import('./calendar/schedule-grid-pdf'),

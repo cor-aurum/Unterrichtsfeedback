@@ -10,10 +10,16 @@ Ordner bzw. Nextcloud per WebDAV).
 
 ## Wer sieht was?
 
-- **Alle Lehrer** sehen und ändern die Konfiguration (Textbausteine, feste Inhalte, Berichtszeiträume …), die
-  Lehrer und die allgemeinen Termine. Jeder Lehrer kann neue Berichtszeiträume anlegen und neue Lehrer einladen.
-- **Personen, Gruppen, Stunden und Termine** eines Berichtszeitraums sehen und ändern nur die Lehrer, die in diesem
-  Zeitraum eingetragen sind (in der App: Konfiguration → Allgemein → Berichtszeiträume → *Aktive Lehrer*).
+- **Alle Lehrer** sehen und ändern die gemeinsame Konfiguration (Textbausteine, feste Inhalte, Instrumente …), die
+  Lehrer (Name, Instrument, Standard-Unterrichtszeiten, Blocker) und die allgemeinen Termine außerhalb der
+  Berichtszeiträume. Jeder Lehrer kann neue Berichtszeiträume anlegen und neue Lehrer einladen.
+- **Alles, was zu einem Berichtszeitraum gehört**, sehen und ändern nur die Lehrer, die in ihm eingetragen sind
+  (in der App: Konfiguration → Allgemein → Berichtszeiträume → *Aktive Lehrer:innen*): Name und Daten des Zeitraums,
+  seine Lehrer, Unterrichtszeiten und Orte darin, seine allgemeinen Termine und die Personen, Gruppen, Stunden und
+  Termine. Die anderen erfahren nur, *dass* es weitere Zeiträume gibt (ihre Anzahl), nicht was darin ist.
+- Beim ersten Start einer neuen Version stellt der Server ältere Daten selbst um: Die Berichtszeiträume wandern aus
+  der Konfiguration in eigene Dokumente, Unterrichtszeiten und Orte je Zeitraum und die allgemeinen Termine darin
+  mit. Ältere App-Versionen kann der Server danach nicht mehr bedienen; sie melden, dass ein Update nötig ist.
 - Lehrer eintragen oder austragen dürfen nur Lehrer, die selbst eingetragen sind. Wer einen Zeitraum neu anlegt,
   muss sich selbst eintragen.
 - Personen werden nie automatisch zusammengeführt. Wer zwei gleiche Personen sehen kann (gleicher Name, passendes
@@ -162,7 +168,7 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `POST /api/login`         | Anmelden: `{username, password}` → wie oben                            |
 | `POST /api/reset`         | Neues Passwort mit Reset-Code: `{code, password}` → wie oben           |
 | `POST /api/logout`        | Abmelden                                                               |
-| `GET /api/me`             | Eigenes Konto                                                          |
+| `GET /api/me`             | Eigenes Konto und Zahl der Berichtszeiträume, in denen man nicht eingetragen ist (`foreignPeriods`) |
 | `GET /api/accounts`       | Welche Lehrer schon ein Konto haben                                   |
 | `POST /api/invites`       | Einladungscode für einen Lehrer ohne Konto: `{teacherId}` → `{code, expiresAt}` |
 | `GET /api/docs`           | Dokumente, die man sehen darf: `[{name, version}]`                     |

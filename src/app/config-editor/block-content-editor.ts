@@ -15,6 +15,8 @@ export class BlockContentEditor {
   readonly type = input.required<FixedBlock['type']>();
   readonly content = input.required<BlockContent>();
   readonly placeholder = input('');
+  /** Nur ansehen, z. B. gemeinsame Inhalte mit Server */
+  readonly readonly = input(false);
 
   readonly contentChange = output<Partial<BlockContent>>();
   readonly imageSettingsChange = output<Partial<Pick<BlockImage, 'widthMm' | 'align'>>>();

@@ -1,4 +1,4 @@
-import { computed, inject, Injectable } from '@angular/core';
+import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { ConfigStore } from './config.store';
 import { formatShortDate, isActiveIn, Lesson, lessonAt, newId, Student, Teacher, teacherOf, today } from './model';
 import { samePerson } from './import/student-import';
@@ -28,6 +28,16 @@ export class StudentsStore {
   readonly students = computed(() => this.allStudents().filter((student) => isActiveIn(student, this.periodId())));
   readonly selectedStudentId = storedSignal<string | null>('feedback.selectedStudent', () => null);
   readonly selectedLessonId = storedSignal<string | null>('feedback.selectedLesson', () => null);
+
+  constructor() {
+    // Wechselt der Berichtszeitraum, gehört die gewählte Person meist nicht mehr dazu: abwählen.
+    let previous: string | undefined;
+    effect(() => {
+      const periodId = this.periodId();
+      if (previous !== undefined && previous !== periodId) untracked(() => this.selectStudent(null));
+      previous = periodId;
+    });
+  }
 
   readonly sortedStudents = computed(() =>
     [...this.students()].sort((a, b) => a.name.localeCompare(b.name, 'de')),

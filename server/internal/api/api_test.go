@@ -66,13 +66,10 @@ func (c *client) docNames() []string {
 	return names
 }
 
-func config(periods map[string][]string) string {
-	var list []string
-	for id, teachers := range periods {
-		ids, _ := json.Marshal(teachers)
-		list = append(list, fmt.Sprintf(`{"id":%q,"name":"Zeitraum","from":"2026-08-01","to":"2027-01-31","teacherIds":%s}`, id, ids))
-	}
-	return `{"format":"unterricht-feedback/konfiguration","version":1,"config":{"reportPeriods":[` + strings.Join(list, ",") + `]}}`
+// period ist das Dokument eines Berichtszeitraums mit seinen Lehrern.
+func period(id string, teachers ...string) string {
+	ids, _ := json.Marshal(teachers)
+	return fmt.Sprintf(`{"format":"unterricht-feedback/berichtszeitraum","version":1,"period":{"id":%q,"name":"Zeitraum","from":"2026-08-01","to":"2027-01-31","teacherIds":%s}}`, id, ids)
 }
 
 func setup(t *testing.T) (*Server, string) {
@@ -111,7 +108,12 @@ func TestScenario(t *testing.T) {
 	anna.must(404, "POST", "/api/redeem", `{"code":"`+code+`","username":"anna2","password":"geheim123"}`) // nur einmal
 
 	// Konfiguration und Daten des ersten Zeitraums
-	anna.must(200, "PUT", "/api/docs/konfiguration.json", config(map[string][]string{"p1": {"t-anna"}}))
+	anna.must(200, "PUT", "/api/docs/konfiguration.json", `{"format":"unterricht-feedback/konfiguration","config":{}}`)
+	anna.must(403, "PUT", "/api/docs/berichtszeitraum_p1.json", period("p1", "t-ben"))  // ohne sich selbst
+	anna.must(400, "PUT", "/api/docs/berichtszeitraum_p1.json", period("p9", "t-anna")) // falsche ID
+	anna.must(200, "PUT", "/api/docs/berichtszeitraum_p1.json", period("p1", "t-anna"))
+	// Ältere Apps mit Zeiträumen in der Konfiguration werden abgewiesen.
+	anna.must(409, "PUT", "/api/docs/konfiguration.json", `{"config":{"reportPeriods":[{"id":"p1","teacherIds":["t-anna"]}]}}`)
 	anna.must(200, "PUT", "/api/docs/zeitraum_p1_t-anna.json", `{"students":[{"id":"s-lea"}]}`)
 	anna.must(200, "PUT", "/api/docs/lehrer-t-anna.json", `{"teacher":{"id":"t-anna"}}`)
 	anna.must(400, "PUT", "/api/docs/notizen.txt", `{}`)
@@ -129,24 +131,30 @@ func TestScenario(t *testing.T) {
 		t.Fatalf("Ben hat die Lehrer-ID %s", benID)
 	}
 
-	// Ben sieht Konfiguration und Lehrer, aber nicht die Personen von p1
+	// Ben sieht Konfiguration und Lehrer, von p1 aber nur, dass es ihn gibt
 	names := strings.Join(ben.docNames(), " ")
 	if strings.Contains(names, "zeitraum_p1") || !strings.Contains(names, "konfiguration.json") {
 		t.Fatalf("Ben sieht: %s", names)
 	}
+	if me := ben.must(200, "GET", "/api/me", ""); !strings.Contains(me, `"foreignPeriods":1`) {
+		t.Fatalf("Ben erfährt nicht, dass es p1 gibt: %s", me)
+	}
+	ben.must(403, "GET", "/api/docs/berichtszeitraum_p1.json", "")
 	ben.must(403, "GET", "/api/docs/zeitraum_p1_t-anna.json", "")
 	ben.must(403, "PUT", "/api/docs/zeitraum_p1_t-ben.json", `{"students":[]}`)
 	// … und kann sich nicht selbst eintragen
-	ben.must(403, "PUT", "/api/docs/konfiguration.json", config(map[string][]string{"p1": {"t-anna", "t-ben"}}))
+	ben.must(403, "PUT", "/api/docs/berichtszeitraum_p1.json", period("p1", "t-anna", "t-ben"))
 	// … oder den Zeitraum löschen
-	ben.must(403, "PUT", "/api/docs/konfiguration.json", config(map[string][]string{}))
+	ben.must(403, "DELETE", "/api/docs/berichtszeitraum_p1.json", "")
 
 	// Anna nimmt Ben in p1 auf; Ben legt p2 an
-	anna.must(200, "PUT", "/api/docs/konfiguration.json", config(map[string][]string{"p1": {"t-anna", "t-ben"}}))
+	anna.must(200, "PUT", "/api/docs/berichtszeitraum_p1.json", period("p1", "t-anna", "t-ben"))
 	ben.must(200, "GET", "/api/docs/zeitraum_p1_t-anna.json", "")
-	ben.must(200, "PUT", "/api/docs/konfiguration.json", config(map[string][]string{"p1": {"t-anna", "t-ben"}, "p2": {"t-ben"}}))
+	ben.must(200, "GET", "/api/docs/berichtszeitraum_p1.json", "")
+	ben.must(200, "PUT", "/api/docs/berichtszeitraum_p2.json", period("p2", "t-ben"))
 	ben.must(200, "PUT", "/api/docs/zeitraum_p2_t-ben.json", `{"students":[{"id":"s-lea-2"}]}`)
 	anna.must(403, "GET", "/api/docs/zeitraum_p2_t-ben.json", "")
+	anna.must(403, "GET", "/api/docs/berichtszeitraum_p2.json", "")
 
 	// Zusammenführen nur, wer beide sieht
 	anna.must(403, "POST", "/api/merges", `{"from":"s-lea-2","into":"s-lea"}`)

@@ -6,9 +6,9 @@
 
 @if (teacherFilter.options().length > 1) {
   <label class="teacher-filter">
-    Lehrer
+    Lehrkraft
     <select (change)="teacherFilter.set(valueOf($event))">
-      <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer</option>
+      <option value="" [selected]="teacherFilter.teacherId() === null">Alle Lehrer:innen</option>
       @for (teacher of teacherFilter.options(); track teacher.id) {
         <option [value]="teacher.id" [selected]="teacher.id === teacherFilter.teacherId()">Nur {{ teacher.name }}</option>
       }
@@ -107,14 +107,14 @@
     </div>
     <div class="row teacher-group">
       @if (showTeachers()) {
-        <select aria-label="Lehrer" (change)="wholeTeacherId.set(valueOf($event))">
+        <select aria-label="Lehrkraft" (change)="wholeTeacherId.set(valueOf($event))">
           @for (teacher of reportPeriod.teachers(); track teacher.id) {
             <option [value]="teacher.id" [selected]="teacher.id === wholeTeacherId()">{{ teacher.name }}</option>
           }
         </select>
       }
       <button class="secondary" (click)="createTeacherGroup()">
-        {{ showTeachers() ? 'Gruppe mit allen Schüler:innen dieses Lehrers' : 'Gruppe mit allen Personen' }}
+        {{ showTeachers() ? 'Gruppe mit allen Schüler:innen dieser Lehrkraft' : 'Gruppe mit allen Personen' }}
       </button>
     </div>
     <div class="group-grid">
@@ -138,7 +138,7 @@
           @if (showTeachers()) {
             <label class="group-teacher">
               <span class="muted small">Termine im Kalender von</span>
-              <select [attr.aria-label]="'Lehrer von ' + label(group)" (change)="setTeacher(group, $event)">
+              <select [attr.aria-label]="'Lehrkraft von ' + label(group)" (change)="setTeacher(group, $event)">
                 @for (teacher of teachersFor(group); track teacher.id) {
                   <option [value]="teacher.id" [selected]="teacher.id === teacherId(group)">{{ teacher.name }}</option>
                 }
@@ -209,7 +209,7 @@
     </label>
     @if (showTeachers()) {
       <label>
-        Lehrer der neuen Gruppen
+        Lehrkraft der neuen Gruppen
         <select (change)="planTeacherId.set(valueOf($event))">
           @for (teacher of reportPeriod.teachers(); track teacher.id) {
             <option [value]="teacher.id" [selected]="teacher.id === planTeacherId()">{{ teacher.name }}</option>

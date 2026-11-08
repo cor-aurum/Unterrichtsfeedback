@@ -1,6 +1,15 @@
 import { effect, inject, Injectable } from '@angular/core';
 import { ConfigStore } from '../config.store';
-import { CalendarSettings, isTeachingDay, newId, Teacher, teachingWindowsOn, today } from '../model';
+import {
+  CalendarSettings,
+  containsDate,
+  isTeachingDay,
+  newId,
+  ReportPeriodEntry,
+  Teacher,
+  teachingWindowsOn,
+  today,
+} from '../model';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
 import {
@@ -94,13 +103,22 @@ export class CalendarStore {
     this.sharedAppointments.update((list) => list.filter((a) => a.id !== id));
   }
 
-  /** Allgemeine Termine im Zeitraum (Tage einschließlich), mit `teacherId` nur die dieses Lehrers */
+  /**
+   * Allgemeine Termine im Zeitraum (Tage einschließlich), mit `teacherId` nur die dieses Lehrers. Bei Terminen für
+   * alle Lehrer des Berichtszeitraums (`allTeachers`) stehen deren Lehrer am Tag in `teacherIds`, auch später
+   * dazugekommene.
+   */
   sharedOccurrences(from: string, to: string, teacherId?: string): SharedOccurrence[] {
-    const appointments = this.sharedAppointments()
-      .filter((appointment) => !teacherId || appointment.teacherIds.includes(teacherId))
-      .sort((a, b) => a.start.localeCompare(b.start));
+    const appointments = [...this.sharedAppointments()].sort((a, b) => a.start.localeCompare(b.start));
+    const periods = this.config().reportPeriods;
     return daysBetween(from, to).flatMap((date) =>
-      appointments.filter((appointment) => occursOn(appointment, date)).map((appointment) => ({ date, appointment })),
+      appointments
+        .filter((appointment) => occursOn(appointment, date))
+        .map((appointment) =>
+          appointment.allTeachers ? { ...appointment, teacherIds: teachersOfPeriodsOn(periods, date) } : appointment,
+        )
+        .filter((appointment) => !teacherId || appointment.teacherIds.includes(teacherId))
+        .map((appointment) => ({ date, appointment })),
     );
   }
 
@@ -262,4 +280,9 @@ export class CalendarStore {
         sharedOverlaps(appointment, start, duration),
     );
   }
+}
+
+/** Lehrer aller Berichtszeiträume, in denen der Tag liegt, in deren Reihenfolge */
+function teachersOfPeriodsOn(periods: ReportPeriodEntry[], date: string): string[] {
+  return [...new Set(periods.filter((period) => containsDate(period, date)).flatMap((period) => period.teacherIds))];
 }

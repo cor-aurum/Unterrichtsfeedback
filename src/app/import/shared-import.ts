@@ -119,7 +119,7 @@ export function toSharedRows(
     const start =
       parseTime(cell(row, mapping.start)) ?? (mapping.start === null ? parseTime(dateCell) : null);
     const durationMinutes = durationOf(start, cell(row, mapping.end), cell(row, mapping.duration));
-    const { teacherIds, unknown } = teachersOf(cell(row, mapping.teachers), config, date);
+    const { teacherIds, unknown, allTeachers } = teachersOf(cell(row, mapping.teachers), config, date);
     const problem = !title
       ? 'Bezeichnung fehlt'
       : !date
@@ -128,8 +128,8 @@ export function toSharedRows(
           ? 'Beginn fehlt oder ist ungültig'
           : durationMinutes === null
             ? 'Ende liegt vor dem Beginn'
-            : teacherIds.length === 0
-              ? 'Kein bekannter Lehrer'
+            : teacherIds.length === 0 && !allTeachers
+              ? 'Keine bekannte Lehrkraft des Berichtszeitraums'
               : null;
     return {
       line,
@@ -140,6 +140,7 @@ export function toSharedRows(
         durationMinutes: durationMinutes ?? DEFAULT_DURATION,
         location: cell(row, mapping.location),
         teacherIds,
+        ...(allTeachers ? { allTeachers: true } : {}),
         blocksPlanning: true,
       },
       fileDate,
@@ -194,22 +195,22 @@ function durationOf(start: string | null, endText: string, durationText: string)
 }
 
 /**
- * Lehrer aus der Zelle („Anna, Ben“, „Anna Schmidt; Ben Krause“, „Anna und Ben“): ganzer Name, Vor- oder Nachname,
- * sofern er eindeutig ist. Eine leere Zelle steht für die Lehrer, die an dem Tag im Berichtszeitraum aktiv sind.
+ * Lehrkräfte aus der Zelle („Anna, Ben“, „Anna Schmidt; Ben Krause“, „Anna und Ben“): ganzer Name, Vor- oder
+ * Nachname, sofern er eindeutig ist. Infrage kommen nur die Lehrkräfte des Berichtszeitraums am Tag; andere zählen
+ * als unbekannt. Eine leere Zelle steht für alle Lehrkräfte des Zeitraums.
  */
 function teachersOf(
   text: string,
   config: FeedbackConfig,
   date: string | null,
-): { teacherIds: string[]; unknown: string[] } {
+): { teacherIds: string[]; unknown: string[]; allTeachers?: boolean } {
   const names = splitNames(text);
-  if (names.length === 0) {
-    return { teacherIds: date ? activeTeachersOn(config, date).map((t) => t.id) : [], unknown: [] };
-  }
+  // Ohne Angabe: alle Lehrkräfte des Zeitraums, auch später dazukommende
+  if (names.length === 0) return { teacherIds: [], unknown: [], allTeachers: true };
   const teacherIds = new Set<string>();
   const unknown: string[] = [];
   for (const name of names) {
-    const match = findTeacher(name, config.teachers);
+    const match = findTeacher(name, date ? activeTeachersOn(config, date) : config.teachers);
     if (match) teacherIds.add(match.id);
     else unknown.push(name);
   }

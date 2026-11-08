@@ -1,7 +1,8 @@
 <h1>Hilfe</h1>
 <p class="lead">
   Mit dieser App hältst du während des Einzelunterrichts fest, wie die Stunde gelaufen ist – meist
-  mit ein paar Klicks. Daraus erstellst du ein PDF, das du deinen Schülerinnen und Schülern mitgibst.
+  mit ein paar Klicks. Daraus erstellst du ein PDF, das du deinen Schülerinnen und Schülern mitgibst. Auf schmalen
+  Bildschirmen öffnest du das Menü über das Menüsymbol (☰) oben in der Leiste.
 </p>
 
 <ol class="steps">
@@ -10,7 +11,8 @@
     <span>
       Beim ersten Start fragt dich die App nach Name, Instrument und optional Unterrichtszeiten, Berichtszeitraum und
       Lieblingsfarbe –
-      oder du spielst dort eine Sicherung bzw. Konfiguration von einem anderen Gerät ein und wählst danach, welche
+      oder du verbindest dich dort mit einem Server (siehe „Mit einem Server arbeiten“). Ohne Server kannst du auch
+      eine Sicherung bzw. Konfiguration von einem anderen Gerät einspielen und wählst danach, welche
       Lehrkraft du bist (oder legst dich neu an). Unter
       <a routerLink="/konfiguration">Konfiguration</a> passt du danach Textbausteine, Instrumente und feste Texte an.
     </span>
@@ -60,8 +62,8 @@
     <li><strong>Speichern musst du nicht</strong> – jede Änderung wird sofort übernommen.</li>
     <li>
       Abschnitte mit dem Kennzeichen <span class="tag">allgemein</span> gelten für alle Stunden der Person im
-      Berichtszeitraum (einstellbar unter <a routerLink="/konfiguration">Konfiguration</a> → Allgemein). Ein dort angehakter
-      Baustein steht im PDF nur einmal. Nimmst du den Haken heraus, verschwindet er aus allen Stunden im Zeitraum.
+      Berichtszeitraum (einstellbar je Abschnitt unter <a routerLink="/konfiguration">Konfiguration</a> →
+      Abschnitte). Ein dort angehakter Baustein steht im PDF nur einmal. Nimmst du den Haken heraus, verschwindet er aus allen Stunden im Zeitraum.
     </li>
     <li>
       <strong>Andere Stunden im Blick:</strong> Unter jedem Textbaustein steht, an welchen Tagen du ihn schon
@@ -89,7 +91,10 @@
       Unter <a routerLink="/personen">Personen</a> steht bei jeder Person, in welchen Gruppen sie ist; ein Klick
       auf eine Gruppe öffnet sie hier.
     </li>
-    <li>Gruppentermine stehen im Kalender der Lehrkraft, den du bei der Gruppe einstellst.</li>
+    <li>
+      Gruppentermine stehen im Kalender der Lehrkraft, die du bei der Gruppe unter <em>Termine im Kalender von</em>
+      einstellst.
+    </li>
     <li>
       <strong>Gruppenstunde:</strong> <kbd>+ Neue Gruppenstunde</kbd> oder ein Klick auf den Gruppentermin legt eine
       Gruppenstunde an. Sie gehört der Gruppe und nutzt die <em>Gruppen-Abschnitte</em> aus der Konfiguration;
@@ -129,27 +134,27 @@
     </li>
     <li>
       <strong>Viele Personen auf einmal:</strong> <kbd>Aus Excel-Datei importieren …</kbd> liest eine Excel- (.xlsx)
-      oder CSV-Datei. Du wählst, in welcher Spalte Vorname, Nachname, Geburtsdatum, Instrument, Lehrer und Gruppen stehen
+      oder CSV-Datei. Du wählst, in welcher Spalte Vorname, Nachname, Geburtsdatum, Instrument, Lehrkraft und Gruppen stehen
       (Geburtsdaten wie „3.5.2015“, „03.05.15“ oder „2015-05-03“; zweistellige Jahre liegen nie in der Zukunft);
-      Instrumente, die es noch nicht gibt, werden angelegt. Danach ordnest du in einer Tabelle jede Person einem Lehrer
-      zu: vorausgewählt ist der Lehrer aus der Datei, sonst der erste. Personen, die es im Berichtszeitraum schon gibt (gleicher
+      Instrumente, die es noch nicht gibt, werden angelegt. Danach ordnest du in einer Tabelle jede Person einer Lehrkraft
+      zu: vorausgewählt ist die Lehrkraft aus der Datei, sonst die erste. Personen, die es im Berichtszeitraum schon gibt (gleicher
       Name und kein abweichendes Geburtsdatum), sind markiert und zunächst abgewählt; Personen aus anderen Zeiträumen werden übernommen statt doppelt angelegt.
       Hat die Zeile ein Geburtsdatum und die vorhandene Person keins, wählst du in der Zeile <em>zusammenführen</em>
-      (voreingestellt: die vorhandene Person behält Stunden, Lehrer und Gruppen und bekommt das Geburtsdatum) oder
+      (voreingestellt: die vorhandene Person behält Stunden, Lehrkraft und Gruppen und bekommt das Geburtsdatum) oder
       <em>als neue Person</em>, wenn es jemand anderes mit gleichem Namen ist.
       Benannte Gruppen aus der Gruppen-Spalte legt der Import im Berichtszeitraum <em>ohne Mitglieder</em> an.
     </li>
     <li>
-      <strong>Als Tabelle exportieren</strong> speichert Name, Geburtsdatum, Instrument, Lehrer und Gruppen der Personen des
+      <strong>Als Tabelle exportieren</strong> speichert Name, Geburtsdatum, Instrument, Lehrkraft und Gruppen der Personen des
       Zeitraums als CSV – im nächsten Zeitraum liest der Excel-Import diese Datei wieder ein.
     </li>
     <li>
-      <strong>Doppelte Personen:</strong> Mit Server legen Lehrer, die einander in keinem Berichtszeitraum sehen,
-      gleichnamige Personen getrennt an. Sieht ein Lehrer später beide Einträge (gleicher Name, kein abweichendes
+      <strong>Doppelte Personen:</strong> Mit Server legen Lehrkräfte, die einander in keinem Berichtszeitraum sehen,
+      gleichnamige Personen getrennt an. Sieht eine Lehrkraft später beide Einträge (gleicher Name, kein abweichendes
       Geburtsdatum), schlägt die App oben unter <em>Mögliche doppelte Personen</em> vor, sie
       <kbd>Zusammenführen</kbd> – oder du bestätigst <kbd>Verschiedene Personen</kbd>. Von Hand geht es bei der Person
       unter <em>Doppelten Eintrag zusammenführen …</em>. Stunden, Termine, Gruppen und Berichtszeiträume gehören dann
-      zu einer Person; die Apps der anderen Lehrer übernehmen das beim nächsten Abgleich.
+      zu einer Person; die Apps der anderen Lehrkräfte übernehmen das beim nächsten Abgleich.
     </li>
     <li>
       <strong>Entfernen oder löschen:</strong> Eine Person, die im gewählten Zeitraum fehlt, übernimmst du mit
@@ -166,15 +171,15 @@
       <strong>Wer ist noch in keiner Gruppe?</strong> Links stehen alle Personen des gewählten Berichtszeitraums ohne
       Gruppe, mit ihrem Alter (sofern ein Geburtsdatum eingetragen ist). Die Zahl daneben wird grün, sobald alle
       in einer Gruppe sind. Mit <em>Alle</em> schaltest du auf alle Personen des Zeitraums um; unter jeder steht,
-      in welchen Gruppen sie ist.
+      in welchen Gruppen sie ist. Bei mehreren Lehrkräften schränkst du oben unter <em>Lehrkraft</em> auf eine ein.
     </li>
     <li>
       <strong>Zuordnen:</strong> Personen anhaken (oder <em>Alle auswählen</em>), eine Gruppe wählen oder
       <em>Neue Gruppe …</em> mit Namen, dann <kbd>… zuordnen</kbd>. Rechts stehen die Gruppen des Zeitraums mit
       Anzahl, Durchschnittsalter und Altersspanne; dort benennst du sie um, nimmst Mitglieder mit ✕ heraus oder legst
-      mit <kbd>+ Gruppe</kbd> eine leere an. <kbd>Gruppe mit allen Schüler:innen dieses Lehrers</kbd> legt eine Gruppe mit
-      allen Personen des gewählten Lehrers im Zeitraum an; sie heißt wie der Lehrer und steht in seinem Kalender. Bei mehreren Lehrern wählst du in jeder Gruppe unter <em>Termine im
-      Kalender von</em> den Lehrer; ihre Gruppentermine wandern dann in seinen Kalender. Zur Wahl stehen die Lehrer
+      mit <kbd>+ Gruppe</kbd> eine leere an. <kbd>Gruppe mit allen Schüler:innen dieser Lehrkraft</kbd> legt eine Gruppe mit
+      allen Personen der gewählten Lehrkraft im Zeitraum an; sie heißt wie die Lehrkraft und steht in ihrem Kalender. Bei mehreren Lehrkräften wählst du in jeder Gruppe unter <em>Termine im
+      Kalender von</em> die Lehrkraft; die Gruppentermine wandern dann in deren Kalender. Zur Wahl stehen die Lehrkräfte
       des Berichtszeitraums. Darunter zeigt eine Grafik die Altersverteilung aller Gruppen.
     </li>
     <li>
@@ -192,7 +197,7 @@
       Der <strong>Vorschlag</strong> erscheint als Grafik – je Gruppe eine Zeile mit einem Punkt je Person, der Spanne
       von der jüngsten bis zur ältesten und dem Durchschnitt als Raute – und als Liste. Du kannst die Gruppen
       benennen und speicherst sie mit <kbd>Als … neue Gruppen speichern</kbd>; <kbd>Verwerfen</kbd> ändert nichts.
-      Bei mehreren Lehrern wählst du vorher, in wessen Kalender die Gruppentermine stehen.
+      Bei mehreren Lehrkräften wählst du vorher, in wessen Kalender die Gruppentermine stehen.
     </li>
   </ul>
 </section>
@@ -206,7 +211,8 @@
   <h3>Ansicht</h3>
   <ul>
     <li>
-      Der Kalender gehört zum Lehrer, der oben rechts ausgewählt ist, und zeigt nur die Termine seiner Personen.
+      Der Kalender gehört zur Lehrkraft, die oben rechts ausgewählt ist (mit Server: dir), und zeigt nur die Termine
+      ihrer Personen.
     </li>
     <li>
       <strong>Zeitraster:</strong> Jeder Tag ist eine Spalte mit den Uhrzeiten links. Ein Termin steht auf der Höhe
@@ -219,13 +225,15 @@
     <li>
       <strong>Blättern:</strong> Mit den Pfeilen wechselst du die Woche, <kbd>Heute</kbd> springt zur aktuellen Woche,
       <em>Zum Beginn …</em> wählt einen Berichtszeitraum und springt in seine erste Woche. Liegt heute nicht im
-      Berichtszeitraum, zeigt der Kalender beim Öffnen dessen erste Woche.
+      Berichtszeitraum, zeigt der Kalender beim Öffnen dessen erste Woche. Eine Woche geht von Montag bis Sonntag. Nur ein
+      Berichtszeitraum von höchstens einer Woche (z. B. Mittwoch bis Dienstag) wird ab seinem ersten Tag gezeigt, so
+      steht er ganz auf dem Bildschirm.
     </li>
     <li>
-      <strong>Termine anderer Lehrer:</strong> Im Termin- und im Blocker-Formular wählst du unter <em>Lehrer</em>,
-      in wessen Kalender der Eintrag steht – vorausgewählt ist der aktive Lehrer. Über der Woche schaltest du
-      zwischen dem aktiven Lehrer und <em>Alle Lehrer</em> um: Dann stehen die Termine, Blocker und allgemeinen
-      Termine aller Lehrer mit dem Lehrernamen in der Woche und lassen sich anklicken und bearbeiten.
+      <strong>Termine anderer Lehrkräfte:</strong> Im Termin- und im Blocker-Formular wählst du unter <em>Lehrer:innen</em>,
+      in wessen Kalender der Eintrag steht – vorausgewählt ist die aktive Lehrkraft. Über der Woche schaltest du
+      zwischen der aktiven Lehrkraft und <em>Alle Lehrkräfte</em> um: Dann stehen die Termine, Blocker und allgemeinen
+      Termine aller Lehrer:innen mit dem Namen der Lehrkraft in der Woche und lassen sich anklicken und bearbeiten.
     </li>
     <li>
       <strong>Farben:</strong> In der Themenfarbe stehen geplante Termine ohne Stunde, <em>grün</em> Termine mit
@@ -237,13 +245,15 @@
   <h3>Termine</h3>
   <ul>
     <li>
-      <strong>Termin anlegen:</strong> <kbd>+ Termin</kbd> oben, <kbd>+</kbd> an einem Tag oder ein Klick auf eine
-      freie Stelle im Raster (dann mit dieser Uhrzeit, auf 15 Minuten abgerundet), dann Person oder
-      Gruppe, Datum, Beginn und Dauer wählen. Als Datum ist heute vorausgewählt – liegt heute nicht im
-      Berichtszeitraum, dessen erster Tag. <kbd>+ Gruppentermin</kbd> wählt gleich die erste Gruppe des Lehrers
-      vor (ohne Gruppen ist der Knopf gesperrt; Gruppen legst du unter „Stunden erfassen“ an). Bei einem neuen
-      Gruppentermin kannst du darunter weitere Gruppen anhaken, auch von anderen Lehrern: Jede bekommt einen Termin
-      zur selben Zeit im Kalender ihres Lehrers. Gruppentermine stehen als „Gruppe …“ mit gestricheltem Rand im
+      <strong>Termin anlegen:</strong> <kbd>+ Termin</kbd> oben oder <kbd>+</kbd> an einem Tag, dann Person oder
+      Gruppe, Datum, Beginn und Dauer wählen. Ein Klick auf eine freie Stelle im Raster legt dagegen einen
+      <em>allgemeinen Termin</em> für alle Lehrkräfte des Berichtszeitraums an, mit dieser Uhrzeit (auf 15 Minuten
+      abgerundet). Als Datum ist heute vorausgewählt – liegt heute nicht im
+      Berichtszeitraum, dessen erster Tag. <kbd>+ Gruppentermin</kbd> wählt gleich die erste Gruppe der Lehrkraft
+      vor (ohne Gruppen ist der Knopf gesperrt; Gruppen legst du unter „Stunden erfassen“ oder „Gruppenplanung“
+      an). Bei einem neuen
+      Gruppentermin kannst du darunter weitere Gruppen anhaken, auch von anderen Lehrkräften: Jede bekommt einen Termin
+      zur selben Zeit im Kalender ihrer Lehrkraft. Gruppentermine stehen als „Gruppe …“ mit gestricheltem Rand im
       Kalender.
     </li>
     <li>
@@ -255,16 +265,17 @@
     </li>
     <li>
       Einen Termin änderst oder löschst du, indem du ihn anklickst. Dort öffnet <kbd>Stunde bearbeiten</kbd> die
-      Stunde dieses Tages – oder legt sie mit Datum und Uhrzeit des Termins an. Termine mit erfasster Stunde sind
+      Stunde dieses Tages; gibt es sie noch nicht, legt <kbd>Stunde anlegen</kbd> sie mit Datum und Uhrzeit des
+      Termins an. Termine mit erfasster Stunde sind
       im Kalender mit „Stunde erfasst“ markiert.
     </li>
     <li>
-      <strong>Ausnahme:</strong> Unter „Personen anderer Lehrer“ kannst du auch eine Person eines anderen Lehrers
-      einplanen. Der Termin steht dann in deinem Kalender (mit „Schüler:in von …“), nicht in dem des anderen Lehrers,
+      <strong>Ausnahme:</strong> Unter „Personen anderer Lehrer:innen“ kannst du auch eine Person einer anderen Lehrkraft
+      einplanen. Der Termin steht dann in deinem Kalender (mit „Schüler:in von …“), nicht in dem der anderen Lehrkraft,
       und belegt deine Zeit.
     </li>
     <li>
-      Eine Person kann nicht gleichzeitig bei zwei Lehrern Einzelunterricht haben: Überschneidet sich ein neuer
+      Eine Person kann nicht gleichzeitig bei zwei Lehrkräften Einzelunterricht haben: Überschneidet sich ein neuer
       Termin mit einem anderen Einzeltermin der Person, fragt die App nach. „Nächster freier Termin“ und das
       automatische Einplanen lassen solche Zeiten aus; beim Füllen eines Zeitraums bleibt ein Slot dann frei.
       Überschneidungen mit Gruppenunterricht werden dagegen nur nach Möglichkeit vermieden.
@@ -281,22 +292,28 @@
       Blocker nicht, damit eine einmalige Abwesenheit keinen Wochentermin verhindert.
     </li>
     <li>
+      <strong>Verschieben:</strong> Einzel-, Gruppen- und allgemeine Termine ziehst du in der Woche an eine andere
+      Uhrzeit (auf 15 Minuten genau) oder an einen anderen Tag; mit dem Finger erst kurz halten, dann ziehen. Bei einer
+      Terminserie fragt die App, ob die ganze Serie wandern soll. Gehört der Termin zu einer erfassten Stunde, bekommt
+      die Stunde die neue Zeit.
+    </li>
+    <li>
       <strong>Allgemeine Termine:</strong> Mit <kbd>+ Allgemeiner Termin</kbd> trägst du einen Termin für mehrere
-      Lehrer ein, z. B. eine Konferenz – mit Bezeichnung, Ort, Datum, Beginn, Dauer und auf Wunsch wiederholt.
-      Vorausgewählt sind die Lehrer, die im Berichtszeitraum des Datums aktiv sind; du kannst einzelne abwählen oder
-      hinzunehmen. Der Termin steht im Kalender jedes ausgewählten Lehrers (umrandet) und in allen Kalender-PDFs und
-      der iCal-Datei – knapp mit Uhrzeit, Bezeichnung und Ort; die beteiligten Lehrer siehst du im Formular. Ist <em>Blockiert die Lehrer für die automatische Planung</em> angehakt (Standard), schlägt die
+      Lehrkräfte ein, z. B. eine Konferenz – mit Bezeichnung, Ort, Datum, Beginn, Dauer und auf Wunsch wiederholt.
+      Voreingestellt ist <em>Alle</em>: Der Termin gilt für alle Lehrkräfte des Berichtszeitraums, auch für solche, die
+      später dazukommen. Nimmst du den Haken weg, wählst du einzelne Lehrkräfte des Zeitraums aus. Der Termin steht im Kalender jeder ausgewählten Lehrkraft (umrandet) und in allen Kalender-PDFs und
+      der iCal-Datei – knapp mit Uhrzeit, Bezeichnung und Ort; die beteiligten Lehrkräfte siehst du im Formular. Ist <em>Blockiert die Lehrkräfte für die automatische Planung</em> angehakt (Standard), schlägt die
       App in dieser Zeit keine Termine vor – einmalige allgemeine Termine wie Blocker, Terminserien auch beim
-      wöchentlichen Einplanen. Änderungen und Löschen gelten für alle beteiligten Lehrer.
+      wöchentlichen Einplanen. Änderungen und Löschen gelten für alle beteiligten Lehrkräfte.
       <kbd>In Gruppentermine umwandeln …</kbd> im Formular macht daraus Gruppentermine: Jede angehakte Gruppe
-      (vorausgewählt die der beteiligten Lehrer) bekommt einen Termin zur selben Zeit und mit derselben
-      Wiederholung im Kalender ihres Lehrers; der allgemeine Termin wird gelöscht.
+      (vorausgewählt die der beteiligten Lehrkräfte) bekommt einen Termin zur selben Zeit und mit derselben
+      Wiederholung im Kalender ihrer Lehrkraft; der allgemeine Termin wird gelöscht.
     </li>
     <li>
       <strong>Allgemeine Termine importieren:</strong> <kbd>Termine importieren …</kbd> liest eine Excel- (.xlsx) oder
       CSV-Datei mit einer Zeile je Termin. Du ordnest die Spalten zu (Bezeichnung, Datum, Beginn, Ende oder Dauer,
-      Ort, Lehrer); Überschriften wie „Datum“ oder „Raum“ erkennt die App selbst. Mehrere Lehrer trennst du mit
-      Komma oder „und“, Vor- oder Nachname genügt, wenn er eindeutig ist; ohne Lehrer gilt der Termin für alle, die
+      Ort, Lehrkraft); Überschriften wie „Datum“ oder „Raum“ erkennt die App selbst. Mehrere Lehrkräfte trennst du mit
+      Komma oder „und“, Vor- oder Nachname genügt, wenn er eindeutig ist; ohne Lehrkraft gilt der Termin für alle, die
       am Tag im Berichtszeitraum aktiv sind. Die Vorschau zeigt jede Zeile; fehlerhafte Zeilen und Termine, die es
       schon gibt (gleiche Bezeichnung, gleiches Datum, gleicher Beginn), werden übersprungen. Hat die Datei eine
       Spalte „Art“ (wie die Tabelle aus dem Export), werden nur die Zeilen der Art „Allgemein“ übernommen. Mit
@@ -310,7 +327,7 @@
   <ul>
     <li>
       <strong>Unterrichtszeiten und Terminvorschläge:</strong> In der <a routerLink="/konfiguration">Konfiguration</a> legst du
-      bei jedem Lehrer fest, wann er an welchem Tag unterrichtet, und unter „Kalender“, wie lang ein Termin
+      bei jeder Lehrkraft fest, wann sie an welchem Tag unterrichtet, und unter „Kalender“, wie lang ein Termin
       standardmäßig ist und ob „Wiederholen“ bei neuen Terminen angehakt ist. Unter <a routerLink="/personen">Personen</a> steht bei
       einer Person dann der nächste freie Termin; <kbd>Termin eintragen</kbd> trägt sie in diesen Slot ein. Die Unterrichtszeiten werden
       dafür in Slots der Standardlänge geteilt; eine Serie muss an jedem ihrer Tage frei sein.
@@ -322,32 +339,35 @@
       Zahl der Personen, aufgerundet, damit alle Stunden vergeben werden können (höchstens einer am Tag). Nach <kbd>Planung starten</kbd> zeigt das Gerät
       nur noch die Namen: antippen, freie Zeiten antippen (nochmal tippen gibt sie frei), <kbd>Fertig</kbd>. Zeiten, in
       denen die Person Gruppenunterricht hat, sind mit ⚠ und dem Namen der Gruppe markiert, aber wählbar – sonst fänden
-      Lehrkräfte, deren Schüler:innen fast alle in Gruppen sind, kaum Einzelschüler:innen. Einzelunterricht bei anderen Lehrern
-      und ein zweiter Termin am selben Tag sind ausgeschlossen; belegte Zeiten und fremde Namen sind nicht zu sehen. Nach 90 Sekunden ohne Berührung springt die Ansicht zurück zu den Namen. <em>Planung beenden</em> (unten,
+      Lehrkräfte, deren Schüler:innen fast alle in Gruppen sind, kaum Einzelschüler:innen. Einzelunterricht bei anderen Lehrkräften
+      und ein zweiter Termin am selben Tag sind ausgeschlossen; belegte Zeiten und fremde Namen sind nicht zu sehen. In der Namensliste
+      steht der Vorname mit dem ersten Buchstaben des Nachnamens; wäre das nicht eindeutig, der volle Name, bei
+      Gleichnamigen mit „sen.“/„jun.“ oder dem Geburtsjahr. Nach 90 Sekunden ohne Berührung springt die Ansicht zurück zu den Namen. <em>Planung beenden</em> (unten,
       mit der PIN, falls du eine vergeben hast) führt zurück in die App. Für Runden startest du erst mit einer kleinen
       Höchstzahl und später erneut mit einer größeren. Pro Lehrkraft am besten nur ein Gerät gleichzeitig.
     </li>
     <li>
-      <strong>Mehrere Lehrkräfte, Lehrer selbst wählen:</strong> Beim Start der Planung hakst du an, welche
-      Lehrkräfte des Berichtszeitraums dabei sind (vorausgewählt ist der aktive Lehrer, du selbst musst nicht dabei
+      <strong>Mehrere Lehrkräfte, Lehrkraft selbst wählen:</strong> Beim Start der Planung hakst du an, welche
+      Lehrkräfte des Berichtszeitraums dabei sind (vorausgewählt ist die aktive Lehrkraft, du selbst musst nicht dabei
       sein). Auf dem Tablet erscheinen die Personen aller angehakten Lehrkräfte. Sind mehrere angehakt, wählt eine
-      Person, die im Berichtszeitraum noch keinen Termin hat, zuerst ihren Lehrer: Sie tippt auf ihn, sieht seine
-      freien Zeiten und kann noch zurück; mit ihrem ersten Termin steht der Lehrer für den Zeitraum fest. Wer schon
-      einen Termin hat, kommt direkt zu den Zeiten seines Lehrers.
+      Person, die im Berichtszeitraum noch keinen Termin hat, zuerst ihre Lehrkraft: Sie tippt darauf, sieht deren
+      freie Zeiten und kann noch zurück; mit ihrem ersten Termin steht die Lehrkraft für den Zeitraum fest. Wer schon
+      einen Termin hat, kommt direkt zu den Zeiten der eigenen Lehrkraft.
     </li>
     <li>
-      <strong>Automatisch einplanen:</strong> verteilt die Personen des oben gewählten Lehrers, die noch keine
-      laufende Terminserie haben, auf seine freien Unterrichtszeiten – ab der gewählten Woche jede Woche bis zum
+      <strong>Automatisch einplanen:</strong> Mit <em>Wöchentliche Termine</em> verteilt die App die Personen der oben
+      gewählten Lehrkraft, die noch keine
+      laufende Terminserie haben, auf ihre freien Unterrichtszeiten – ab der gewählten Woche jede Woche bis zum
       Ende des Berichtszeitraums. Voreingestellt ist der nächste Montag oder, liegt er nicht im Berichtszeitraum,
       dessen erster Tag. Vorrang
-      hat, möglichst viele Slots zu füllen. Überschneidungen mit Gruppenunterricht bei anderen Lehrern werden nach
+      hat, möglichst viele Slots zu füllen. Überschneidungen mit Gruppenunterricht bei anderen Lehrkräften werden nach
       Möglichkeit vermieden; lässt sich eine nicht vermeiden, zeigt der Vorschlag sie mit ⚠ an. Mitglieder derselben
       Gruppe plant die App wahlweise <em>zeitnah hintereinander</em> oder <em>gemischt mit anderen</em> ein.
       Eingetragen wird erst, wenn du den Vorschlag bestätigst.
     </li>
     <li>
       Mit <em>Einmalige Termine in einem Zeitraum</em> (höchstens 31 Tage) füllt die App alle freien Slots im
-      Zeitraum mit einmaligen Terminen; alle Personen des Lehrers sind vorausgewählt und können mehrere Termine
+      Zeitraum mit einmaligen Terminen; alle Personen der Lehrkraft sind vorausgewählt und können mehrere Termine
       bekommen. Dabei werden Überschneidungen mit Gruppenunterricht vermieden, die Termine möglichst gleichmäßig
       auf alle verteilt und nach Möglichkeit niemand zweimal am selben Tag eingeplant (vorhandene Termine zählen
       mit; ein zweiter Termin am Tag ist im Vorschlag markiert). Mit
@@ -362,37 +382,38 @@
   <ul>
     <li>
       <strong>Unterricht je Person:</strong> Unter der Woche zeigt ein Balken je Person, wie viel Unterricht im
-      gewählten Zeitraum geplant ist (Einzel- und Gruppenunterricht, bei allen Lehrern), sortiert nach Dauer. Die
-      Linie markiert den Durchschnitt; Personen ohne Termine stehen am Ende.
+      gewählten Zeitraum geplant ist (Einzel- und Gruppenunterricht, bei allen Lehrkräften), sortiert nach Dauer. Die
+      Linie markiert den Durchschnitt; Personen ohne Termine stehen am Ende. Mit <em>Personen aller Lehrkräfte</em>
+      siehst du auch die Personen der anderen Lehrkräfte.
     </li>
     <li>
       <strong>Termine als PDF:</strong> Unten wählst du einen Zeitraum (anfangs die angezeigte Woche) und die
-      Darstellung. Die <em>Liste</em> zeigt für jeden Lehrer mit Name und Raum seine Termine, Tag für Tag. Die
-      <em>Liste nur mit Einzelunterricht</em> enthält alle Lehrer, aber nur Einzelunterricht; jeder Lehrer beginnt
-      auf einer neuen Seite, seine Tage folgen fortlaufend. Die <em>Liste ohne Einzelunterricht</em> zeigt nur Gruppentermine und allgemeine Termine aller Lehrer, Tag für Tag,
-      jeweils mit Raum: bei Gruppen der Raum des Lehrers, bei allgemeinen Terminen ihr Ort; der Lehrer steht nur
-      dabei, wenn es genau einer ist. Blocker stehen nicht darin. In der <em>Liste</em> und der <em>Liste ohne
-      Einzelunterricht</em> beginnt jeder Tag auf einer neuen Seite; alle Seiten tragen dieselbe große Überschrift; in der <em>Liste</em> steht der Lehrer mit Raum auf jeder Seite darüber.
+      Darstellung. Die <em>Liste</em> zeigt für jede Lehrkraft mit Name und Raum ihre Termine, Tag für Tag. Die
+      <em>Liste nur mit Einzelunterricht</em> enthält alle Lehrkräfte, aber nur Einzelunterricht; jede Lehrkraft beginnt
+      auf einer neuen Seite, ihre Tage folgen fortlaufend. Die <em>Liste ohne Einzelunterricht</em> zeigt nur Gruppentermine und allgemeine Termine aller Lehrkräfte, Tag für Tag,
+      jeweils mit Raum: bei Gruppen der Raum der Lehrkraft, bei allgemeinen Terminen ihr Ort; die Lehrkraft steht nur
+      dabei, wenn es genau eine ist. Blocker stehen nicht darin. In der <em>Liste</em> und der <em>Liste ohne
+      Einzelunterricht</em> beginnt jeder Tag auf einer neuen Seite; alle Seiten tragen dieselbe große Überschrift; in der <em>Liste</em> steht die Lehrkraft mit Raum auf jeder Seite darüber.
       Die Überschriften, die Fußzeile, den Hinweis „keine Termine“ und die Bezeichnung der Blocker legst du unter
       <a routerLink="/konfiguration">Konfiguration</a> → Kalender bei <em>Texte der Kalender-PDFs</em> fest. Der
-      <em>Wochenplan als Tabelle</em> zeigt im Querformat je Lehrer und Woche eine Seite mit den Tagen als Spalten;
+      <em>Wochenplan als Tabelle</em> zeigt im Querformat je Lehrkraft und Woche eine Seite mit den Tagen als Spalten;
       die Unterrichtszeiten sind hell hinterlegt. Jede Woche beginnt am Wochentag des Zeitraum-Beginns; Tage nach dem
-      Zeitraum-Ende und Wochen ohne Termine fallen weg. Der <em>Tagesplan aller Lehrer</em> zeigt je Tag eine Seite
-      mit den Lehrern als Spalten – alle, die an dem Tag im Berichtszeitraum aktiv sind oder Termine haben.
-      Allgemeine Termine reichen über die Spalten ihrer Lehrer; Tage ohne Termine fallen weg. Alle drei enthalten
-      immer alle Lehrer, nicht nur den oben ausgewählten.
+      Zeitraum-Ende und Wochen ohne Termine fallen weg. Der <em>Tagesplan aller Lehrkräfte</em> zeigt je Tag eine Seite
+      mit den Lehrer:innen als Spalten – alle, die an dem Tag im Berichtszeitraum aktiv sind oder Termine haben.
+      Allgemeine Termine reichen über die Spalten ihrer Lehrer:innen; Tage ohne Termine fallen weg. Alle Darstellungen
+      enthalten immer alle Lehrer:innen, nicht nur die oben ausgewählte Lehrkraft.
     </li>
     <li>
-      <strong>Termine als Tabelle:</strong> Unten im Kalender exportierst du die Termine aller Lehrer eines Zeitraums
+      <strong>Termine als Tabelle:</strong> Unten im Kalender exportierst du die Termine aller Lehrkräfte eines Zeitraums
       (voreingestellt: der Berichtszeitraum) als CSV-Datei, die sich in Excel öffnet: eine Zeile je Termin und Tag mit
-      Art, Bezeichnung, Datum, Wochentag, Beginn, Ende, Dauer, Ort und Lehrer. Welche Arten hineinkommen
+      Art, Bezeichnung, Datum, Wochentag, Beginn, Ende, Dauer, Ort und Lehrkraft. Welche Arten hineinkommen
       (Einzelunterricht, Gruppentermine, allgemeine Termine, Blocker), wählst du per Haken. Einzel- und Gruppenunterricht
-      stehen mit dem Raum ihres Lehrers. Die Spalten passen zu <kbd>Termine importieren …</kbd>: So kannst du allgemeine
+      stehen mit dem Raum ihrer Lehrkraft. Die Spalten passen zu <kbd>Termine importieren …</kbd>: So kannst du allgemeine
       Termine in Excel bearbeiten oder ergänzen und wieder einlesen; vorhandene Termine werden dabei nicht doppelt
       angelegt.
     </li>
     <li>
-      <strong>Termine im Systemkalender:</strong> Ganz unten erstellst du eine iCal-Datei (.ics) für einen Lehrer
+      <strong>Termine im Systemkalender:</strong> Ganz unten erstellst du eine iCal-Datei (.ics) für eine Lehrkraft
       oder alle, auf Wunsch mit Blockern. Voreingestellt ist der Zeitraum von dieser Woche bis zum Ende des
       Berichtszeitraums. Am Rechner öffnest du die Datei mit Outlook oder dem Apple-Kalender, bei Google Kalender über
       Einstellungen → Importieren; auf dem iPhone fragt Safari direkt, ob die Termine in den Kalender sollen. In der
@@ -403,13 +424,13 @@
     </li>
     <li>
       <strong>Kalender-Abo:</strong> Mit Server gibt es darunter <kbd>Abo einrichten</kbd>. Die Adresse trägst du einmal
-      in deiner Kalender-App ein (Google-Kalender: <em>Weitere Kalender → Per URL</em>; Outlook: <em>Aus dem Internet
-      abonnieren</em>; iPhone: <em>Einstellungen → Kalender → Accounts → Abonnierten Kalender hinzufügen</em>). Danach
+      in deiner Kalender-App ein (Google-Kalender: <em>Weitere Kalender → Per URL</em>; Outlook: <em>Kalender
+      hinzufügen → Aus dem Internet abonnieren</em>; iPhone: <em>Einstellungen → Kalender → Accounts → Abonnierten Kalender hinzufügen</em>). Danach
       holt sie sich deine Termine selbst, auch geänderte und gelöschte: Einzel- und Gruppenunterricht, allgemeine
       Termine und Blocker, von vier Wochen zurück bis zum Ende des Berichtszeitraums. Den Kalender schickt die App bei
       jedem Abgleich an den Server; wie oft die Kalender-App nachsieht, bestimmt sie selbst (Google-Kalender nur etwa
       alle 8 bis 24 Stunden). Wer die Adresse kennt, sieht deine Termine ohne Passwort; <kbd>Neue Adresse
-      erzeugen</kbd> macht die alte sofort ungültig.
+      erzeugen</kbd> macht die alte sofort ungültig, <kbd>Abo beenden</kbd> schaltet das Abo ab.
     </li>
   </ul>
 </section>
@@ -428,18 +449,19 @@
       gerade gilt, wählst du je Gerät oben in der Leiste (auch hier oder unter „Export &amp; Sicherung“); ohne Wahl
       gilt der, in dem heute liegt – zwischen zwei Zeiträumen (z. B. in den Ferien) der nächste. Er legt fest, welche Personen und Gruppen aktiv sind, welche Stunden im PDF stehen, für welche Stunden die Haken im
       allgemeinen Teil gelten und welche Varianten der festen Inhalte greifen. <code>{{ '{zeitraum}' }}</code> setzt
-      seinen Namen ins PDF. Gibt es mehrere Lehrer, hakst du je Zeitraum die <em>aktiven Lehrer</em> an: Sie sind bei
-      allgemeinen Terminen vorausgewählt und stehen im Tagesplan aller Lehrer. Ein neuer Lehrer ist in laufenden und
-      künftigen Zeiträumen gleich aktiv; ein neuer Zeitraum übernimmt die Lehrer des vorigen, auch in ihrer
-      Reihenfolge. Mit <kbd>↑</kbd>/<kbd>↓</kbd> legst du sie fest: In dieser Reihenfolge stehen die Lehrer in
-      Auswahllisten, Filtern, im Tagesplan und in den Terminlisten, den ersten (z. B. die Leitung) also immer vorne.
+      seinen Namen ins PDF. Gibt es mehrere Lehrer:innen, hakst du je Zeitraum die <em>aktiven Lehrer:innen</em> an: Sie sind bei
+      allgemeinen Terminen vorausgewählt und stehen im Tagesplan aller Lehrkräfte. Eine neue Lehrkraft ist in laufenden und
+      künftigen Zeiträumen gleich aktiv (mit Server nur in deinen); ein neuer Zeitraum übernimmt die Lehrer:innen des vorigen, auch in ihrer
+      Reihenfolge. Mit <kbd>↑</kbd>/<kbd>↓</kbd> legst du sie fest: In dieser Reihenfolge stehen die Lehrer:innen in
+      Auswahllisten, Filtern, im Tagesplan und in den Terminlisten, den/die ersten (z. B. die Leitung) also immer vorne.
     </li>
     <li>
       <strong>Personen je Berichtszeitraum:</strong> Personen gehören zu den Berichtszeiträumen, in denen sie Unterricht
-      haben, und können in jedem einen anderen Lehrer haben. Angezeigt werden nur die des Zeitraums, den du oben in
-      der Leiste wählst; in anderen Zeiträumen sind sie inaktiv, ihre Stunden bleiben erhalten. Neue Personen gehören
+      haben, und können in jedem eine andere Lehrkraft haben. Angezeigt werden nur die des Zeitraums, den du oben in
+      der Leiste wählst; in anderen Zeiträumen sind sie inaktiv, ihre Stunden bleiben erhalten. Wechselst du den
+      Zeitraum, ist keine Person mehr ausgewählt. Neue Personen gehören
       zum gewählten Zeitraum, ein neuer Zeitraum beginnt also mit einer leeren Liste. Legst du dort eine Person an, die
-      es schon gibt (gleicher Name), verwendet die App die vorhandene weiter – mit ihrem bisherigen Lehrer und ihren
+      es schon gibt (gleicher Name), verwendet die App die vorhandene weiter – mit ihrer bisherigen Lehrkraft und ihren
       früheren Stunden, sodass frühere Berichte erhalten bleiben. Unter <a routerLink="/personen">Personen</a> steht bei jeder
       Person, in welchen Berichtszeiträumen sie ist; dort übernimmst du sie auch in einen Zeitraum oder nimmst sie
       heraus.
@@ -462,22 +484,22 @@
     </li>
     <li>
       <strong>Unterrichtszeiten je Berichtszeitraum:</strong> Bei jedem Berichtszeitraum (Konfiguration →
-      Allgemein) wählst du unter <em>Unterrichtszeiten</em>, ob <em>jeder Lehrer eigene</em> hat oder ob sie
-      <em>für alle Lehrer gleich</em> sind. Gemeinsame Zeiten planst du direkt dort beim Zeitraum; sie beginnen mit
-      den Zeiten des ersten aktiven Lehrers. Schaltest du zurück, verwirft die App sie nach Rückfrage, und es gelten
-      wieder die Zeiten der einzelnen Lehrer, die dabei unverändert geblieben sind.
+      Allgemein) wählst du unter <em>Unterrichtszeiten</em>, ob <em>jede Lehrkraft eigene</em> hat oder ob sie
+      <em>für alle Lehrer:innen gleich</em> sind. Gemeinsame Zeiten planst du direkt dort beim Zeitraum; sie beginnen mit
+      den Zeiten der ersten aktiven Lehrkraft. Schaltest du zurück, verwirft die App sie nach Rückfrage, und es gelten
+      wieder die Zeiten der einzelnen Lehrer:innen, die dabei unverändert geblieben sind.
     </li>
     <li>
-      <strong>Eigene Zeiten je Lehrer:</strong> Oben im Tab „Lehrer“ wählst du, für welchen Berichtszeitraum du die
+      <strong>Eigene Zeiten je Lehrer:in:</strong> Oben im Tab „Lehrer:innen“ wählst du, für welchen Berichtszeitraum du Ort und
       Unterrichtszeiten bearbeitest (anfangs der auf diesem Gerät aktive), z. B. einen neuen Stundenplan im
-      2. Halbjahr. Hat der Zeitraum gemeinsame Zeiten, steht dort stattdessen ein Hinweis. Hat ein Lehrer in einem
-      Zeitraum noch keine eigenen Zeiten (z. B. aus einer älteren Version), gelten seine Standardzeiten; sobald du
-      dort etwas änderst, bekommt er eigene.
+      2. Halbjahr. Hat der Zeitraum gemeinsame Zeiten, steht dort stattdessen ein Hinweis. Hat eine Lehrkraft in einem
+      Zeitraum noch keine eigenen Zeiten (z. B. aus einer älteren Version), gelten ihre Standardzeiten; sobald du
+      dort etwas änderst, bekommt sie eigene.
     </li>
     <li>
       Kalender, Terminvorschläge, automatisches Einplanen und die Kalender-PDFs nehmen an jedem Tag die Zeiten des
       Berichtszeitraums, in dem er liegt. Ein neuer Berichtszeitraum übernimmt die Zeiten des vorigen – gemeinsame
-      ebenso wie die der einzelnen Lehrer.
+      ebenso wie die der einzelnen Lehrer:innen.
     </li>
   </ul>
 </section>
@@ -488,11 +510,16 @@
     <img src="help/konfiguration.jpg" alt="Seite „Konfiguration“ mit Überschrift, Themenfarbe und Instrumenten" />
     <figcaption>
       Hier richtest du ein, was du im Unterricht anklicken kannst und was im PDF steht. Links wählst du den
-      Bereich: Allgemein, Abschnitte, Feste Inhalte, Kopf- &amp; Fußzeile, Instrumente, Lehrer und Kalender.
+      Bereich: Allgemein, Abschnitte, Feste Inhalte, Gruppen-Abschnitte, Gruppen-Inhalte, Kopf- &amp; Fußzeile,
+      Instrumente, Lehrer:innen und Kalender.
     </figcaption>
   </figure>
   <ul>
-    <li><strong>Überschrift und Themenfarbe</strong> bestimmen, wie das PDF und die App aussehen.</li>
+    <li>
+      <strong>Farbe:</strong> Unter <em>Allgemein</em> bestimmt <em>Deine Farbe für App und PDF</em>, wie die App
+      und die PDFs aussehen. Die Farbe ist persönlich: Sie gilt für die aktive Lehrkraft (mit Server: für dich) und
+      die PDFs, die sie erstellt; andere Lehrkräfte behalten ihre eigene.
+    </li>
     <li>
       <strong>PDFs in Schwarzweiß</strong> (ebenfalls unter <em>Allgemein</em>) spart Tinte: Alle PDFs, auch die
       Kalender-PDFs, kommen dann in Grautönen, farbige Flächen werden schmale Linien und Bilder werden grau. Die App
@@ -509,10 +536,11 @@
     </li>
     <li>
       <strong>Feste Inhalte</strong> stehen in jedem PDF, zum Beispiel eine Anrede am Anfang, ein Gruß oder
-      ein Logo am Ende. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument oder
+      ein Logo am Ende. Oben in diesem Bereich legst du auch die <em>Überschrift im PDF</em> fest; sie steht auf
+      jedem PDF, auch dem Gruppen-PDF. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument oder
       Berichtszeitraum austauschen, z. B. einen Gruß in die Sommerferien nur im 2. Halbjahr. Ist bei mehreren
       Bedingungen etwas angehakt, muss alles passen; die erste passende Variante gilt. Für deine eigenen Personen
-      allein gibt es „Nur für mich“ (siehe unten); Varianten für andere Lehrer legt jeder Lehrer selbst an.
+      allein gibt es „Nur für mich“ (siehe unten); Varianten für andere Lehrkräfte legt jede Lehrkraft selbst an.
     </li>
     <li>
       <strong>Gruppen-Abschnitte</strong> und <strong>Gruppen-Inhalte</strong> funktionieren genauso, gelten aber für
@@ -522,18 +550,26 @@
     </li>
     <li>
       <strong>Eigene Abschnitte und Inhalte:</strong> Mit <em>Nur für mich</em> gehört ein Abschnitt oder fester
-      Inhalt dem gewählten Lehrer (oben in der Leiste). Er erscheint dann nur beim Erfassen und im PDF seiner
-      Personen und Gruppen und ist farbig markiert; andere Lehrer sehen ihn in der Konfiguration nicht. Ohne Haken
+      Inhalt der gewählten Lehrkraft (oben in der Leiste). Er erscheint dann nur beim Erfassen und im PDF ihrer
+      Personen und Gruppen und ist farbig markiert; andere Lehrkräfte sehen ihn in der Konfiguration nicht. Ohne Haken
       gilt er wieder für alle. Auch eine <em>Variante</em> eines gemeinsamen Inhalts kann „Nur für mich“ sein: Sie
       ersetzt den Inhalt nur bei deinen Personen bzw. Gruppen (zusätzlich zu ihren Instrumenten und Zeiträumen) und
-      bleibt für andere Lehrer verborgen. Ältere Varianten mit angehakten Lehrern wurden zu eigenen Varianten dieser
-      Lehrer. Wird ein Lehrer gelöscht, verschwinden auch seine eigenen Abschnitte,
+      bleibt für andere Lehrkräfte verborgen. Wird eine Lehrkraft gelöscht, verschwinden auch ihre eigenen Abschnitte,
       Inhalte und Varianten.
+    </li>
+    <li>
+      <strong>Feste Inhalte mit Server:</strong> Mit Server änderst du nur deine eigenen festen Inhalte und Varianten.
+      Was für alle gilt – der Standardinhalt und gemeinsame Varianten –, ist nur zu sehen. Neue Inhalte und Varianten
+      gehören automatisch dir. Eine eigene Variante ohne angehakte Bedingung ersetzt den Inhalt bei allen deinen
+      Personen bzw. Gruppen. Beim ersten Abgleich mit dem Server wurden bisher geänderte gemeinsame Texte und
+      gemeinsame Varianten zu eigenen Varianten jeder Lehrkraft; der gemeinsame Inhalt steht wieder auf der Vorlage,
+      in den PDFs ändert sich dadurch nichts. Ohne Server lässt sich weiterhin alles bearbeiten.
     </li>
     <li>
       <strong>Kopf- und Fußzeile:</strong> Hier legst du den Untertitel unter der Überschrift, die Kopfzeile ab
       der zweiten Seite und die Fußzeile fest, zum Beispiel mit deinem Namen links und der Seitenzahl rechts.
-      Ein leeres Feld blendet die Zeile aus. Darunter kannst du je ein <strong>Logo</strong> für Kopf- und Fußzeile
+      Ein leeres Feld blendet die Zeile aus. <em>Infozeile anzeigen</em> schaltet die Zeile mit Anzahl der Stunden
+      und Stand (bei nur einer Stunde ihr Datum) ein oder aus. Darunter kannst du je ein <strong>Logo</strong> für Kopf- und Fußzeile
       hochladen und Höhe und Ausrichtung wählen. Voreingestellt ist oben rechts das Logo der App; entfernst du es,
       holt <kbd>App-Logo verwenden</kbd> es zurück. Das Kopflogo steht auf der ersten Seite neben der Überschrift
       (mittig darüber) und kleiner neben der Kopfzeile der Folgeseiten, das Fußlogo auf jeder Seite in der
@@ -546,22 +582,24 @@
       Anlegen einer Person schon ausgewählt.
     </li>
     <li>
-      <strong>Lehrer:</strong> Jeder Lehrer hat einen Namen, ein Instrument, einen Ort und eigene Unterrichtszeiten.
+      <strong>Lehrer:innen:</strong> Jede Lehrkraft hat einen Namen, ein Instrument, einen Ort und eigene Unterrichtszeiten.
+      Ihre Unterrichtszeiten ändert jede Lehrkraft nur selbst (die aktive bzw. angemeldete); die der anderen sind nur zu
+      sehen. Gemeinsame Zeiten eines Berichtszeitraums bearbeiten dessen Lehrkräfte unter „Allgemein“.
       Ort und Unterrichtszeiten gelten je Berichtszeitraum (Auswahl oben im Tab); ein neuer Zeitraum übernimmt sie aus
       dem vorigen. Im Kalender, in den Terminlisten, im Kalender-Abo und bei <code>{{ '{ort}' }}</code> steht der Ort
       des Zeitraums, in dem der Termin bzw. der Bericht liegt.
-      Jede Person gehört zu einem Lehrer; ihre Termine stehen in seinem Kalender. Gibt es mehrere Lehrer, wählst
-      du oben rechts in der Leiste aus, wer gerade arbeitet. Mit Server bist du immer der Lehrer, als der du dich
+      Jede Person gehört zu einer Lehrkraft; die Termine stehen in ihrem Kalender. Gibt es mehrere Lehrer:innen, wählst
+      du oben rechts in der Leiste aus, wer gerade arbeitet. Mit Server bist du immer die Lehrkraft, als die du dich
       angemeldet hast; dort steht dann nur dein Name. Kalender, „Heute geplant“ und neue Personen richten
-      sich danach; den Lehrer einer Person änderst du unter
-      <a routerLink="/personen">Personen</a>. <kbd>⧉</kbd> dupliziert einen
-      Lehrer: Die Kopie steht direkt darunter, heißt „… (Kopie)“ und hat dasselbe Instrument, denselben Ort,
+      sich danach; die Lehrkraft einer Person änderst du unter
+      <a routerLink="/personen">Personen</a>. <kbd>⧉</kbd> dupliziert eine
+      Lehrkraft: Die Kopie steht direkt darunter, heißt „… (Kopie)“ und hat dasselbe Instrument, denselben Ort,
       dieselben Unterrichtszeiten und dieselben Berichtszeiträume; Personen, Termine und Textvarianten bleiben beim
       Original.
     </li>
     <li>
       <strong>Standardunterrichtszeiten:</strong> Im Tab „Kalender“ legst du eine Vorlage für einen Unterrichtstag
-      fest, z. B. 14:00–18:30. Bei einem Lehrer übernimmt <kbd>Standard</kbd> sie auf einen Wochentag; neue Lehrer
+      fest, z. B. 14:00–18:30. Bei einer Lehrkraft übernimmt <kbd>Standard</kbd> sie auf einen Wochentag; neue Lehrer:innen
       bekommen sie von Montag bis Freitag.
     </li>
     <li>Mit den Pfeilen änderst du die Reihenfolge – so erscheinen die Inhalte auch im PDF.</li>
@@ -614,25 +652,27 @@
     </li>
     <li>
       Im PDF stehen nacheinander: die festen Inhalte für den Anfang, der allgemeine Teil, die Stunden als
-      Zeitleiste und die festen Inhalte für das Ende. Bei nur einer Stunde steht ihr Datum oben im Kopf.
+      Zeitleiste und die festen Inhalte für das Ende. Bei nur einer Stunde steht ihr Datum oben in der Infozeile.
     </li>
     <li>
       <strong>Daten exportieren</strong> lädt ein ZIP mit allen Personen, Stunden, Terminen und der
-      Konfiguration herunter: <code>konfiguration.json</code> für alles Gemeinsame, je Lehrer eine Datei
-      <code>lehrer-….json</code> mit seinen Textvarianten und Blockern und je Berichtszeitraum und Lehrer eine Datei
-      <code>zeitraum-….json</code> mit den Personen, Gruppen, Stunden und Terminen dieses Zeitraums; die allgemeinen
-      Termine stehen in <code>allgemeine-termine.json</code>. <strong>Daten importieren</strong> stellt eine
+      Konfiguration herunter: <code>konfiguration.json</code> für alles Gemeinsame, je Lehrkraft eine Datei
+      <code>lehrer-….json</code> mit ihren Textvarianten und Blockern, je Berichtszeitraum eine Datei
+      <code>berichtszeitraum-….json</code> mit Name, Daten, Lehrkräften, Unterrichtszeiten, Orten und seinen allgemeinen
+      Terminen und je Berichtszeitraum und Lehrkraft eine Datei <code>zeitraum-….json</code> mit den Personen, Gruppen,
+      Stunden und Terminen dieses Zeitraums; allgemeine Termine außerhalb aller Zeiträume stehen in
+      <code>allgemeine-termine.json</code>. <strong>Daten importieren</strong> stellt eine
       Sicherung (ZIP oder ältere JSON-Datei) wieder her und ersetzt dabei alles, was gerade in der App ist.
     </li>
     <li>
       <strong>Sicherung eines Berichtszeitraums:</strong> <kbd>Nur „…“ exportieren</kbd> sichert Konfiguration und
-      Lehrer sowie Personen, Gruppen und Termine nur des gewählten Zeitraums. Gib sie einem Lehrer, der in diesem
-      Zeitraum neu dazukommt: Er spielt sie beim ersten Start im Willkommensdialog ein, der Zeitraum ist dann gewählt,
-      und er wählt sich aus oder legt sich mit Name und Instrument neu an. Auf einem Gerät mit Daten ersetzt auch
+      Lehrkräfte sowie Personen, Gruppen und Termine nur des gewählten Zeitraums. Gib sie einer Lehrkraft, die in diesem
+      Zeitraum neu dazukommt: Sie spielt sie beim ersten Start im Willkommensdialog ein, der Zeitraum ist dann gewählt,
+      und man wählt sich aus oder legt sich mit Name und Instrument neu an. Auf einem Gerät mit Daten ersetzt auch
       diese Sicherung alles – darauf weist die App vorher hin.
     </li>
     <li>
-      <strong>Server:</strong> Über einen Unterrichtsfeedback-Server teilen sich mehrere Lehrer und Geräte die Daten
+      <strong>Server:</strong> Über einen Unterrichtsfeedback-Server teilen sich mehrere Lehrkräfte und Geräte die Daten
       (siehe unten). Eigene Änderungen schickt die App kurz nach der Eingabe, Änderungen anderer übernimmt sie beim
       Start, beim Zurückkehren zur App und alle 20 Sekunden. Nur wenn dieselben Daten hier und auf einem anderen
       Gerät geändert wurden, fragt die App, welche Fassung gilt.
@@ -648,16 +688,18 @@
       In der <strong>Android-App</strong> gibt es statt <kbd>PDF erstellen</kbd> zwei Knöpfe:
       <kbd>PDF öffnen</kbd> zeigt das PDF direkt in deiner PDF-App an, <kbd>PDF teilen</kbd> öffnet den
       Teilen-Dialog. Dort kannst du die Datei zum Beispiel per Mail verschicken oder in Google Drive oder
-      unter „Dateien“ speichern. Auch die Datensicherung läuft in der App über den Teilen-Dialog.
+      unter „Dateien“ speichern. Auch die Datensicherung läuft in der App über den Teilen-Dialog. Gibt es eine neue
+      Version der App, weist sie oben darauf hin; der Link führt zu Neuerungen und Download, <kbd>Ausblenden</kbd>
+      blendet den Hinweis bis zur nächsten Version aus.
     </li>
   </ul>
 
   <h3>Mit einem Server arbeiten</h3>
   <ul>
     <li>
-      <strong>Einladungscode:</strong> Jeder Lehrer braucht ein Konto. Den Code für den ersten Lehrer erzeugt die
-      Administration auf dem Server; weitere Lehrer lädt jeder Lehrer selbst ein: <a routerLink="/konfiguration">Konfiguration</a>
-      → Lehrer → Lehrer anlegen → <kbd>Einladungscode erzeugen</kbd>. Der Code enthält die Adresse des Servers, gilt
+      <strong>Einladungscode:</strong> Jede Lehrkraft braucht ein Konto. Den Code für die erste Lehrkraft erzeugt die
+      Administration auf dem Server; weitere Lehrkräfte lädt jede Lehrkraft selbst ein: <a routerLink="/konfiguration">Konfiguration</a>
+      → Lehrer:innen → Lehrkraft anlegen → <kbd>Einladungscode erzeugen</kbd>. Der Code enthält die Adresse des Servers, gilt
       einmal und 14 Tage.
     </li>
     <li>
@@ -670,10 +712,15 @@
       <strong>Weitere Geräte:</strong> Auf demselben Weg mit <em>Anmelden</em>, Benutzername und Passwort.
     </li>
     <li>
-      <strong>Wer sieht was?</strong> Konfiguration, Lehrer und allgemeine Termine sehen alle. Personen, Gruppen,
-      Stunden und Termine eines Berichtszeitraums sehen nur die Lehrer, die dort als aktive Lehrer eingetragen sind.
-      Berichtszeiträume anlegen dürfen alle; ändern, wer dort mitmacht, oder einen Zeitraum löschen dürfen nur
-      dessen Lehrer.
+      <strong>Wer sieht was?</strong> Die gemeinsame Konfiguration und allgemeine Termine außerhalb der
+      Berichtszeiträume sehen alle. Andere Lehrkräfte siehst du nur, wenn ihr mindestens einen Berichtszeitraum
+      teilt; legst du eine Lehrkraft an, die es so verborgen schon gibt, nimmt die App die vorhandene in deine
+      laufenden Zeiträume auf, statt sie doppelt anzulegen. Ein Berichtszeitraum mit allem, was dazugehört – Name, Daten, Lehrkräfte,
+      Unterrichtszeiten und Orte darin, seine allgemeinen Termine, Personen, Gruppen, Stunden und Termine –, ist nur für
+      die Lehrkräfte sichtbar, die dort eingetragen sind. Die anderen sehen unter Konfiguration → Allgemein nur,
+      <em>dass</em> es weitere Zeiträume gibt. Berichtszeiträume anlegen dürfen alle; ändern, wer dort mitmacht, oder
+      einen Zeitraum löschen dürfen nur dessen Lehrkräfte. Bist du noch in keinem eingetragen, arbeitest du in einem
+      vorläufigen Zeitraum, der nicht auf dem Server gespeichert wird.
     </li>
     <li>
       <strong>Passwort vergessen?</strong> Die Administration erzeugt auf dem Server einen Reset-Code. Den fügst du
@@ -704,7 +751,7 @@
   <p>
     Deine Daten liegen <strong>nur in diesem Browser bzw. in dieser App auf diesem Gerät</strong>. Sie
     werden nirgendwohin hochgeladen – außer du verbindest dich mit einem Server; dann liegt eine Kopie dort, und
-    die anderen Lehrer sehen sie, soweit sie im selben Berichtszeitraum eingetragen sind. Ohne Server heißt das:
+    die anderen Lehrkräfte sehen sie, soweit sie im selben Berichtszeitraum eingetragen sind. Ohne Server heißt das:
   </p>
   <ul>
     <li>Ein anderer Browser, die Android-App oder ein anderes Gerät sieht deine Daten nicht.</li>

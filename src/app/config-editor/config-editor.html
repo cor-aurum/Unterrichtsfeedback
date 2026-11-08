@@ -31,36 +31,30 @@
         <h2 class="tab-title">Allgemein</h2>
 
         <section class="card">
-          <label for="config-title"><strong>Überschrift im PDF</strong></label>
-          <input
-            id="config-title"
-            type="text"
-            class="full"
-            [value]="store.config().title"
-            (change)="store.setTitle(valueOf($event))"
-          />
-
-          <label class="color-label" for="config-color"><strong>Themenfarbe für App und PDF</strong></label>
+          <label for="config-color">
+            <strong>Deine Farbe für App und PDF</strong>
+            <span class="muted small">(nur für {{ activeTeacher.teacher().name }}, andere Lehrkräfte behalten ihre)</span>
+          </label>
           <div class="row color-row">
             <input
               id="config-color"
               type="color"
-              [value]="store.config().themeColor"
-              (input)="store.setThemeColor(valueOf($event))"
+              [value]="activeTeacher.color()"
+              (input)="setColor(valueOf($event))"
             />
             <input
               type="text"
               class="hex"
-              [value]="store.config().themeColor"
+              [value]="activeTeacher.color()"
               (change)="setThemeColorFromText($event)"
-              aria-label="Themenfarbe als Hex-Wert"
+              aria-label="Farbe als Hex-Wert"
             />
-            <span class="swatch" [style.background]="store.theme().primaryText" title="Text in Themenfarbe"></span>
-            <span class="swatch" [style.background]="store.theme().primaryLight" title="Heller Hintergrund"></span>
+            <span class="swatch" [style.background]="activeTeacher.theme().primaryText" title="Text in deiner Farbe"></span>
+            <span class="swatch" [style.background]="activeTeacher.theme().primaryLight" title="Heller Hintergrund"></span>
             <button
               class="secondary"
-              [disabled]="store.config().themeColor === defaultThemeColor"
-              (click)="store.setThemeColor(defaultThemeColor)"
+              [disabled]="activeTeacher.color() === defaultThemeColor"
+              (click)="setColor(defaultThemeColor)"
             >
               Standardfarbe
             </button>
@@ -131,17 +125,17 @@
                   <label>
                     <span class="choice-label">Unterrichtszeiten</span>
                     <select (change)="setSharedWindows(period, $event)">
-                      <option value="own" [selected]="!period.sharedWindows">jede Lehrkraft eigene (im Tab „Lehrer:in“)</option>
+                      <option value="own" [selected]="!period.sharedWindows">jede Lehrkraft eigene (im Tab „Lehrer:innen“)</option>
                       <option value="shared" [selected]="!!period.sharedWindows">für alle Lehrer:innen gleich</option>
                     </select>
                   </label>
                   @if (period.sharedWindows) {
-                    <app-teaching-windows-editor class="shared-windows" [periodId]="period.id" />
+                    <app-teaching-windows-editor class="shared-windows" [periodId]="period.id" [readonly]="locked(period)" />
                   }
                 </div>
-                @if (store.config().teachers.length > 1) {
+                @if (activeTeacher.visibleTeachers().length > 1) {
                   <div class="period-teachers">
-                    <span class="choice-label">Aktive Lehrer</span>
+                    <span class="choice-label">Aktive Lehrer:innen</span>
                     <ul>
                       @for (teacher of teachersOf(period); track teacher.id; let first = $first) {
                         @let index = period.teacherIds.indexOf(teacher.id);
@@ -177,7 +171,7 @@
                     </ul>
                     @if (period.teacherIds.length > 1) {
                       <p class="muted small">
-                        In dieser Reihenfolge stehen die Lehrer des Zeitraums in Auswahllisten, Filtern und
+                        In dieser Reihenfolge stehen die Lehrkräfte des Zeitraums in Auswahllisten, Filtern und
                         Kalender-PDFs – den ersten, z. B. die Leitung, also immer vorne.
                       </p>
                     }
@@ -186,6 +180,19 @@
               </li>
             }
           </ul>
+          @if (hasPlaceholderPeriod()) {
+            <p class="message">
+              Du bist noch in keinem Berichtszeitraum eingetragen. Bis dich jemand einträgt oder du selbst einen anlegst,
+              arbeitest du in einem vorläufigen Zeitraum; er wird nicht auf dem Server gespeichert.
+            </p>
+          }
+          @if (sync.login() && sync.foreignPeriods() > 0) {
+            <p class="muted small">
+              Außerdem {{ sync.foreignPeriods() === 1 ? 'gibt es einen Berichtszeitraum' : 'gibt es ' + sync.foreignPeriods() + ' Berichtszeiträume' }},
+              in {{ sync.foreignPeriods() === 1 ? 'dem' : 'denen' }} du nicht eingetragen bist. Was darin ist, sehen nur
+              dessen Lehrkräfte.
+            </p>
+          }
           <div>
             <button class="secondary" (click)="addPeriod()">+ Berichtszeitraum</button>
           </div>
@@ -193,8 +200,8 @@
             Der markierte Zeitraum gilt auf diesem Gerät: Im PDF stehen nur Personen mit mindestens einer Stunde in
             diesem Zeitraum und nur diese Stunden, und die Textbausteine im allgemeinen Teil gelten für alle Stunden im
             Zeitraum. Ohne eigene Wahl gilt der Zeitraum, in dem heute liegt. Unter „Feste Inhalte“ kann jeder Zeitraum
-            eigene Varianten bekommen; <code>{{ '{zeitraum}' }}</code> setzt seinen Namen ins PDF. Die aktiven Lehrer
-            sind bei allgemeinen Terminen im Kalender vorausgewählt und stehen im Tagesplan aller Lehrer.
+            eigene Varianten bekommen; <code>{{ '{zeitraum}' }}</code> setzt seinen Namen ins PDF. Die aktiven Lehrer:innen
+            sind bei allgemeinen Terminen im Kalender vorausgewählt und stehen im Tagesplan aller Lehrkräfte.
           </p>
         </section>
       }
@@ -204,6 +211,19 @@
       }
       @case ('blocks') {
         <h2 class="tab-title">Feste Inhalte im PDF</h2>
+        <section class="card">
+          <label for="config-title"><strong>Überschrift im PDF</strong></label>
+          <input
+            id="config-title"
+            type="text"
+            class="full"
+            [value]="store.config().title"
+            (change)="store.setTitle(valueOf($event))"
+          />
+          <p class="muted small">
+            Steht oben auf jedem PDF, auch dem Gruppen-PDF; Platzhalter wie <code>{{ '{name}' }}</code> sind möglich.
+          </p>
+        </section>
         <p class="muted group-hint">
           Erscheinen bei jeder Person: „Am Anfang“ unter der Überschrift, „Am Ende“ nach der letzten Stunde.
           Dazwischen, vor den Stunden, steht der allgemeine Teil mit den Abschnitten, die dafür eingestellt
@@ -225,7 +245,7 @@
         <h2 class="tab-title">Feste Inhalte im Gruppen-PDF</h2>
         <p class="muted group-hint">
           Wie die festen Inhalte bei Personen, aber für das Gruppen-PDF. Eigene Varianten („Nur für mich“) richten
-          sich nach dem Lehrer der Gruppe. {{ groupPlaceholderHint }}
+          sich nach der Lehrkraft der Gruppe. {{ groupPlaceholderHint }}
         </p>
         <ng-container *ngTemplateOutlet="blocksPanel; context: { $implicit: 'group' }" />
       }
@@ -390,9 +410,9 @@
         </section>
       }
       @case ('teachers') {
-        <h2 class="tab-title">Lehrer</h2>
+        <h2 class="tab-title">Lehrer:innen</h2>
         <p class="muted group-hint">
-          Jede Person gehört zu einem Lehrer; dessen Kalender enthält ihre Termine. Platzhalter:
+          Jede Person gehört zu einer Lehrkraft; deren Kalender enthält die Termine der Person. Platzhalter:
           <code>{{ '{lehrer}' }}</code>, <code>{{ '{lehrerinstrument}' }}</code>, <code>{{ '{ort}' }}</code>.
         </p>
 
@@ -405,7 +425,7 @@
           </select>
         </label>
 
-        @for (teacher of store.config().teachers; track teacher.id; let first = $first, last = $last) {
+        @for (teacher of activeTeacher.visibleTeachers(); track teacher.id; let first = $first, last = $last) {
           <section class="card teacher">
             <div class="row teacher-head">
               <input
@@ -413,21 +433,21 @@
                 class="grow title"
                 [value]="teacher.name"
                 (change)="setTeacherName(teacher, $event)"
-                aria-label="Name des Lehrers"
+                aria-label="Name der Lehrkraft"
               />
               <button class="icon" [disabled]="first" (click)="store.moveTeacher(teacher.id, -1)" title="Nach oben">↑</button>
               <button class="icon" [disabled]="last" (click)="store.moveTeacher(teacher.id, 1)" title="Nach unten">↓</button>
               <button
                 class="icon"
                 (click)="store.duplicateTeacher(teacher.id)"
-                title="Duplizieren: neuer Lehrer mit denselben Unterrichtszeiten"
-                aria-label="Lehrer duplizieren"
+                title="Duplizieren: neue Lehrkraft mit denselben Unterrichtszeiten"
+                aria-label="Lehrkraft duplizieren"
               >⧉</button>
               <button
                 class="icon"
                 [disabled]="first && last"
                 (click)="removeTeacher(teacher)"
-                [title]="first && last ? 'Mindestens ein Lehrer wird gebraucht' : 'Lehrer löschen'"
+                [title]="first && last ? 'Mindestens eine Lehrkraft wird gebraucht' : 'Lehrkraft löschen'"
               >✕</button>
             </div>
             <div class="teacher-fields">
@@ -459,8 +479,8 @@
                     <textarea class="invite-code" readonly rows="2" [value]="invite.code" (focus)="selectAll($event)"></textarea>
                     <span class="muted small">
                       Gültig bis {{ invite.expires }}, einmal. {{ teacher.name }} fügt ihn beim ersten Start der App unter
-                      „Einladungscode“ ein. Personen sieht er erst in Berichtszeiträumen, in denen du ihn unter
-                      „Allgemein“ als aktiven Lehrer einträgst.
+                      „Einladungscode“ ein. Personen sind erst in Berichtszeiträumen zu sehen, in denen du die Lehrkraft unter
+                      „Allgemein“ als aktive Lehrkraft einträgst.
                     </span>
                     <button class="secondary" (click)="copy(invite.code)">Kopieren</button>
                   }
@@ -471,31 +491,40 @@
             <h3>Unterrichtszeiten <span class="muted">· {{ windowsPeriodName() }}</span></h3>
             @if (windowsPeriodShared()) {
               <p class="muted small inherit-hint">
-                In „{{ windowsPeriodName() }}“ gelten für alle Lehrer dieselben Unterrichtszeiten. Du bearbeitest sie
+                In „{{ windowsPeriodName() }}“ gelten für alle Lehrkräfte dieselben Unterrichtszeiten. Du bearbeitest sie
                 unter <button type="button" class="link" (click)="tab.set('general')">Allgemein</button> beim
                 Berichtszeitraum.
               </p>
             } @else {
               @if (inheritsWindows(teacher)) {
                 <p class="muted small inherit-hint">
-                  Noch keine eigenen Zeiten für diesen Zeitraum, es gelten die Standardzeiten des Lehrers. Eine
+                  Noch keine eigenen Zeiten für diesen Zeitraum, es gelten die Standardzeiten der Lehrkraft. Eine
                   Änderung gilt nur für diesen Zeitraum.
                 </p>
               }
-              <app-teaching-windows-editor [teacherId]="teacher.id" [periodId]="windowsPeriodId()" />
+              @if (!ownsWindows(teacher)) {
+                <p class="muted small inherit-hint">
+                  Ihre Unterrichtszeiten ändert nur {{ teacher.name }} selbst.
+                </p>
+              }
+              <app-teaching-windows-editor
+                [teacherId]="teacher.id"
+                [periodId]="windowsPeriodId()"
+                [readonly]="!ownsWindows(teacher)"
+              />
             }
           </section>
         }
 
         <div class="row add">
-          <input #newTeacher type="text" class="grow" placeholder="Neuer Lehrer" (keydown.enter)="addTeacher(newTeacher)" />
+          <input #newTeacher type="text" class="grow" placeholder="Neue Lehrkraft" (keydown.enter)="addTeacher(newTeacher)" />
           <button class="secondary" (click)="addTeacher(newTeacher)">Hinzufügen</button>
         </div>
       }
       @case ('calendar') {
         <h2 class="tab-title">Kalender</h2>
         <p class="muted group-hint">
-          Gilt für alle Lehrer. Ihre Unterrichtszeiten legst du im Tab „Lehrer“ fest; sie werden in Slots der
+          Gilt für alle Lehrkräfte. Ihre Unterrichtszeiten legst du im Tab „Lehrer:innen“ fest; sie werden in Slots der
           Standardlänge geteilt.
         </p>
 
@@ -523,8 +552,8 @@
 
           <h3>Standardunterrichtszeiten</h3>
           <p class="muted small">
-            Vorlage für einen Unterrichtstag. Im Tab „Lehrer“ übernimmt <strong>Standard</strong> sie auf einen
-            Wochentag; neue Lehrer bekommen sie von Montag bis Freitag.
+            Vorlage für einen Unterrichtstag. Im Tab „Lehrer:innen“ übernimmt <strong>Standard</strong> sie auf einen
+            Wochentag; neue Lehrkräfte bekommen sie von Montag bis Freitag.
           </p>
           <div class="standard-windows">
             @for (window of standardWindows(); track window.id) {
@@ -571,7 +600,7 @@
 <ng-template #sectionsPanel let-kind>
     <p class="muted small own-hint">
       „Nur für mich“ macht einen Abschnitt zu einem eigenen von {{ activeTeacher.teacher().name }}: Er erscheint nur
-      bei {{ kind === 'group' ? 'dessen Gruppen' : 'dessen Personen' }}, andere Lehrer sehen ihn nicht.
+      bei {{ kind === 'group' ? 'deren Gruppen' : 'deren Personen' }}, andere Lehrkräfte sehen ihn nicht.
     </p>
     @for (section of sectionsOf(kind); track section.id; let first = $first, last = $last) {
       <section class="card section" [class.own]="!!section.ownerId">
@@ -669,10 +698,18 @@
 
 <!-- Feste Inhalte für Einzelunterricht (kind = 'single') oder Gruppen (kind = 'group') -->
 <ng-template #blocksPanel let-kind>
-    <p class="muted small own-hint">
-      „Nur für mich“ macht einen Inhalt zu einem eigenen von {{ activeTeacher.teacher().name }}: Er erscheint nur im
-      PDF {{ kind === 'group' ? 'seiner Gruppen' : 'seiner Personen' }}, andere Lehrer sehen ihn nicht.
-    </p>
+    @if (sharedEditable()) {
+      <p class="muted small own-hint">
+        „Nur für mich“ macht einen Inhalt zu einem eigenen von {{ activeTeacher.teacher().name }}: Er erscheint nur im
+        PDF {{ kind === 'group' ? 'ihrer Gruppen' : 'ihrer Personen' }}, andere Lehrkräfte sehen ihn nicht.
+      </p>
+    } @else {
+      <p class="muted small own-hint">
+        Mit Server änderst du nur deine eigenen Inhalte und Varianten (farbig markiert); was für alle gilt, ist hier
+        nur zu sehen. Eine eigene Variante ohne angehakte Bedingung ersetzt den Inhalt bei allen
+        {{ kind === 'group' ? 'deinen Gruppen' : 'deinen Personen' }}.
+      </p>
+    }
     @for (block of blocksOf(kind); track block.id; let first = $first, last = $last) {
       <section class="card section" [class.own]="!!block.ownerId">
         <div class="row block-head">
@@ -680,20 +717,25 @@
           <select
             class="grow"
             [value]="block.position"
+            [disabled]="!canEdit(block)"
             (change)="store.setBlockPosition(block.id, $any(valueOf($event)))"
             aria-label="Position im PDF"
           >
             <option value="start">Am Anfang</option>
             <option value="end">Am Ende</option>
           </select>
-          <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1, activeTeacher.teacher().id)" title="Nach oben">↑</button>
-          <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1, activeTeacher.teacher().id)" title="Nach unten">↓</button>
-          <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
+          @if (canEdit(block)) {
+            <button class="icon" [disabled]="first" (click)="store.moveBlock(block.id, -1, activeTeacher.teacher().id)" title="Nach oben">↑</button>
+            <button class="icon" [disabled]="last" (click)="store.moveBlock(block.id, 1, activeTeacher.teacher().id)" title="Nach unten">↓</button>
+            <button class="icon" (click)="removeBlock(block)" title="Löschen">✕</button>
+          }
         </div>
-        <label class="own-toggle">
-          <input type="checkbox" [checked]="!!block.ownerId" (change)="store.setBlockOwner(block.id, ownerFor($event))" />
-          Nur für mich ({{ activeTeacher.teacher().name }})
-        </label>
+        @if (sharedEditable()) {
+          <label class="own-toggle">
+            <input type="checkbox" [checked]="!!block.ownerId" (change)="store.setBlockOwner(block.id, ownerFor($event))" />
+            Nur für mich ({{ activeTeacher.teacher().name }})
+          </label>
+        }
 
         @if (block.variants.length > 0) {
           <p class="variant-label">Standard (für alle anderen {{ kind === 'group' ? 'Gruppen' : 'Personen' }})</p>
@@ -701,6 +743,7 @@
         <app-block-content-editor
           [type]="block.type"
           [content]="block"
+          [readonly]="!canEdit(block)"
           [placeholder]="kind === 'group' ? 'z. B. Hallo {mitglieder},' : 'z. B. Hallo {vorname},'"
           (contentChange)="store.updateContent({ blockId: block.id, variantId: null }, $event)"
           (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: null }, $event)"
@@ -710,10 +753,12 @@
         @for (variant of variantsOf(block); track variant.id) {
           <div class="variant" [class.own]="!!variant.ownerId">
             <div class="row">
-              <p class="variant-label grow">Variante für</p>
-              <button class="icon" (click)="store.removeVariant(block.id, variant.id)" title="Variante löschen">✕</button>
+              <p class="variant-label grow">{{ variant.ownerId ? 'Deine Variante für' : 'Variante für' }}</p>
+              @if (canEdit(variant)) {
+                <button class="icon" (click)="store.removeVariant(block.id, variant.id)" title="Variante löschen">✕</button>
+              }
             </div>
-            @if (!block.ownerId) {
+            @if (!block.ownerId && sharedEditable()) {
               <label class="own-toggle">
                 <input
                   type="checkbox"
@@ -731,6 +776,7 @@
                   <input
                     type="checkbox"
                     [checked]="variant.instrumentIds.includes(instrument.id)"
+                    [disabled]="!canEdit(variant)"
                     (change)="store.toggleVariantCondition(block.id, variant.id, 'instrumentIds', instrument.id)"
                   />
                   {{ instrument.name }}
@@ -744,6 +790,7 @@
                   <input
                     type="checkbox"
                     [checked]="variant.periodIds.includes(period.id)"
+                    [disabled]="!canEdit(variant)"
                     (change)="store.toggleVariantCondition(block.id, variant.id, 'periodIds', period.id)"
                   />
                   {{ period.name }}
@@ -756,6 +803,7 @@
             <app-block-content-editor
               [type]="block.type"
               [content]="variant"
+              [readonly]="!canEdit(variant)"
               (contentChange)="store.updateContent({ blockId: block.id, variantId: variant.id }, $event)"
               (imageSettingsChange)="store.updateContentImage({ blockId: block.id, variantId: variant.id }, $event)"
               (error)="showError($event)"
@@ -763,14 +811,16 @@
           </div>
         }
 
-        <button class="secondary add-variant" (click)="store.addVariant(block.id)">
-          + Variante für bestimmte Instrumente oder Zeiträume
-        </button>
+        @if (canEdit(block) || !block.ownerId) {
+          <button class="secondary add-variant" (click)="store.addVariant(block.id, newOwner())">
+            {{ sharedEditable() ? '+ Variante für bestimmte Instrumente oder Zeiträume' : '+ Eigene Variante' }}
+          </button>
+        }
       </section>
     }
 
     <div class="row add">
-      <button class="secondary" (click)="store.addTextBlock(kind)">+ Fester Text</button>
+      <button class="secondary" (click)="store.addTextBlock(kind, newOwner())">+ Fester Text</button>
       <button class="secondary" (click)="imageInput.click()">+ Bild</button>
       <input #imageInput type="file" accept="image/*" hidden (change)="addImage(imageInput, kind)" />
     </div>

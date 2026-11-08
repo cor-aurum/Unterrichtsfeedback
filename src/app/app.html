@@ -1,5 +1,5 @@
 @if (planning.active()) {
-  <!-- Schüler-Planung am Tablet: nur die Planung, ohne Menü und übrige App -->
+  <!-- Planung durch Schüler:innen am Tablet: nur die Planung, ohne Menü und übrige App -->
   <app-student-planning-page />
 } @else {
 <header class="topbar" (keydown.escape)="menuOpen.set(false)">

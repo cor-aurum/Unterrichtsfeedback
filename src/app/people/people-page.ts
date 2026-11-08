@@ -100,7 +100,7 @@ export class PeoplePage {
   protected readonly importMessage = signal<string | null>(null);
   protected readonly formatDate = formatDate;
   protected readonly slotText = slotText;
-  protected readonly teachers = computed(() => this.config().teachers);
+  protected readonly teachers = this.activeTeacher.visibleTeachers;
   protected readonly defaultInstrumentId = computed(() => defaultInstrument(this.config()).id);
   /** Instrument für die nächste neue Person; nach dem Anlegen wieder das Standardinstrument */
   protected readonly newStudentInstrumentId = linkedSignal(() => this.defaultInstrumentId());
@@ -195,7 +195,7 @@ export class PeoplePage {
       this.teacherOf(student).name,
       this.groups.groupsOf(student.id).map((group) => group.name.trim()).filter(Boolean).join(', '),
     ]);
-    const header = ['Name', 'Geburtsdatum', 'Instrument', 'Lehrer', 'Gruppen'];
+    const header = ['Name', 'Geburtsdatum', 'Instrument', 'Lehrkraft', 'Gruppen'];
     await saveFile(`Personen_${safeFileName(this.reportPeriod.period().name)}.csv`, csvBlob([header, ...rows]));
   }
 

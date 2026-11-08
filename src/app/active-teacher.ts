@@ -4,6 +4,7 @@ import { Student, Teacher } from './model';
 import { storedSignal } from './stored-signal';
 import { StudentsStore } from './students.store';
 import { ServerSync } from './sync/server-sync';
+import { themeFrom } from './theme';
 
 /**
  * Lehrer, der gerade mit der App arbeitet. Er gilt nur auf diesem Gerät und steuert, welchen Kalender,
@@ -16,6 +17,27 @@ export class ActiveTeacher {
   private readonly studentsStore = inject(StudentsStore);
   private readonly selectedId = storedSignal<string | null>('feedback.activeTeacher', () => null);
   private readonly login = inject(ServerSync).login;
+
+  /**
+   * Mit Server nur die Lehrkräfte, mit denen der angemeldete Lehrer mindestens einen Berichtszeitraum teilt (und er
+   * selbst); ohne Server alle. Die übrigen bleiben in den Daten, erscheinen aber nirgends zur Auswahl.
+   */
+  readonly visibleTeachers = computed<Teacher[]>(() => {
+    const config = this.config();
+    const me = this.login()?.teacherId;
+    if (!me) return config.teachers;
+    const shared = new Set([me, ...config.reportPeriods.filter((p) => p.teacherIds.includes(me)).flatMap((p) => p.teacherIds)]);
+    return config.teachers.filter((teacher) => shared.has(teacher.id));
+  });
+
+  /** Farbe der aktiven Lehrkraft, sonst die allgemeine */
+  readonly color = computed(() => this.teacher().themeColor ?? this.config().themeColor);
+  /** Farben für App und PDFs aus der Farbe der aktiven Lehrkraft */
+  readonly theme = computed(() => themeFrom(this.color()));
+
+  isVisible(teacherId: string): boolean {
+    return this.visibleTeachers().some((teacher) => teacher.id === teacherId);
+  }
 
   /** Mit Server angemeldet: Der Lehrer steht fest. */
   readonly fixed = computed(() => !!this.login());

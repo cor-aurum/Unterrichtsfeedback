@@ -1,4 +1,5 @@
 import { Component, computed, inject, input } from '@angular/core';
+import { ActiveTeacher } from '../active-teacher';
 import { StudentLabelPipe } from '../student-label.pipe';
 import { RouterLink } from '@angular/router';
 import { CalendarStore } from '../calendar/calendar.store';
@@ -51,7 +52,7 @@ export class GroupPanel {
 
   protected readonly label = computed(() => groupLabel(this.group(), this.studentsStore.students()));
   protected readonly members = computed(() => memberNames(this.group(), this.studentsStore.students()));
-  protected readonly teachers = computed(() => this.config().teachers);
+  protected readonly teachers = inject(ActiveTeacher).visibleTeachers;
   protected readonly groupTeacherId = computed(() => groupTeacherOf(this.group(), this.config()).id);
   /** Gemeinsame Gruppen-Abschnitte und die eigenen des Lehrers der Gruppe */
   protected readonly sections = computed(() => configForTeacher(this.config(), this.groupTeacherId()).groupSections);

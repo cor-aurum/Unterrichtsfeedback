@@ -106,13 +106,14 @@
   <h2>Datensicherung</h2>
   <p class="muted">
     Die Sicherung ist ein ZIP mit der allgemeinen Konfiguration (<code>konfiguration.json</code>), einer Datei je
-    Lehrer (<code>lehrer-….json</code>) mit seinen Textvarianten und Blockern und einer Datei je Berichtszeitraum und
-    Lehrer (<code>zeitraum-….json</code>) mit Personen, Gruppen, Stunden und Terminen. Beim Import werden die Daten
+    Lehrkraft (<code>lehrer-….json</code>) mit ihren Textvarianten und Blockern, einer Datei je Berichtszeitraum
+    (<code>berichtszeitraum-….json</code>) mit seinen Lehrkräften, Unterrichtszeiten und allgemeinen Terminen und einer
+    Datei je Berichtszeitraum und Lehrkraft (<code>zeitraum-….json</code>) mit Personen, Gruppen, Stunden und Terminen. Beim Import werden die Daten
     auf diesem Gerät vollständig ersetzt; ältere Sicherungen lassen sich weiterhin importieren.
   </p>
   <p class="muted">
     Die Sicherung des Berichtszeitraums enthält Personen, Gruppen und Termine nur aus „{{ reportPeriod.period().name }}“.
-    Gib sie einem Lehrer, der in diesem Zeitraum neu dazukommt: Er spielt sie beim ersten Start im Willkommensdialog
+    Gib sie einer Lehrkraft, die in diesem Zeitraum neu dazukommt: Sie spielt sie beim ersten Start im Willkommensdialog
     ein und legt sich dort an.
   </p>
 
@@ -133,9 +134,9 @@
 <section class="card">
   <h2>Server</h2>
   <p class="muted">
-    Mit einem Unterrichtsfeedback-Server teilen sich mehrere Lehrer und Geräte die Daten. Die Daten bleiben auch auf
+    Mit einem Unterrichtsfeedback-Server teilen sich mehrere Lehrkräfte und Geräte die Daten. Die Daten bleiben auch auf
     diesem Gerät, die App funktioniert also offline weiter und gleicht ab, sobald der Server erreichbar ist. Personen
-    und ihre Stunden sieht jeder Lehrer nur in den Berichtszeiträumen, in denen er eingetragen ist.
+    und ihre Stunden sieht jede Lehrkraft nur in den Berichtszeiträumen, in denen sie eingetragen ist.
   </p>
   @if (sync.legacyNotice()) {
     <p class="message warning">

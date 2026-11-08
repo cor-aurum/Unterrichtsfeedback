@@ -29,8 +29,8 @@ const COLUMNS: { key: ColumnKey; label: string; optional: string | null }[] = [
   { key: 'location', label: 'Ort', optional: '– keine Spalte –' },
   {
     key: 'teachers',
-    label: 'Lehrer',
-    optional: '– keine Spalte (aktive Lehrer des Berichtszeitraums) –',
+    label: 'Lehrkräfte',
+    optional: '– keine Spalte (aktive Lehrkräfte des Berichtszeitraums) –',
   },
   { key: 'kind', label: 'Art', optional: '– keine Spalte (alles allgemeine Termine) –' },
 ];
@@ -124,6 +124,7 @@ export class SharedImportPanel {
   }
 
   protected teacherNames(row: SharedImportRow): string {
+    if (row.appointment.allTeachers) return 'alle';
     const teachers = this.config().teachers;
     const names = row.appointment.teacherIds.map(
       (id) => teachers.find((t) => t.id === id)?.name ?? '',

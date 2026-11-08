@@ -20,7 +20,8 @@ import { StudentPlanningPage } from './planning/student-planning-page';
 })
 export class App {
   private readonly configStore = inject(ConfigStore);
-  private readonly theme = this.configStore.theme;
+  /** Jede Lehrkraft hat ihre eigene Farbe; es gilt die der aktiven. */
+  private readonly theme = computed(() => this.activeTeacher.theme());
   /** Die Lehrer des gewählten Zeitraums zuerst, in seiner Reihenfolge */
   protected readonly teachers = computed(() =>
     byPeriodOrder(this.configStore.config().teachers, this.reportPeriod.period().teacherIds),

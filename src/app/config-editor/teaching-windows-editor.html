@@ -7,22 +7,26 @@
     <div class="windows">
       @for (window of windowsByDay()[day.index]; track window.id) {
         <span class="window">
-          <input type="time" [value]="window.from" (change)="setTime(window, 'from', $event)" aria-label="Von" />
+          <input type="time" [value]="window.from" [disabled]="readonly()" (change)="setTime(window, 'from', $event)" aria-label="Von" />
           –
-          <input type="time" [value]="window.to" (change)="setTime(window, 'to', $event)" aria-label="Bis" />
-          <button class="icon" (click)="remove(window)" title="Zeitfenster löschen">✕</button>
+          <input type="time" [value]="window.to" [disabled]="readonly()" (change)="setTime(window, 'to', $event)" aria-label="Bis" />
+          @if (!readonly()) {
+            <button class="icon" (click)="remove(window)" title="Zeitfenster löschen">✕</button>
+          }
         </span>
       } @empty {
         <span class="muted">kein Unterricht</span>
       }
     </div>
-    <button
-      class="icon"
-      (click)="applyStandard(day.index)"
-      title="Unterrichtszeiten dieses Tages durch die Standardunterrichtszeiten ersetzen"
-    >
-      Standard
-    </button>
-    <button class="icon" (click)="add(day.index)" title="Zeitfenster hinzufügen">+</button>
+    @if (!readonly()) {
+      <button
+        class="icon"
+        (click)="applyStandard(day.index)"
+        title="Unterrichtszeiten dieses Tages durch die Standardunterrichtszeiten ersetzen"
+      >
+        Standard
+      </button>
+      <button class="icon" (click)="add(day.index)" title="Zeitfenster hinzufügen">+</button>
+    }
   </div>
 }

@@ -1,7 +1,7 @@
 @let d = draft();
 <section class="card form">
   <h2>{{ d.id ? 'Allgemeinen Termin bearbeiten' : 'Neuer allgemeiner Termin' }}</h2>
-  <p class="muted small">Steht im Kalender jedes ausgewählten Lehrers, z. B. eine Konferenz oder ein Vorspiel.</p>
+  <p class="muted small">Steht im Kalender jeder ausgewählten Lehrkraft, z. B. eine Konferenz oder ein Vorspiel.</p>
   <div class="fields">
     <label class="wide-field">
       Bezeichnung
@@ -31,21 +31,27 @@
     </label>
   </div>
   <div class="teacher-choice">
-    <span class="choice-label">Lehrer</span>
-    @for (teacher of teachers(); track teacher.id) {
-      <label>
-        <input type="checkbox" [checked]="d.teacherIds.includes(teacher.id)" (change)="toggleTeacher(teacher.id)" />
-        {{ teacher.name }}
-      </label>
+    <span class="choice-label">Lehrkräfte{{ periodName() ? ' in „' + periodName() + '“' : '' }}</span>
+    <label>
+      <input type="checkbox" [checked]="!!d.allTeachers" (change)="setAllTeachers(checked($event))" />
+      <strong>Alle</strong> – auch Lehrkräfte, die später dazukommen
+    </label>
+    @if (!d.allTeachers) {
+      @for (teacher of teachers(); track teacher.id) {
+        <label>
+          <input type="checkbox" [checked]="d.teacherIds.includes(teacher.id)" (change)="toggleTeacher(teacher.id)" />
+          {{ teacher.name }}
+        </label>
+      }
     }
   </div>
   <app-recurrence-fields [date]="d.date" [repeat]="d.repeat" (repeatChange)="set({ repeat: $event })" />
   <label class="weekly">
     <input type="checkbox" [checked]="d.blocksPlanning" (change)="set({ blocksPlanning: checked($event) })" />
-    Blockiert die Lehrer für die automatische Planung
+    Blockiert die Lehrkräfte für die automatische Planung
   </label>
   @if (d.id && d.repeat) {
-    <p class="muted small">Änderungen und Löschen gelten für alle Wiederholungen und alle beteiligten Lehrer.</p>
+    <p class="muted small">Änderungen und Löschen gelten für alle Wiederholungen und alle beteiligten Lehrkräfte.</p>
   }
   @if (error(); as text) {
     <p class="message error">{{ text }}</p>
@@ -67,8 +73,8 @@
       } @else {
         <p class="muted small">
           Jede angehakte Gruppe bekommt einen Gruppentermin zur selben Zeit{{ d.repeat ? ' mit derselben Wiederholung' : '' }},
-          jeweils im Kalender ihres Lehrers. Der allgemeine Termin wird danach gelöscht; Bezeichnung und Ort gehen dabei
-          verloren. Vorausgewählt sind die Gruppen der beteiligten Lehrer.
+          jeweils im Kalender ihrer Lehrkraft. Der allgemeine Termin wird danach gelöscht; Bezeichnung und Ort gehen dabei
+          verloren. Vorausgewählt sind die Gruppen der beteiligten Lehrkräfte.
         </p>
         <div class="teacher-choice">
           @for (group of groups(); track group.id) {

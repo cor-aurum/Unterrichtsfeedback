@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -250,8 +251,21 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, _ store.Account)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) me(w http.ResponseWriter, _ *http.Request, account store.Account) {
-	writeJSON(w, map[string]string{"username": account.Username, "teacherId": account.TeacherID})
+// me nennt auch, wie viele Berichtszeiträume es gibt, in denen der Lehrer nicht eingetragen ist; was darin steht,
+// erfährt er nicht.
+func (s *Server) me(w http.ResponseWriter, r *http.Request, account store.Account) {
+	members, err := s.members(r.Context())
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	foreign := 0
+	for periodID := range members {
+		if !members.In(periodID, account.TeacherID) {
+			foreign++
+		}
+	}
+	writeJSON(w, map[string]any{"username": account.Username, "teacherId": account.TeacherID, "foreignPeriods": foreign})
 }
 
 // accounts zeigt, welche Lehrer schon ein Konto haben, damit die App nur für die anderen Einladungen anbietet.
@@ -292,15 +306,39 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request, _ store.Account)
 
 // --- Dokumente ---
 
+// members liest die Lehrer jedes Berichtszeitraums aus dessen Dokument; eine ältere Konfiguration mit
+// Berichtszeiträumen (vor `Migrate`) zählt ebenfalls.
 func (s *Server) members(ctx context.Context) (access.Members, error) {
+	members := access.Members{}
 	config, _, err := s.store.Doc(ctx, access.ConfigName)
-	if errors.Is(err, store.ErrNotFound) {
-		return access.Members{}, nil
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return nil, err
 	}
+	if err == nil {
+		if members, err = access.MembersOf(config); err != nil {
+			return nil, err
+		}
+	}
+	docs, err := s.store.Docs(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return access.MembersOf(config)
+	for _, d := range docs {
+		doc, err := access.Parse(d.Name)
+		if err != nil || doc.Kind != access.PeriodConfig {
+			continue
+		}
+		content, _, err := s.store.Doc(ctx, d.Name)
+		if err != nil {
+			return nil, err
+		}
+		_, teacherIDs, err := access.PeriodOf(content)
+		if err != nil {
+			return nil, err
+		}
+		members[doc.PeriodID] = teacherIDs
+	}
+	return members, nil
 }
 
 func (s *Server) listDocs(w http.ResponseWriter, r *http.Request, account store.Account) {
@@ -381,14 +419,18 @@ func (s *Server) putDoc(w http.ResponseWriter, r *http.Request, account store.Ac
 		fail(w, http.StatusBadRequest, "Das Dokument ist kein gültiges JSON.")
 		return
 	}
-	if doc.Kind == access.Config {
-		next, err := access.MembersOf(content)
-		if err != nil {
-			fail(w, http.StatusBadRequest, err.Error())
+	if doc.Kind == access.Config && access.HasPeriods(content) {
+		fail(w, http.StatusConflict, "Diese App-Version speichert Berichtszeiträume noch in der Konfiguration. Bitte die App aktualisieren.")
+		return
+	}
+	if doc.Kind == access.PeriodConfig {
+		periodID, teacherIDs, err := access.PeriodOf(content)
+		if err != nil || periodID != doc.PeriodID {
+			fail(w, http.StatusBadRequest, "Das Dokument passt nicht zu diesem Berichtszeitraum.")
 			return
 		}
-		if err := access.CheckConfig(members, next, account.TeacherID); err != nil {
-			fail(w, http.StatusForbidden, err.Error())
+		if _, exists := members[doc.PeriodID]; !exists && !slices.Contains(teacherIDs, account.TeacherID) {
+			fail(w, http.StatusForbidden, "Wer einen Berichtszeitraum anlegt, muss selbst eingetragen sein.")
 			return
 		}
 	}

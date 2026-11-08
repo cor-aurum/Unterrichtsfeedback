@@ -1,4 +1,5 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { ActiveTeacher } from '../active-teacher';
 import { StudentLabelPipe } from '../student-label.pipe';
 import { RouterLink } from '@angular/router';
 import { CalendarStore } from '../calendar/calendar.store';
@@ -68,7 +69,7 @@ export class Lessons {
     return student ? sortedLessons(student).reverse() : [];
   });
 
-  protected readonly teachers = computed(() => this.config().teachers);
+  protected readonly teachers = inject(ActiveTeacher).visibleTeachers;
 
   constructor() {
     // Der Hinweis gehört zur Person, bei der er entstanden ist.

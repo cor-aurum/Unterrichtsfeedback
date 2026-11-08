@@ -17,9 +17,9 @@
     @case ('file') {
       <p class="muted">
         Wähle eine Excel-Datei (.xlsx) oder eine CSV-Datei mit einer Zeile je Termin, z. B. mit den
-        Spalten Bezeichnung, Datum, Beginn, Ende, Ort und Lehrer. Welche Spalte was enthält, legst
-        du im nächsten Schritt fest. Mehrere Lehrer trennst du mit Komma; ohne Lehrer gilt der
-        Termin für alle, die am Tag im Berichtszeitraum aktiv sind. Eine Tabelle aus „Termine als
+        Spalten Bezeichnung, Datum, Beginn, Ende, Ort und Lehrkräfte. Welche Spalte was enthält, legst
+        du im nächsten Schritt fest. Mehrere Lehrkräfte trennst du mit Komma; ohne Lehrkraft gilt der
+        Termin für alle, die am Tag im Berichtszeitraum aktiv sind; andere Lehrkräfte können nicht dabei sein. Eine Tabelle aus „Termine als
         Tabelle“ kannst du direkt einlesen; daraus werden nur die allgemeinen Termine übernommen.
       </p>
       <button (click)="fileInput.click()">Datei wählen</button>
@@ -91,7 +91,7 @@
               <th>Datum</th>
               <th>Zeit</th>
               <th>Ort</th>
-              <th>Lehrer</th>
+              <th>Lehrer:in</th>
               <th>Hinweis</th>
             </tr>
           </thead>

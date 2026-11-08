@@ -38,7 +38,7 @@ export class LessonLoadPanel {
   protected readonly to = signal(this.reportPeriod.period().to);
   /** Nur die Personen des aktiven Lehrers oder alle; gilt nur auf diesem Gerät. */
   protected readonly allTeachers = storedSignal<boolean>('feedback.loadAllTeachers', () => false, (data) => data === true);
-  protected readonly multipleTeachers = computed(() => this.config().teachers.length > 1);
+  protected readonly multipleTeachers = computed(() => this.activeTeacher.visibleTeachers().length > 1);
 
   protected readonly loads = computed(() => {
     const [from, to] = [this.from(), this.to()];

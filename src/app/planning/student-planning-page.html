@@ -20,8 +20,8 @@
     @if (teacher(); as shown) {
       @if (choosing() && teachers().length > 1) {
         <p class="hint">
-          Mit deinem ersten Termin ist {{ shown.name }} für diesen Zeitraum dein Lehrer.
-          <button class="link-button" (click)="chooseTeacher(null)">Anderen Lehrer wählen</button>
+          Mit deinem ersten Termin ist {{ shown.name }} für diesen Zeitraum deine Lehrkraft.
+          <button class="link-button" (click)="chooseTeacher(null)">Andere Lehrkraft wählen</button>
         </p>
       }
       <p class="hint">Tippe auf eine Zeit, um sie zu wählen. Nochmal tippen gibt sie wieder frei.</p>
@@ -55,7 +55,7 @@
         <p class="empty">Hier ist gerade keine Zeit mehr frei. Sprich bitte deine Lehrkraft an.</p>
       }
     } @else {
-      <!-- Lehrer wählen: erst ansehen, fest wird er mit dem ersten Termin -->
+      <!-- Lehrkraft wählen: erst ansehen, fest wird sie mit dem ersten Termin -->
       <div class="names teacher-choice">
         @for (option of teachers(); track option.id) {
           <button class="name" (click)="chooseTeacher(option)">

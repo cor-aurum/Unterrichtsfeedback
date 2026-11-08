@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
 import { locationOn } from '../model';
@@ -31,6 +32,7 @@ const KINDS: { kind: CalendarRowKind; label: string }[] = [
   styleUrl: './ical-export-panel.scss',
 })
 export class CalendarTablePanel {
+  private readonly activeTeacher = inject(ActiveTeacher);
   private readonly calendar = inject(CalendarStore);
   private readonly groupsStore = inject(GroupsStore);
   private readonly config = inject(ConfigStore).config;
@@ -119,7 +121,7 @@ export class CalendarTablePanel {
   /** Mehrtägige Blocker stehen an jedem Tag einzeln, mit ihrem Teil des Tages. */
   private blockerRows(from: string, to: string): CalendarRow[] {
     const label = this.config().calendarPdf.blocked;
-    return this.config().teachers.flatMap((teacher) =>
+    return this.activeTeacher.visibleTeachers().flatMap((teacher) =>
       this.calendar.blockersOf(teacher.id, from, to).flatMap((blocker) =>
         daysBetween(from, to).flatMap((date) => {
           const part = blockerOnDay(blocker, date);

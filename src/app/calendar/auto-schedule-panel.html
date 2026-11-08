@@ -18,7 +18,7 @@
     @if (mode() === 'weekly') {
       Verteilt Personen von {{ teacher().name }} ohne wöchentlichen Termin auf die freien Unterrichtszeiten (Slots der
       Standardlänge). Vorrang hat, möglichst viele Slots zu füllen; Überschneidungen mit Gruppenunterricht bei anderen
-      Lehrern werden nach Möglichkeit vermieden.
+      Lehrkräften werden nach Möglichkeit vermieden.
     } @else {
       @if (onePerPerson()) {
         Gibt jeder ausgewählten Person einen einmaligen Termin in den freien Unterrichtszeiten von {{ teacher().name }}
@@ -27,7 +27,7 @@
       } @else {
         Füllt alle freien Unterrichtszeiten von {{ teacher().name }} im Zeitraum mit einmaligen Terminen; eine Person
         kann mehrere bekommen. Nach Möglichkeit hat niemand zwei Termine am selben Tag, Überschneidungen mit
-        Gruppenunterricht bei anderen Lehrern werden vermieden und die Termine gleichmäßig verteilt.
+        Gruppenunterricht bei anderen Lehrkräften werden vermieden und die Termine gleichmäßig verteilt.
       }
     }
   </p>
@@ -134,7 +134,7 @@
     @if (emptySlots().length > 0) {
       <p class="message warning">
         {{ emptySlots().length }} Slot(s) bleiben frei, weil alle ausgewählten Personen dort schon Einzelunterricht
-        bei einem anderen Lehrer haben:
+        bei einer anderen Lehrkraft haben:
         @for (slot of emptySlots(); track $index; let last = $last) {
           {{ slotLabel(slot) }}{{ last ? '' : '; ' }}
         }

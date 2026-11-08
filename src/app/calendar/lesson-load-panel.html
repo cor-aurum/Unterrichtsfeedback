@@ -1,7 +1,7 @@
 <section class="card load">
   <h2>Unterricht je Person</h2>
   <p class="muted">
-    Geplante Termine im Zeitraum, nach Dauer sortiert – Einzel- und Gruppenunterricht, bei allen Lehrern.
+    Geplante Termine im Zeitraum, nach Dauer sortiert – Einzel- und Gruppenunterricht, bei allen Lehrkräften.
   </p>
 
   <div class="controls">
@@ -21,7 +21,7 @@
     @if (multipleTeachers()) {
       <label class="check-line">
         <input type="checkbox" [checked]="allTeachers()" (change)="allTeachers.set($any($event.target).checked)" />
-        Personen aller Lehrer
+        Personen aller Lehrkräfte
       </label>
     }
   </div>

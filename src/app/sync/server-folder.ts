@@ -149,6 +149,11 @@ export const serverApi = {
     await checked(await request(login.url, 'POST', '/api/merges', { token: login.token, body }));
   },
 
+  /** Eigenes Konto; `foreignPeriods`: Berichtszeiträume, in denen der Lehrer nicht eingetragen ist */
+  me(login: ServerLogin): Promise<{ username: string; teacherId: string; foreignPeriods?: number }> {
+    return json(request(login.url, 'GET', '/api/me', { token: login.token }));
+  },
+
   /** Kalender-Abo: `url` ist leer, solange keins eingerichtet ist. */
   feed(login: ServerLogin): Promise<FeedState> {
     return json(request(login.url, 'GET', '/api/feed', { token: login.token }));

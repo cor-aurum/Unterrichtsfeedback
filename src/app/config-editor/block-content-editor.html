@@ -5,30 +5,35 @@
       <div class="image-settings">
         <label>
           Breite im PDF (mm)
-          <input type="number" min="5" [max]="maxImageWidth" [value]="image.widthMm" (change)="setWidth($event)" />
+          <input type="number" min="5" [max]="maxImageWidth" [value]="image.widthMm" [disabled]="readonly()" (change)="setWidth($event)" />
         </label>
         <label>
           Ausrichtung
-          <select [value]="image.align" (change)="imageSettingsChange.emit({ align: $any(valueOf($event)) })">
+          <select [value]="image.align" [disabled]="readonly()" (change)="imageSettingsChange.emit({ align: $any(valueOf($event)) })">
             <option value="left">Links</option>
             <option value="center">Mittig</option>
             <option value="right">Rechts</option>
           </select>
         </label>
-        <div class="row">
-          <button class="secondary" (click)="fileInput.click()">Bild ersetzen</button>
-          <button class="secondary" (click)="contentChange.emit({ image: undefined })">Entfernen</button>
-        </div>
+        @if (!readonly()) {
+          <div class="row">
+            <button class="secondary" (click)="fileInput.click()">Bild ersetzen</button>
+            <button class="secondary" (click)="contentChange.emit({ image: undefined })">Entfernen</button>
+          </div>
+        }
       </div>
     } @else {
       <p class="muted no-image">Kein Bild, an dieser Stelle erscheint nichts.</p>
-      <button class="secondary" (click)="fileInput.click()">Bild auswählen</button>
+      @if (!readonly()) {
+        <button class="secondary" (click)="fileInput.click()">Bild auswählen</button>
+      }
     }
     <input #fileInput type="file" accept="image/*" hidden (change)="chooseImage(fileInput)" />
   </div>
 } @else {
   <textarea
     [value]="content().text"
+    [readonly]="readonly()"
     (change)="contentChange.emit({ text: valueOf($event) })"
     [placeholder]="placeholder()"
     aria-label="Fester Text"

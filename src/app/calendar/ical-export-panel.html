@@ -8,12 +8,12 @@
   <div class="row options">
     @if (teachers().length > 1) {
       <label>
-        Lehrer
+        Lehrkraft
         <select (change)="teacherId.set(valueOf($event))">
           @for (teacher of teachers(); track teacher.id) {
             <option [value]="teacher.id" [selected]="teacher.id === teacherId()">{{ teacher.name }}</option>
           }
-          <option [value]="allTeachers" [selected]="teacherId() === allTeachers">Alle Lehrer</option>
+          <option [value]="allTeachers" [selected]="teacherId() === allTeachers">Alle Lehrer:innen</option>
         </select>
       </label>
     }

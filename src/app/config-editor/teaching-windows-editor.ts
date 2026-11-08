@@ -18,6 +18,8 @@ export class TeachingWindowsEditor {
   readonly teacherId = input<string | null>(null);
   /** Bei einem Lehrer: `null` für seine Standardzeiten */
   readonly periodId = input.required<string | null>();
+  /** Nur ansehen, z. B. die Zeiten einer anderen Lehrkraft */
+  readonly readonly = input(false);
 
   protected readonly weekdays = WEEKDAY_NAMES.map((name, index) => ({ name, index }));
   protected readonly error = signal<string | null>(null);

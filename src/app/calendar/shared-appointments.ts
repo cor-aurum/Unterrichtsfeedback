@@ -16,7 +16,13 @@ export interface SharedAppointment {
   repeat?: Recurrence;
   /** Freitext, z. B. „Aula“ */
   location: string;
+  /** Beteiligte Lehrer; bei `allTeachers` leer gespeichert und je Tag aus dem Berichtszeitraum ergänzt */
   teacherIds: string[];
+  /**
+   * Gilt für alle Lehrer des Berichtszeitraums am Tag, auch für später dazukommende (siehe
+   * `CalendarStore.sharedOccurrences`).
+   */
+  allTeachers?: boolean;
   /** Die beteiligten Lehrer bekommen in dieser Zeit keine Terminvorschläge (automatische Planung). */
   blocksPlanning: boolean;
 }
@@ -52,6 +58,7 @@ export function parseSharedAppointments(data: unknown, periods: Period[]): Share
       ...withRepeat(parseRecurrence({ ...a, date: a.date! }, periods)),
       location: typeof a.location === 'string' ? a.location : '',
       teacherIds: Array.isArray(a.teacherIds) ? a.teacherIds.filter((id) => typeof id === 'string') : [],
+      ...(a.allTeachers ? { allTeachers: true } : {}),
       blocksPlanning: a.blocksPlanning !== false,
     }));
 }

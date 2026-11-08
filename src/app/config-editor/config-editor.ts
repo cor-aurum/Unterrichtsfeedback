@@ -154,12 +154,29 @@ export class ConfigEditor {
   }
 
   /** Mit Server darf man Lehrer nur in Zeiträume eintragen, in denen man selbst aktiv ist. */
+  /**
+   * Gibt es die Lehrkraft schon, nur nicht in den eigenen Berichtszeiträumen (mit Server unsichtbar), wird sie
+   * wiederverwendet statt doppelt angelegt.
+   */
   protected addTeacher(input: HTMLInputElement): void {
     const name = input.value.trim();
     if (!name) return;
     const login = this.sync.login();
-    this.store.addTeacher(name, login ? { joinPeriodsOf: login.teacherId } : {});
+    const hidden = login && this.hiddenTeacherNamed(name);
+    if (login && hidden) {
+      this.store.joinTeacherToPeriods(hidden.id, login.teacherId);
+      this.showError(`${hidden.name} gab es schon; die Lehrkraft ist jetzt in deinen laufenden Berichtszeiträumen.`);
+    } else {
+      this.store.addTeacher(name, login ? { joinPeriodsOf: login.teacherId } : {});
+    }
     input.value = '';
+  }
+
+  private hiddenTeacherNamed(name: string): Teacher | undefined {
+    const key = name.toLowerCase();
+    return this.store
+      .config()
+      .teachers.find((t) => t.name.trim().toLowerCase() === key && !this.activeTeacher.isVisible(t.id));
   }
 
   // --- Server: Konten, Einladungen, Rechte ---
@@ -233,7 +250,7 @@ export class ConfigEditor {
   }
 
   protected removeTeacher(teacher: Teacher): void {
-    if (confirm(`Lehrer „${teacher.name}“ löschen? Seine Personen und deren Termine gehören danach zum ersten Lehrer.`)) {
+    if (confirm(`Lehrkraft „${teacher.name}“ löschen? Ihre Personen und deren Termine gehören danach zur ersten Lehrkraft.`)) {
       this.store.removeTeacher(teacher.id);
     }
   }
@@ -300,13 +317,18 @@ export class ConfigEditor {
     }
   }
 
+  /** Die Farbe gehört der aktiven Lehrkraft; andere behalten ihre. */
+  protected setColor(color: string): void {
+    this.store.setTeacherColor(this.activeTeacher.teacher().id, color);
+  }
+
   protected setThemeColorFromText(event: Event): void {
     const input = event.target as HTMLInputElement;
     const color = input.value.trim().replace(/^#?/, '#');
     if (isHexColor(color)) {
-      this.store.setThemeColor(color);
+      this.setColor(color);
     } else {
-      input.value = this.store.config().themeColor;
+      input.value = this.activeTeacher.color();
       this.showError('Bitte die Farbe als Hex-Wert angeben, z. B. #f57115.');
     }
   }
@@ -350,14 +372,35 @@ export class ConfigEditor {
     return blocksOf(this.store.config(), kind).filter((block) => isVisibleTo(block, this.activeTeacher.teacher().id));
   }
 
+  protected readonly hasPlaceholderPeriod = computed(() => this.store.config().reportPeriods.some((p) => p.placeholder));
+
+  /** Eigene Unterrichtszeiten ändert jede Lehrkraft nur selbst (die aktive bzw. angemeldete). */
+  protected ownsWindows(teacher: Teacher): boolean {
+    return teacher.id === this.activeTeacher.teacher().id;
+  }
+
   /** Die aktiven Lehrer des Zeitraums in seiner Reihenfolge, danach die übrigen */
   protected teachersOf(period: ReportPeriodEntry): Teacher[] {
-    return byPeriodOrder(this.store.config().teachers, period.teacherIds);
+    // Lehrkräfte des Zeitraums immer, dazu die sichtbaren zum Aufnehmen
+    const teachers = this.store.config().teachers.filter((t) => period.teacherIds.includes(t.id) || this.activeTeacher.isVisible(t.id));
+    return byPeriodOrder(teachers, period.teacherIds);
   }
 
   /** Ort im oben gewählten Berichtszeitraum; ein neuer Zeitraum übernimmt ihn aus dem vorigen. */
   protected locationOf(teacher: Teacher): string {
     return locationIn(teacher, this.windowsPeriodId());
+  }
+
+  /** Mit Server sind gemeinsame Inhalte und Varianten gesperrt; jede Lehrkraft ändert nur eigene. */
+  protected readonly sharedEditable = computed(() => !this.sync.login());
+
+  protected canEdit(entry: { ownerId?: string }): boolean {
+    return entry.ownerId ? entry.ownerId === this.activeTeacher.teacher().id : this.sharedEditable();
+  }
+
+  /** Mit Server gehört Neues immer der eigenen Lehrkraft. */
+  protected newOwner(): string | undefined {
+    return this.sharedEditable() ? undefined : this.activeTeacher.teacher().id;
   }
 
   /** Gemeinsame Varianten und die eigenen des gewählten Lehrers */
@@ -375,7 +418,7 @@ export class ConfigEditor {
     input.value = '';
     if (!file) return;
     try {
-      this.store.addImageBlock(await readImageFile(file), kind);
+      this.store.addImageBlock(await readImageFile(file), kind, this.newOwner());
     } catch (e) {
       this.showError(`Bild konnte nicht geladen werden: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -434,7 +477,7 @@ export class ConfigEditor {
   }
 
   protected reset(): void {
-    if (confirm('Texte, Abschnitte und Gestaltung auf die Beispielvorlage zurücksetzen? Lehrer, Instrumente und Berichtszeiträume bleiben erhalten.')) {
+    if (confirm('Texte, Abschnitte und Gestaltung auf die Beispielvorlage zurücksetzen? Lehrkräfte, Instrumente und Berichtszeiträume bleiben erhalten.')) {
       this.store.resetToDefault();
       this.message.set(null);
     }

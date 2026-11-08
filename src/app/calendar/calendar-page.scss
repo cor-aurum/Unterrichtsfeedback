@@ -439,6 +439,16 @@
 .entry {
   position: absolute;
   box-sizing: border-box;
+  // Lange drücken öffnet kein Kontextmenü und markiert keinen Text: Das ist das Ziehen per Finger.
+  user-select: none;
+  -webkit-touch-callout: none;
+
+  &.dragging {
+    z-index: 5;
+    opacity: 0.85;
+    cursor: grabbing;
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+  }
   gap: 0;
   padding: 0.15rem 0.3rem;
   overflow: hidden;

@@ -36,3 +36,9 @@
   margin: 0;
   align-self: center;
 }
+
+// Gemeinsame Inhalte mit Server: nur zu sehen
+textarea[readonly] {
+  background: var(--bg);
+  color: var(--muted);
+}

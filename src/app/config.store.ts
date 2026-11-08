@@ -70,7 +70,6 @@ export class ConfigStore {
   );
   readonly config = storedSignal<FeedbackConfig>('feedback.config', defaultConfig, parseConfig);
 
-  readonly theme = computed(() => themeFrom(this.config().themeColor));
 
   setTitle(title: string): void {
     this.mutate((config) => (config.title = title));
@@ -93,8 +92,9 @@ export class ConfigStore {
     );
   }
 
-  setThemeColor(color: string): void {
-    if (isHexColor(color)) this.mutate((config) => (config.themeColor = color.toLowerCase()));
+  /** Persönliche Farbe einer Lehrkraft; die anderen behalten ihre. */
+  setTeacherColor(teacherId: string, color: string): void {
+    if (isHexColor(color)) this.mutateTeacher(teacherId, (teacher) => (teacher.themeColor = color.toLowerCase()));
   }
 
   setCalendarDefaults(change: Partial<CalendarSettings>): void {
@@ -144,10 +144,18 @@ export class ConfigStore {
   }
 
   /**
-   * Entfernt auch seine eigenen Abschnitte, Inhalte und Varianten. Personen dieses Lehrers gehören danach zum ersten
-   * Lehrer.
-   * Der letzte Lehrer bleibt immer erhalten.
+   * Nimmt eine vorhandene Lehrkraft in die laufenden und künftigen Berichtszeiträume von `ofTeacherId` auf, z. B.
+   * wenn jemand eine Lehrkraft „neu“ anlegt, die es schon gibt, die er bisher aber nicht sehen konnte.
    */
+  joinTeacherToPeriods(teacherId: string, ofTeacherId: string): void {
+    this.mutate((config) =>
+      config.reportPeriods
+        .filter((period) => period.to >= today() && period.teacherIds.includes(ofTeacherId))
+        .filter((period) => !period.teacherIds.includes(teacherId))
+        .forEach((period) => period.teacherIds.push(teacherId)),
+    );
+  }
+
   /** Ort des Lehrers in einem Berichtszeitraum; die anderen Zeiträume behalten ihren. */
   setTeacherLocation(teacherId: string, periodId: string, location: string): void {
     this.mutate((config) => {
@@ -156,6 +164,10 @@ export class ConfigStore {
     });
   }
 
+  /**
+   * Entfernt auch seine eigenen Abschnitte, Inhalte und Varianten. Personen dieses Lehrers gehören danach zum ersten
+   * Lehrer. Der letzte Lehrer bleibt immer erhalten.
+   */
   removeTeacher(teacherId: string): void {
     this.mutate((config) => {
       if (config.teachers.length <= 1) return;
@@ -380,7 +392,7 @@ export class ConfigStore {
         periodWindows: {},
         periodLocations: {},
       });
-      if (isHexColor(setup.themeColor)) config.themeColor = setup.themeColor.toLowerCase();
+      if (isHexColor(setup.themeColor)) config.teachers[0].themeColor = setup.themeColor.toLowerCase();
       config.reportPeriods = [
         { id: newId(), ...setup.reportPeriod, name: setup.reportPeriod.name.trim(), teacherIds: [config.teachers[0].id] },
       ];
@@ -403,6 +415,8 @@ export class ConfigStore {
       // Gemeinsame Zeiten übernimmt der neue Zeitraum ebenso.
       const shared = latest?.sharedWindows ? { sharedWindows: copyWindows(latest.sharedWindows) } : {};
       config.reportPeriods.push({ id, ...period, ...shared });
+      // Ein echter Zeitraum ersetzt den vorläufigen.
+      config.reportPeriods = config.reportPeriods.filter((p) => !p.placeholder);
     });
     return id;
   }
@@ -412,7 +426,8 @@ export class ConfigStore {
     const start = addDays(latest.to, 1);
     const halfYear = schoolHalfYear(start);
     // Wer zuletzt unterrichtet hat, ist meist auch im nächsten Zeitraum dabei.
-    const teacherIds = [...latest.teacherIds];
+    // Ein vorläufiger Zeitraum gilt für alle; der neue bekommt dann nur die, die ihn anlegt (siehe Konfiguration).
+    const teacherIds = latest.placeholder ? [] : [...latest.teacherIds];
     if (halfYear.from === start) return { name: halfYear.name, from: halfYear.from, to: halfYear.to, teacherIds };
     return { name: 'Neuer Zeitraum', from: start, to: addDays(start, daysBetween(latest.from, latest.to).length - 1), teacherIds };
   }
@@ -513,15 +528,24 @@ export class ConfigStore {
     this.mutate((config) => move(config.instruments, instrumentId, offset));
   }
 
-  addTextBlock(kind: ContentKind = 'single'): void {
+  /** Mit `ownerId` ein eigener Inhalt dieser Lehrkraft (mit Server immer, siehe Konfiguration) */
+  addTextBlock(kind: ContentKind = 'single', ownerId?: string): void {
     this.mutate((config) =>
-      blocksOf(config, kind).push({ id: newId(), type: 'text', position: 'start', text: '', variants: [] }),
+      blocksOf(config, kind).push({ id: newId(), type: 'text', position: 'start', text: '', variants: [], ...(ownerId ? { ownerId } : {}) }),
     );
   }
 
-  addImageBlock(image: BlockImage, kind: ContentKind = 'single'): void {
+  addImageBlock(image: BlockImage, kind: ContentKind = 'single', ownerId?: string): void {
     this.mutate((config) =>
-      blocksOf(config, kind).push({ id: newId(), type: 'image', position: 'start', text: '', image, variants: [] }),
+      blocksOf(config, kind).push({
+        id: newId(),
+        type: 'image',
+        position: 'start',
+        text: '',
+        image,
+        variants: [],
+        ...(ownerId ? { ownerId } : {}),
+      }),
     );
   }
 
@@ -549,10 +573,57 @@ export class ConfigStore {
     });
   }
 
-  addVariant(blockId: string): void {
+  /** Mit `ownerId` eine eigene Variante dieser Lehrkraft (mit Server immer, siehe Konfiguration) */
+  addVariant(blockId: string, ownerId?: string): void {
     this.mutateBlock(blockId, (block) =>
-      block.variants.push({ id: newId(), instrumentIds: [], periodIds: [], text: '' }),
+      block.variants.push({ id: newId(), instrumentIds: [], periodIds: [], text: '', ...(ownerId ? { ownerId } : {}) }),
     );
+  }
+
+  /**
+   * Einmal beim Abgleich mit einem Server: Mit Server ändert jede Lehrkraft nur noch eigene Inhalte und Varianten.
+   * Was bisher an gemeinsamen festen Inhalten geändert war, bleibt deshalb als eigene Variante jeder Lehrkraft
+   * erhalten (für die PDFs ändert sich nichts), und der gemeinsame Inhalt geht auf die Vorlage zurück. Gemeinsame
+   * Varianten werden ebenso zu eigenen jeder Lehrkraft, mit denselben Bedingungen.
+   */
+  migrateSharedContents(): void {
+    this.mutate((config) => {
+      if (config.sharedContentsMigrated) return;
+      const teacherIds = config.teachers.map((t) => t.id);
+      const copies = (content: BlockContent, conditions: Pick<BlockVariant, 'instrumentIds' | 'periodIds'>, id: string) =>
+        teacherIds.map((ownerId, index) => ({
+          // Feste IDs, damit jedes Gerät dieselben erzeugt
+          id: index === 0 ? id : `${id}-${ownerId}`,
+          instrumentIds: [...conditions.instrumentIds],
+          periodIds: [...conditions.periodIds],
+          text: content.text,
+          ...(content.image ? { image: content.image } : {}),
+          ownerId,
+        }));
+      const migrate = (blocks: FixedBlock[], template: FixedBlock[]) => {
+        blocks
+          .filter((block) => !block.ownerId)
+          .forEach((block, index) => {
+            // Eine gemeinsame Variante ohne Bedingung galt nie; als eigene würde sie plötzlich überall greifen.
+            const applies = (variant: BlockVariant) => variant.instrumentIds.length + variant.periodIds.length > 0;
+            const variants = block.variants.flatMap((variant) =>
+              variant.ownerId ? [variant] : applies(variant) ? copies(variant, variant, variant.id) : [],
+            );
+            const standard = template[index]?.type === block.type ? template[index] : undefined;
+            const changed = block.text !== (standard?.text ?? '') || !!block.image !== !!standard?.image;
+            if (changed) {
+              variants.push(...copies(block, { instrumentIds: [], periodIds: [] }, `${block.id}-eigen`));
+              block.text = standard?.text ?? '';
+              if (standard?.image) block.image = standard.image;
+              else delete block.image;
+            }
+            block.variants = variants;
+          });
+      };
+      migrate(config.blocks, defaultBlocks());
+      migrate(config.groupBlocks, defaultGroupBlocks());
+      config.sharedContentsMigrated = true;
+    });
   }
 
   /** `ownerId` null: Die Variante gilt wieder für alle Lehrer, auf die ihre Bedingungen passen. */
@@ -678,6 +749,7 @@ export function parseConfig(data: unknown): FeedbackConfig {
     groupSections: Array.isArray(config.groupSections) ? config.groupSections.map(parseSection) : defaultGroupSections(),
     reportPeriods: parseReportPeriods(config.reportPeriods, teachers.map((t) => t.id)),
     calendarPdf: parseCalendarPdfTexts(config.calendarPdf),
+    ...(config.sharedContentsMigrated ? { sharedContentsMigrated: true } : {}),
   };
 }
 
@@ -695,8 +767,9 @@ function parseReportPeriods(data: unknown, allTeacherIds: string[]): ReportPerio
       to: p.to!,
       teacherIds: Array.isArray(p.teacherIds) ? p.teacherIds.filter((id) => typeof id === 'string') : [...allTeacherIds],
       ...(Array.isArray(p.sharedWindows) ? { sharedWindows: parseTeachingWindows(p.sharedWindows) } : {}),
+      ...(p.placeholder ? { placeholder: true } : {}),
     }));
-  return periods.length > 0 ? periods : [{ ...schoolHalfYear(today()), teacherIds: [...allTeacherIds] }];
+  return periods.length > 0 ? periods : [{ ...schoolHalfYear(today()), teacherIds: [...allTeacherIds], placeholder: true }];
 }
 
 export function isPeriod(data: Partial<Period> | null | undefined): data is Period {
@@ -748,6 +821,7 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       // Ältere Lehrer haben noch keine Zeiten und Orte je Berichtszeitraum; dort gelten die allgemeinen.
       periodWindows: parsePeriodWindows(t.periodWindows),
       periodLocations: parsePeriodLocations(t.periodLocations),
+      ...(isHexColor(t.themeColor) ? { themeColor: t.themeColor.toLowerCase() } : {}),
     }));
   }
   const legacyWindows = (config.calendar as { teachingWindows?: unknown } | undefined)?.teachingWindows;
@@ -930,6 +1004,25 @@ function defaultGroupSections(): Section[] {
   ];
 }
 
+function defaultBlocks(): FixedBlock[] {
+  return [
+    {
+      id: newId(),
+      type: 'text',
+      position: 'start',
+      text: 'Hallo {vorname},\n\nhier ist meine Rückmeldung zu unserem Unterricht. Lies sie dir in Ruhe durch und nimm die Aufgaben mit in deine Übezeit.',
+      variants: [],
+    },
+    {
+      id: newId(),
+      type: 'text',
+      position: 'end',
+      text: 'Viel Spaß beim Üben und bis zur nächsten Stunde!',
+      variants: [],
+    },
+  ];
+}
+
 function defaultGroupBlocks(): FixedBlock[] {
   return [
     {
@@ -970,22 +1063,7 @@ function defaultConfig(): FeedbackConfig {
     ],
     instruments: [instrument],
     defaultInstrumentId: instrument.id,
-    blocks: [
-      {
-        id: newId(),
-        type: 'text',
-        position: 'start',
-        text: 'Hallo {vorname},\n\nhier ist meine Rückmeldung zu unserem Unterricht. Lies sie dir in Ruhe durch und nimm die Aufgaben mit in deine Übezeit.',
-        variants: [],
-      },
-      {
-        id: newId(),
-        type: 'text',
-        position: 'end',
-        text: 'Viel Spaß beim Üben und bis zur nächsten Stunde!',
-        variants: [],
-      },
-    ],
+    blocks: defaultBlocks(),
     sections: [
       checklist(
         'Das zeichnet dich aus',

@@ -2,15 +2,18 @@
 //
 // Die App speichert ihre Daten in denselben Dokumenten wie früher im Sync-Ordner:
 //
-//	konfiguration.json                  gemeinsame Konfiguration, darin die Berichtszeiträume mit ihren Lehrern
-//	allgemeine-termine.json             Termine für mehrere Lehrer
+//	konfiguration.json                  gemeinsame Konfiguration (ohne Berichtszeiträume)
+//	allgemeine-termine.json             Termine für mehrere Lehrer außerhalb der Berichtszeiträume
 //	lehrer-<Lehrer-ID>.json             ein Lehrer mit Textvarianten und Blockern
+//	berichtszeitraum_<Zeitraum-ID>.json ein Berichtszeitraum: Name, Daten, Lehrer, Unterrichtszeiten und Orte der
+//	                                    Lehrer darin, seine allgemeinen Termine
 //	zeitraum_<Zeitraum-ID>_<Lehrer-ID>.json
 //	                                    Personen, Gruppen, Stunden und Termine eines Lehrers in einem Zeitraum
 //	                                    (ohne Zeitraum-ID: Personen ohne bekannten Zeitraum)
 //
-// Personen und ihre Stunden sieht nur, wer in dem Berichtszeitraum als Lehrer eingetragen ist. Wer das ist, steht
-// in der Konfiguration; ändern dürfen das nur die Lehrer, die schon eingetragen sind.
+// Alles, was zu einem Berichtszeitraum gehört, sieht nur, wer in ihm als Lehrer eingetragen ist; die anderen
+// erfahren nur, dass es ihn gibt. Wer eingetragen ist, steht im Dokument des Zeitraums; ändern dürfen das nur die
+// Lehrer, die schon eingetragen sind.
 package access
 
 import (
@@ -29,6 +32,7 @@ const (
 	Shared
 	Teacher
 	Period
+	PeriodConfig
 )
 
 const (
@@ -39,6 +43,7 @@ const (
 var (
 	teacherName = regexp.MustCompile(`^lehrer-([A-Za-z0-9-]+)\.json$`)
 	periodName  = regexp.MustCompile(`^zeitraum_([A-Za-z0-9-]*)_([A-Za-z0-9-]+)\.json$`)
+	reportName  = regexp.MustCompile(`^berichtszeitraum_([A-Za-z0-9-]+)\.json$`)
 )
 
 // Doc ist ein Dokumentname mit dem, was sich aus ihm ablesen lässt.
@@ -66,13 +71,48 @@ func Parse(name string) (Doc, error) {
 	if m := periodName.FindStringSubmatch(name); m != nil {
 		return Doc{Name: name, Kind: Period, PeriodID: m[1], TeacherID: m[2]}, nil
 	}
+	if m := reportName.FindStringSubmatch(name); m != nil {
+		return Doc{Name: name, Kind: PeriodConfig, PeriodID: m[1]}, nil
+	}
 	return Doc{}, ErrUnknownName
+}
+
+// PeriodDocName ist der Name des Dokuments eines Berichtszeitraums.
+func PeriodDocName(periodID string) string {
+	return "berichtszeitraum_" + periodID + ".json"
+}
+
+// PeriodOf liest ID und Lehrer aus dem Dokument eines Berichtszeitraums.
+func PeriodOf(content []byte) (string, []string, error) {
+	var file struct {
+		Period struct {
+			ID         string   `json:"id"`
+			TeacherIDs []string `json:"teacherIds"`
+		} `json:"period"`
+	}
+	if err := json.Unmarshal(content, &file); err != nil {
+		return "", nil, fmt.Errorf("Berichtszeitraum lässt sich nicht lesen: %w", err)
+	}
+	if file.Period.ID == "" {
+		return "", nil, errors.New("der Berichtszeitraum hat keine ID")
+	}
+	return file.Period.ID, file.Period.TeacherIDs, nil
+}
+
+// HasPeriods ist wahr, wenn eine Konfiguration noch Berichtszeiträume enthält (ältere App-Versionen).
+func HasPeriods(config []byte) bool {
+	var file struct {
+		Config struct {
+			ReportPeriods []json.RawMessage `json:"reportPeriods"`
+		} `json:"config"`
+	}
+	return json.Unmarshal(config, &file) == nil && len(file.Config.ReportPeriods) > 0
 }
 
 // Members ordnet jedem Berichtszeitraum die Lehrer zu, die in ihm eingetragen sind.
 type Members map[string][]string
 
-// MembersOf liest die Berichtszeiträume aus der Konfiguration; ohne Konfiguration gibt es keine.
+// MembersOf liest die Berichtszeiträume aus einer älteren Konfiguration, die sie noch enthält; ohne gibt es keine.
 func MembersOf(config []byte) (Members, error) {
 	members := Members{}
 	if len(config) == 0 {
@@ -105,6 +145,9 @@ func (m Members) In(periodID, teacherID string) bool {
 
 // CanRead sagt, ob der Lehrer das Dokument sehen darf.
 func CanRead(doc Doc, teacherID string, members Members) bool {
+	if doc.Kind == PeriodConfig {
+		return members.In(doc.PeriodID, teacherID)
+	}
 	if doc.Kind != Period {
 		return true
 	}
@@ -115,45 +158,14 @@ func CanRead(doc Doc, teacherID string, members Members) bool {
 	return members.In(doc.PeriodID, teacherID)
 }
 
-// CanWrite sagt, ob der Lehrer das Dokument ändern oder löschen darf. Für die Konfiguration prüft CheckConfig
-// zusätzlich, welche Zeiträume sich ändern.
+// CanWrite sagt, ob der Lehrer das Dokument ändern oder löschen darf. Einen neuen Berichtszeitraum darf jeder
+// anlegen; dass er sich dabei selbst einträgt, prüft der Server am Inhalt.
 func CanWrite(doc Doc, teacherID string, members Members) bool {
+	if doc.Kind == PeriodConfig {
+		_, exists := members[doc.PeriodID]
+		return !exists || members.In(doc.PeriodID, teacherID)
+	}
 	return CanRead(doc, teacherID, members)
-}
-
-// CheckConfig prüft eine neue Konfiguration gegen die bisherige: Die Lehrer eines Zeitraums ändern oder ihn
-// löschen darf nur, wer in ihm eingetragen ist; einen neuen Zeitraum anlegen darf jeder, der sich selbst einträgt.
-func CheckConfig(old, next Members, teacherID string) error {
-	for id, before := range old {
-		after, kept := next[id]
-		if kept && sameSet(before, after) {
-			continue
-		}
-		if !slices.Contains(before, teacherID) {
-			if !kept {
-				return fmt.Errorf("Berichtszeitraum %q: nur eingetragene Lehrer dürfen ihn löschen", id)
-			}
-			return fmt.Errorf("Berichtszeitraum %q: nur eingetragene Lehrer dürfen seine Lehrer ändern", id)
-		}
-	}
-	for id, after := range next {
-		if _, existed := old[id]; !existed && !slices.Contains(after, teacherID) {
-			return fmt.Errorf("Berichtszeitraum %q: wer ihn anlegt, muss selbst eingetragen sein", id)
-		}
-	}
-	return nil
-}
-
-func sameSet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for _, x := range a {
-		if !slices.Contains(b, x) {
-			return false
-		}
-	}
-	return true
 }
 
 // StudentIDs liest die IDs der Personen aus einem Zeitraum-Dokument, z. B. um eine Zusammenführung zu prüfen.

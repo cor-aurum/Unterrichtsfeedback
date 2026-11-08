@@ -180,7 +180,7 @@ export class ExportPage {
     const config = this.config();
     const teacherName = (id: string) => config.teachers.find((t) => t.id === id)?.name ?? 'unbekannte Lehrkraft';
     const teacher = /^lehrer-(.+)\.json$/.exec(name);
-    if (teacher) return `Lehrer ${teacherName(teacher[1])}`;
+    if (teacher) return `Lehrkraft ${teacherName(teacher[1])}`;
     const period = /^zeitraum_([^_]*)_(.+)\.json$/.exec(name);
     if (period) {
       const periodName = config.reportPeriods.find((p) => p.id === period[1])?.name ?? 'ohne Berichtszeitraum';

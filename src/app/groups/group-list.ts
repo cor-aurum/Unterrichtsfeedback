@@ -17,7 +17,7 @@ export class GroupList {
   private readonly students = inject(StudentsStore).students;
   private readonly config = inject(ConfigStore).config;
   private readonly activeTeacher = inject(ActiveTeacher);
-  protected readonly multipleTeachers = computed(() => this.config().teachers.length > 1);
+  protected readonly multipleTeachers = computed(() => this.activeTeacher.visibleTeachers().length > 1);
 
   private readonly teacherFilter = inject(TeacherFilter);
   /** Gruppen, deren Lehrer zum Filter unter „Personen“ passt */

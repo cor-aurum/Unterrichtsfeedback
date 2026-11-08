@@ -112,6 +112,9 @@ func serve(args []string) error {
 		return err
 	}
 	defer st.Close()
+	if err := server.Migrate(context.Background()); err != nil {
+		return fmt.Errorf("Daten umstellen: %w", err)
+	}
 	if o.publicURL == "" {
 		log.Print("Hinweis: --public-url fehlt; Einladungscodes aus der App enthalten dann keine Serveradresse.")
 	}
