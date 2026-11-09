@@ -16,6 +16,17 @@
     <a routerLink="/export" routerLinkActive="active">Export &amp; Sicherung</a>
   </nav>
   <div class="tools">
+    @if (demoMode) {
+      <button
+        type="button"
+        class="demo-badge"
+        (click)="endDemo()"
+        aria-label="Demomodus beenden"
+        title="Demomodus beenden – alle Änderungen der Demo werden verworfen, deine echten Daten bleiben"
+      >
+        Demo <span class="demo-end">beenden ✕</span>
+      </button>
+    }
     @if (reportPeriod.periods().length > 1) {
       <select
         class="teacher-select"
@@ -60,6 +71,12 @@
 </header>
 
 <main>
+  @if (demoPeriodStart(); as start) {
+    <p class="message demo-bar">
+      Der Demolehrgang beginnt am {{ start }}.
+      <button type="button" class="secondary" (click)="startDemoPeriodToday()">Jetzt beginnen lassen</button>
+    </p>
+  }
   @if (syncNeedsAttention()) {
     <p class="message warning sync-banner">
       Der Abgleich mit dem Server wartet auf dich. <a routerLink="/export">Zu Export &amp; Sicherung</a>

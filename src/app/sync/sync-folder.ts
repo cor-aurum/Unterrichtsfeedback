@@ -9,7 +9,11 @@ export interface SyncFolder {
   requestAccess(): Promise<boolean>;
   list(): Promise<FolderEntry[]>;
   read(name: string): Promise<string>;
-  write(name: string, text: string): Promise<void>;
+  /**
+   * Schreibt die Datei und liefert ihre neue Version. Mit `expected` (Version beim Lesen, `0` für eine neue Datei)
+   * nur, wenn sie seitdem niemand geändert hat; sonst `StaleError`.
+   */
+  write(name: string, text: string, expected?: string): Promise<string | undefined>;
   remove(name: string): Promise<void>;
 }
 

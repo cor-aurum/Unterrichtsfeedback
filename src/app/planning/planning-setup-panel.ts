@@ -4,6 +4,7 @@ import { addDays } from '../calendar/appointments';
 import { formatShortDate, Teacher, today } from '../model';
 import { ReportPeriod } from '../report-period';
 import { storedSignal } from '../stored-signal';
+import { ServerSync } from '../sync/server-sync';
 import { StudentPlanning } from './student-planning';
 
 /**
@@ -23,6 +24,9 @@ export class PlanningSetupPanel {
   protected readonly teacher = inject(ActiveTeacher).teacher;
   private readonly reportPeriod = inject(ReportPeriod);
   protected readonly period = this.reportPeriod.period;
+  /** Nur mit Server lassen sich mehrere Tablets gleichzeitig verwenden. */
+  private readonly sync = inject(ServerSync);
+  protected readonly withServer = computed(() => this.sync.status() !== 'off');
 
   /** Die Lehrkräfte des Zeitraums (und der aktive Lehrer, falls er dort fehlt) */
   protected readonly candidates = computed(() => this.reportPeriod.teachersWith(this.teacher().id));

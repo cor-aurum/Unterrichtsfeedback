@@ -3,10 +3,11 @@ import { BackupService } from '../backup';
 import { CalendarFeed } from '../calendar/calendar-feed';
 import { ConfigStore } from '../config.store';
 import { PersonMerger } from '../person-merger';
-import { storedSignal } from '../stored-signal';
-import { ServerError, ServerFolder, ServerLogin, serverApi } from './server-folder';
+import { storageKey, storedSignal } from '../stored-signal';
+import { mergePeriodFile } from './merge-files';
+import { ServerError, ServerFolder, ServerLogin, serverApi, StaleError } from './server-folder';
 import { SyncFolder } from './sync-folder';
-import { fromSyncFiles, isSyncFile, SyncFiles } from './sync-files';
+import { fromSyncFiles, isPeriodFile, isSyncFile, SyncFiles } from './sync-files';
 import { Checksums, planSync } from './sync-plan';
 
 /**
@@ -21,6 +22,18 @@ export type SyncStatus = 'off' | 'reconnect' | 'ok' | 'initial' | 'conflict' | '
 const WRITE_DELAY_MS = 1500;
 /** Wie oft der Server auf Änderungen anderer Geräte geprüft wird, solange die App sichtbar ist */
 const POLL_INTERVAL_MS = 20_000;
+/** Während Schüler:innen sich an Tablets eintragen, öfter: Vergebene Zeiten verschwinden so schnell überall. */
+const FAST_POLL_INTERVAL_MS = 4_000;
+/** So oft wird neu abgeglichen, wenn ein anderes Gerät gerade dieselbe Datei geschrieben hat */
+const STALE_RETRIES = 5;
+
+/**
+ * Ergebnis von `transact`:
+ * - `saved`: auf dem Server gespeichert
+ * - `local`: nur auf diesem Gerät (ohne Server oder ohne Verbindung); der Abgleich folgt später
+ * - `rejected`: nicht möglich, z. B. weil die Zeit inzwischen vergeben ist
+ */
+export type TransactResult = 'saved' | 'local' | 'rejected';
 /** Einstellungen der früheren Ordner-Synchronisation; sie werden beim Start entfernt. */
 const LEGACY_KEYS = ['feedback.syncFolder', 'feedback.syncKnown'];
 
@@ -53,27 +66,38 @@ export class ServerSync {
   readonly serverEmpty = signal(false);
   /** Berichtszeiträume auf dem Server, in denen der angemeldete Lehrer nicht eingetragen ist; mehr erfährt er nicht. */
   readonly foreignPeriods = signal(0);
+  /** Solange die Schüler-Planung läuft: öfter abgleichen */
+  readonly fastPolling = signal(false);
   /** Hinweis, wenn auf diesem Gerät noch die frühere Ordner-Synchronisation eingerichtet war */
-  readonly legacyNotice = signal(LEGACY_KEYS.some((key) => localStorage.getItem(key) !== null));
+  readonly legacyNotice = signal(LEGACY_KEYS.some((key) => localStorage.getItem(storageKey(key)) !== null));
 
   private folder: SyncFolder | null = null;
   /** Zuletzt gelesene Inhalte; eine Datei wird nur neu gelesen, wenn sich ihre Version geändert hat. */
   private readonly cache = new Map<string, { version: string; content: string }>();
+  /** Inhalte beim letzten Abgleich: Grundlage, um Zeitraum-Dateien je Eintrag zusammenzuführen (nur im Speicher) */
+  private base = new Map<string, string>();
+  private lastPoll = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private queue: Promise<void> = Promise.resolve();
 
   constructor() {
-    LEGACY_KEYS.forEach((key) => localStorage.removeItem(key));
+    LEGACY_KEYS.forEach((key) => localStorage.removeItem(storageKey(key)));
     effect(() => {
       this.backup.files();
       if (untracked(this.status) === 'ok') this.scheduleSync();
     });
     const syncIfVisible = () => {
-      if (document.visibilityState === 'visible' && this.status() === 'ok') this.run(() => this.sync());
+      // Nach einem Fehler (z. B. kurz offline) von selbst erneut versuchen, damit Tablets ihre Eintragungen nachreichen.
+      if (document.visibilityState !== 'visible' || !['ok', 'error'].includes(this.status())) return;
+      this.lastPoll = Date.now();
+      this.run(() => this.sync());
     };
     document.addEventListener('visibilitychange', syncIfVisible);
     window.addEventListener('focus', syncIfVisible);
-    setInterval(syncIfVisible, POLL_INTERVAL_MS);
+    setInterval(() => {
+      const interval = this.fastPolling() ? FAST_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
+      if (Date.now() - this.lastPoll >= interval - 500) syncIfVisible();
+    }, FAST_POLL_INTERVAL_MS);
     this.run(() => this.restore());
   }
 
@@ -109,6 +133,48 @@ export class ServerSync {
     if (login) await serverApi.logout(login);
   }
 
+  /**
+   * Für Eintragungen an mehreren Geräten gleichzeitig (Schüler-Planung): holt erst den neuesten Stand vom Server,
+   * führt dann `change` aus und schreibt sofort. Hat ein anderes Gerät dazwischen dieselbe Datei geschrieben, lehnt
+   * der Server ab; dann wird `change` zurückgenommen und mit dem neuen Stand wiederholt. `change` prüft selbst, ob
+   * die Änderung noch geht, und liefert ihre Rücknahme oder `false`.
+   */
+  transact(change: () => (() => void) | false): Promise<TransactResult> {
+    let result: TransactResult = 'local';
+    const attempt = async () => {
+      if (this.folder && this.status() !== 'off') {
+        for (let i = 0; i < STALE_RETRIES; i++) {
+          try {
+            await this.syncOnce();
+          } catch (e) {
+            if (e instanceof StaleError) continue;
+            this.fail(e);
+            break;
+          }
+          if (this.status() !== 'ok') break;
+          const undo = change();
+          if (!undo) {
+            result = 'rejected';
+            return;
+          }
+          try {
+            await this.writeLocal();
+            result = 'saved';
+            return;
+          } catch (e) {
+            undo();
+            if (e instanceof StaleError) continue;
+            this.fail(e);
+            break;
+          }
+        }
+      }
+      // Ohne Server oder ohne Verbindung gilt die Änderung erst einmal nur hier.
+      result = change() ? 'local' : 'rejected';
+    };
+    return this.run(attempt).then(() => result);
+  }
+
   /** Übernimmt alle Daten vom Server; die Daten auf diesem Gerät werden ersetzt. */
   loadFromServer(): Promise<void> {
     return this.run(async () => {
@@ -117,13 +183,16 @@ export class ServerSync {
       // Ohne Daten auf dem Server bleiben die dieses Geräts; sie werden hochgeladen.
       if (remote.size > 0) this.backup.importFiles(remote);
       await this.applyMerges();
-      await this.writeLocal(remote);
+      await this.writeLocal();
     });
   }
 
   /** Schreibt alle Daten dieses Geräts auf den Server (soweit dieser Lehrer sie ändern darf). */
   overwriteServer(): Promise<void> {
-    return this.run(async () => this.writeLocal(await this.readServer()));
+    return this.run(async () => {
+      await this.readServer();
+      await this.writeLocal(true);
+    });
   }
 
   retry(): Promise<void> {
@@ -162,6 +231,17 @@ export class ServerSync {
    * wird ohne `keep` nichts verändert. Zusammenführungen von Personen gehen vorher an den Server und kommen von ihm.
    */
   private async sync(keep?: 'server' | 'local'): Promise<void> {
+    // Hat ein anderes Gerät gerade dieselbe Datei geschrieben, einfach mit dessen Stand neu abgleichen.
+    for (let i = 1; ; i++) {
+      try {
+        return await this.syncOnce(keep);
+      } catch (e) {
+        if (!(e instanceof StaleError) || i >= STALE_RETRIES) throw e;
+      }
+    }
+  }
+
+  private async syncOnce(keep?: 'server' | 'local'): Promise<void> {
     await this.sendMerges();
     const remote = await this.readServer();
     const base = this.known();
@@ -175,20 +255,35 @@ export class ServerSync {
     }
     const local = this.backup.files();
     const plan = planSync(base, checksums(local), checksums(remote));
-    if (plan.conflicts.length > 0 && !keep) {
-      this.conflicts.set(plan.conflicts);
+    const merged = this.mergePeriodFiles(plan.conflicts, local, remote);
+    const conflicts = plan.conflicts.filter((name) => !merged.has(name));
+    if (conflicts.length > 0 && !keep) {
+      this.conflicts.set(conflicts);
       this.status.set('conflict');
       return;
     }
-    const pull = keep === 'server' ? [...plan.pull, ...plan.conflicts] : plan.pull;
-    if (pull.length > 0) this.pull(local, remote, pull);
+    const pull = [...plan.pull, ...merged.keys(), ...(keep === 'server' ? conflicts : [])];
+    if (pull.length > 0) this.pull(local, new Map([...remote, ...merged]), pull);
     // Erst nach dem Übernehmen: Wer zusammengeführt hat, hat die betroffenen Dateien meist schon geschrieben. Davor
     // wäre die Zusammenführung hier eine eigene Änderung an denselben Dateien und damit ein Konflikt.
     await this.applyMerges();
     // Mit Server ändert jede Lehrkraft nur eigene feste Inhalte; ältere geänderte gemeinsame Texte werden einmal
     // zu eigenen Varianten aller Lehrkräfte.
     if (!this.configStore.config().sharedContentsMigrated) this.configStore.migrateSharedContents();
-    await this.writeLocal(remote);
+    await this.writeLocal();
+  }
+
+  /**
+   * Zeitraum-Dateien, die hier und auf dem Server geändert wurden, je Eintrag zusammenführen: Tragen sich an zwei
+   * Tablets Personen bei derselben Lehrkraft ein, bleiben beide Termine erhalten statt eines Konflikts.
+   */
+  private mergePeriodFiles(conflicts: string[], local: SyncFiles, remote: SyncFiles): Map<string, string> {
+    const merged = new Map<string, string>();
+    for (const name of conflicts.filter(isPeriodFile)) {
+      const content = mergePeriodFile(this.base.get(name), local.get(name), remote.get(name));
+      if (content !== null) merged.set(name, content);
+    }
+    return merged;
   }
 
   /** Hat dieses Gerät eigene Personen? Eine frische Einrichtung zählt nicht. */
@@ -233,18 +328,29 @@ export class ServerSync {
 
   /**
    * Bringt den Server auf den Stand dieses Geräts: schreibt abweichende Dateien und entfernt Dateien, die es hier
-   * nicht mehr gibt. Danach ist dieser Stand die Grundlage für den nächsten Abgleich.
+   * nicht mehr gibt. Danach ist dieser Stand die Grundlage für den nächsten Abgleich. Geschrieben wird nur, wenn
+   * die Datei auf dem Server noch die zuletzt gelesene Version hat (sonst `StaleError`), außer bei `force`.
    */
-  private async writeLocal(remote: SyncFiles): Promise<void> {
+  private async writeLocal(force = false): Promise<void> {
     const folder = this.folder!;
     const local = this.backup.files();
     for (const [name, content] of local) {
-      if (remote.get(name) !== content) await folder.write(name, content);
+      const known = this.cache.get(name);
+      if (known?.content === content) continue;
+      const version = await folder.write(name, content, force ? undefined : (known?.version ?? '0'));
+      if (version) {
+        this.cache.set(name, { version, content });
+      } else {
+        this.cache.delete(name);
+      }
     }
-    for (const name of remote.keys()) {
-      if (!local.has(name)) await folder.remove(name);
+    for (const name of [...this.cache.keys()]) {
+      if (local.has(name)) continue;
+      await folder.remove(name);
+      this.cache.delete(name);
     }
     this.known.set(checksums(local));
+    this.base = new Map(local);
     this.conflicts.set([]);
     this.lastSync.set(new Date());
     this.status.set('ok');
@@ -306,6 +412,11 @@ export class ServerSync {
   }
 
   private fail(e: unknown): void {
+    if (e instanceof StaleError) {
+      // Kein Fehler: Ein anderes Gerät war schneller; der nächste Abgleich übernimmt dessen Stand.
+      this.scheduleSync();
+      return;
+    }
     if (e instanceof ServerError && e.status === 401) {
       this.status.set('reconnect');
       this.error.set(null);

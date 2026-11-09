@@ -9,6 +9,7 @@ import { ConfigStore } from '../config.store';
 import { PdfExport } from '../pdf-export';
 import { labelOf, ReportPeriod } from '../report-period';
 import { isNativeApp } from '../save-file';
+import { storageKey } from '../stored-signal';
 import { StudentLabelPipe } from '../student-label.pipe';
 import { StudentsStore } from '../students.store';
 import { GroupsStore } from '../groups.store';
@@ -205,7 +206,8 @@ export class ExportPage {
       return;
     }
     await this.sync.disconnect();
-    for (const key of Object.keys(localStorage).filter((k) => k.startsWith('feedback.'))) {
+    // Im Demomodus nur die Demodaten
+    for (const key of Object.keys(localStorage).filter((k) => k.startsWith(storageKey('feedback.')))) {
       localStorage.removeItem(key);
     }
     location.hash = '#/stunden';

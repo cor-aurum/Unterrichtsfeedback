@@ -1,3 +1,9 @@
+@if (offline()) {
+  <p class="sync-warning" role="status">
+    Keine Verbindung zum Server: Deine Termine sind auf diesem Tablet gespeichert und werden später übertragen.
+    Bitte sag einer Lehrkraft Bescheid.
+  </p>
+}
 @if (session(); as s) {
   @if (student(); as current) {
     <header class="student-head">
@@ -25,6 +31,9 @@
         </p>
       }
       <p class="hint">Tippe auf eine Zeit, um sie zu wählen. Nochmal tippen gibt sie wieder frei.</p>
+      @if (notice(); as text) {
+        <p class="notice" role="alert">{{ text }}</p>
+      }
       @if (hasGroupClashes()) {
         <p class="hint clash-hint"><span class="clash-mark">⚠</span> heißt: Zu dieser Zeit hast du Gruppenunterricht.</p>
       }
@@ -38,7 +47,7 @@
                 class="time"
                 [class.own]="slot.own"
                 [class.clash]="!!slot.groupClash"
-                [disabled]="slot.own ? !slot.appointmentId : remaining() === 0"
+                [disabled]="busy() || (slot.own ? !slot.appointmentId : remaining() === 0)"
                 [attr.aria-pressed]="slot.own"
                 [title]="slot.groupClash ? 'Zu dieser Zeit: ' + slot.groupClash : ''"
                 (click)="toggle(slot)"

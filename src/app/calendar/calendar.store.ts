@@ -65,8 +65,11 @@ export class CalendarStore {
     });
   }
 
-  add(appointment: Omit<Appointment, 'id'>): void {
-    this.appointments.update((list) => [...list, { ...appointment, id: newId() }]);
+  /** Liefert die ID des neuen Termins */
+  add(appointment: Omit<Appointment, 'id'>): string {
+    const id = newId();
+    this.appointments.update((list) => [...list, { ...appointment, id }]);
+    return id;
   }
 
   /** Bei Terminserien gilt die Änderung für alle Wiederholungen. */

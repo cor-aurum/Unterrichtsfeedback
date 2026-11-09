@@ -4,7 +4,9 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { ActiveTeacher } from './active-teacher';
 import { appVersion, AppUpdate } from './app-update';
 import { ConfigStore } from './config.store';
-import { byPeriodOrder } from './model';
+import { byPeriodOrder, formatLongDate, today } from './model';
+import { DEMO_PERIOD_ID, endDemo, startDemoPeriodToday } from './demo';
+import { demoMode } from './stored-signal';
 import { ReportPeriod } from './report-period';
 import { ServerSync } from './sync/server-sync';
 import { isNativeApp } from './save-file';
@@ -44,6 +46,16 @@ export class App {
     return login ? new URL(login.url).host : '';
   });
   protected readonly nativeApp = isNativeApp;
+  /** Im Demomodus zeigt die Leiste das deutlich und beendet ihn mit einem Klick (die Demo wird verworfen). */
+  protected readonly demoMode = demoMode;
+  protected readonly endDemo = endDemo;
+  protected readonly startDemoPeriodToday = startDemoPeriodToday;
+  /** Beginn des Demolehrgangs, solange er noch in der Zukunft liegt, z. B. „Montag, 16. November 2026“ */
+  protected readonly demoPeriodStart = computed(() => {
+    if (!demoMode) return null;
+    const period = this.configStore.config().reportPeriods.find((p) => p.id === DEMO_PERIOD_ID);
+    return period && period.from > today() ? formatLongDate(period.from) : null;
+  });
   /** Läuft die Schüler-Planung, zeigt die App nur sie. */
   protected readonly planning = inject(StudentPlanning);
   /** Hinweis auf eine neuere Android-App */

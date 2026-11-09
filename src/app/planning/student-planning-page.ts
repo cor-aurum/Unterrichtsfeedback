@@ -1,5 +1,6 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { formatShortDate, Student, Teacher } from '../model';
+import { ServerSync } from '../sync/server-sync';
 import { PlanningSlot, StudentPlanning } from './student-planning';
 
 /** Ohne Berührung geht die Ansicht nach dieser Zeit zurück zur Namensliste, falls jemand „Fertig“ vergisst. */
@@ -23,6 +24,13 @@ interface PlanningDay {
 })
 export class StudentPlanningPage {
   protected readonly planning = inject(StudentPlanning);
+  private readonly sync = inject(ServerSync);
+  /** Mit Server, aber gerade ohne Abgleich: Eintragungen bleiben vorerst auf diesem Tablet. */
+  protected readonly offline = computed(() => ['reconnect', 'initial', 'conflict', 'error'].includes(this.sync.status()));
+  /** Während eine Zeit eingetragen wird (mit Server: abgleichen und speichern) */
+  protected readonly busy = signal(false);
+  /** z. B. „Diese Zeit wurde gerade an einem anderen Tablet vergeben.“ */
+  protected readonly notice = signal<string | null>(null);
   protected readonly session = this.planning.session;
   protected readonly teachers = this.planning.teachers;
   protected readonly teacherNames = computed(() => this.teachers().map((t) => t.name).join(', '));
@@ -74,7 +82,10 @@ export class StudentPlanningPage {
   private thanksTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
+    // Vergebene Zeiten anderer Tablets sollen schnell verschwinden.
+    this.sync.fastPolling.set(true);
     inject(DestroyRef).onDestroy(() => {
+      this.sync.fastPolling.set(false);
       clearTimeout(this.idleTimer);
       clearTimeout(this.thanksTimer);
     });
@@ -82,6 +93,7 @@ export class StudentPlanningPage {
 
   protected choose(student: Student): void {
     this.thanks.set(null);
+    this.notice.set(null);
     this.browsingTeacherId.set(null);
     this.studentId.set(student.id);
     window.scrollTo({ top: 0 });
@@ -94,19 +106,27 @@ export class StudentPlanningPage {
   }
 
   /** Antippen wählt eine freie Zeit oder gibt eine eigene wieder frei. */
-  protected toggle(slot: PlanningSlot): void {
+  protected async toggle(slot: PlanningSlot): Promise<void> {
     const student = this.student();
     const teacher = this.teacher();
-    if (!student || !teacher) return;
+    if (!student || !teacher || this.busy()) return;
+    this.notice.set(null);
     if (slot.own) {
       if (slot.appointmentId) this.planning.unbook(slot.appointmentId);
       return;
     }
-    this.planning.book(student, teacher, slot);
+    this.busy.set(true);
+    try {
+      const result = await this.planning.book(student, teacher, slot);
+      if (result === 'rejected') this.notice.set('Diese Zeit wurde gerade vergeben. Bitte wähle eine andere.');
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected done(): void {
     const student = this.student();
+    this.notice.set(null);
     this.studentId.set(null);
     this.browsingTeacherId.set(null);
     window.scrollTo({ top: 0 });

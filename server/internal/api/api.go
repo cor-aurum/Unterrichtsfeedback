@@ -265,7 +265,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request, account store.Accoun
 			foreign++
 		}
 	}
-	writeJSON(w, map[string]any{"username": account.Username, "teacherId": account.TeacherID, "foreignPeriods": foreign})
+	// conditionalWrites: Der Server kennt If-Match beim Schreiben; ältere erlauben den Header nicht einmal (CORS).
+	writeJSON(w, map[string]any{
+		"username": account.Username, "teacherId": account.TeacherID, "foreignPeriods": foreign, "conditionalWrites": true,
+	})
 }
 
 // accounts zeigt, welche Lehrer schon ein Konto haben, damit die App nur für die anderen Einladungen anbietet.
@@ -434,12 +437,36 @@ func (s *Server) putDoc(w http.ResponseWriter, r *http.Request, account store.Ac
 			return
 		}
 	}
-	revision, err := s.store.PutDoc(r.Context(), doc.Name, content, account.ID)
+	revision, err := s.storeDoc(r, doc.Name, content, account.ID)
+	if errors.Is(err, store.ErrStale) {
+		fail(w, http.StatusPreconditionFailed, "Das Dokument wurde inzwischen auf einem anderen Gerät geändert.")
+		return
+	}
+	if errors.Is(err, errBadRevision) {
+		fail(w, http.StatusBadRequest, "If-Match muss eine Revision sein.")
+		return
+	}
 	if err != nil {
 		internal(w, err)
 		return
 	}
 	writeJSON(w, map[string]string{"version": strconv.FormatInt(revision, 10)})
+}
+
+var errBadRevision = errors.New("ungültige Revision")
+
+// storeDoc speichert das Dokument. Mit If-Match (Revision beim Lesen, 0 für ein neues Dokument) nur, wenn es seitdem
+// niemand geändert hat; ältere Apps schicken das nicht mit und überschreiben wie bisher.
+func (s *Server) storeDoc(r *http.Request, name string, content []byte, accountID int64) (int64, error) {
+	match := strings.Trim(strings.TrimSpace(r.Header.Get("If-Match")), `"`)
+	if match == "" {
+		return s.store.PutDoc(r.Context(), name, content, accountID)
+	}
+	expected, err := strconv.ParseInt(match, 10, 64)
+	if err != nil || expected < 0 {
+		return 0, errBadRevision
+	}
+	return s.store.PutDocIf(r.Context(), name, content, accountID, expected)
 }
 
 func (s *Server) deleteDoc(w http.ResponseWriter, r *http.Request, account store.Account) {
@@ -540,7 +567,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Access-Control-Allow-Origin", s.origin)
-		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match")
 		h.Set("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS")
 		h.Set("Access-Control-Expose-Headers", "X-Revision")
 		h.Set("Access-Control-Max-Age", "86400")

@@ -20,6 +20,14 @@ const GROUP_COUNTS = [2, 3, 4, 5, 6, 7, 8];
  */
 type PlanMode = 'mixed' | 'byAge';
 
+/** Eine Auswahl, die man einer Gruppe auf einmal hinzufügt; `students` sind nur die noch fehlenden. */
+interface BulkOption {
+  /** leer für alle Personen, sonst die ID der Lehrkraft */
+  key: string;
+  label: string;
+  students: Student[];
+}
+
 /**
  * Gruppen des gewählten Berichtszeitraums planen: auf einen Blick sehen, wer noch in keiner Gruppe ist, Personen
  * gesammelt zuordnen und Gruppen mit ähnlichem Altersgefüge automatisch vorschlagen lassen. Gruppenstunden
@@ -204,6 +212,38 @@ export class GroupPlanningPage {
 
   protected rename(group: Group, event: Event): void {
     this.groupsStore.update(group.id, { name: (event.target as HTMLInputElement).value.trim() });
+  }
+
+  /**
+   * Wen man einer Gruppe auf einmal hinzufügen kann: alle Personen des Zeitraums und, bei mehreren Lehrkräften, alle
+   * Schüler:innen einer Lehrkraft. Angeboten wird nur, wer noch nicht vollständig in der Gruppe ist.
+   */
+  protected bulkOptions(group: Group): BulkOption[] {
+    const all = this.studentsStore.students();
+    const options: BulkOption[] = [{ key: '', label: 'Alle Personen im Zeitraum', students: all }];
+    if (this.showTeachers()) {
+      for (const teacher of this.reportPeriod.teachers()) {
+        const students = all.filter((s) => this.studentsStore.teacherOf(s).id === teacher.id);
+        options.push({ key: teacher.id, label: `Alle Schüler:innen von ${teacher.name}`, students });
+      }
+    }
+    return options
+      .map((option) => ({ ...option, students: option.students.filter((s) => !group.memberIds.includes(s.id)) }))
+      .filter((option) => option.students.length > 0);
+  }
+
+  /** Nimmt alle Personen der gewählten Auswahl in die Gruppe auf; wer schon drin ist, bleibt einfach drin. */
+  protected addAll(group: Group, event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const option = this.bulkOptions(group).find((o) => `add:${o.key}` === select.value);
+    select.value = '';
+    if (!option) return;
+    this.groupsStore.addMembers(
+      group.id,
+      option.students.map((s) => s.id),
+    );
+    const count = option.students.length === 1 ? '1 Person' : `${option.students.length} Personen`;
+    this.message.set(`${count} in „${this.label(group)}“ aufgenommen.`);
   }
 
   protected removeMember(group: Group, student: Student): void {

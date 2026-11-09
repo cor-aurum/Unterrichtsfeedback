@@ -1,7 +1,7 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { ConfigStore, isPeriod } from './config.store';
 import { containsDate, formatDate, Lesson, Period, periodTeachers, ReportPeriodEntry, Teacher, today } from './model';
-import { storedSignal } from './stored-signal';
+import { storageKey, storedSignal } from './stored-signal';
 
 /** Früher galt ein unbenannter Zeitraum nur auf dem Gerät; er wird beim ersten Start übernommen. */
 const LEGACY_KEY = 'feedback.reportPeriod';
@@ -57,7 +57,7 @@ export class ReportPeriod {
     const existing = this.periods().find((p) => p.from === legacy.from && p.to === legacy.to);
     const teacherIds = this.configStore.config().teachers.map((t) => t.id);
     this.select(existing?.id ?? this.configStore.addReportPeriod({ name: 'Berichtszeitraum', ...legacy, teacherIds }));
-    localStorage.removeItem(LEGACY_KEY);
+    localStorage.removeItem(storageKey(LEGACY_KEY));
   }
 }
 
@@ -82,7 +82,7 @@ function currentPeriod(periods: ReportPeriodEntry[]): ReportPeriodEntry {
 
 function readLegacyPeriod(): Period | null {
   try {
-    const data = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? 'null');
+    const data = JSON.parse(localStorage.getItem(storageKey(LEGACY_KEY)) ?? 'null');
     return isPeriod(data) ? { from: data.from, to: data.to } : null;
   } catch {
     return null;

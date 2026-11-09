@@ -168,11 +168,11 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `POST /api/login`         | Anmelden: `{username, password}` → wie oben                            |
 | `POST /api/reset`         | Neues Passwort mit Reset-Code: `{code, password}` → wie oben           |
 | `POST /api/logout`        | Abmelden                                                               |
-| `GET /api/me`             | Eigenes Konto und Zahl der Berichtszeiträume, in denen man nicht eingetragen ist (`foreignPeriods`) |
+| `GET /api/me`             | Eigenes Konto, Zahl der Berichtszeiträume, in denen man nicht eingetragen ist (`foreignPeriods`), und `conditionalWrites: true` (der Server kennt If-Match) |
 | `GET /api/accounts`       | Welche Lehrer schon ein Konto haben                                   |
 | `POST /api/invites`       | Einladungscode für einen Lehrer ohne Konto: `{teacherId}` → `{code, expiresAt}` |
 | `GET /api/docs`           | Dokumente, die man sehen darf: `[{name, version}]`                     |
-| `GET/PUT/DELETE /api/docs/{name}` | Dokument lesen, schreiben, löschen                            |
+| `GET/PUT/DELETE /api/docs/{name}` | Dokument lesen, schreiben, löschen. `PUT` mit `If-Match: <version>` (`0` für ein neues Dokument) schreibt nur, wenn das Dokument noch diese Version hat, sonst `412`; so überschreiben Tablets in der Schüler-Planung nicht gegenseitig ihre Eintragungen |
 | `GET /api/merges`         | Zusammengeführte Personen: `[{from, into}]`                            |
 | `POST /api/merges`        | Zwei Personen zusammenführen: `{from, into}`                           |
 | `GET /api/feed`           | Eigenes Kalender-Abo: `{url, updatedAt}`; `url` leer ohne Abo          |

@@ -130,7 +130,7 @@ export class StudentsStore {
   }
 
   /** In der Schüler-Planung gewählt: Mit dem ersten Termin steht der Lehrer für den Zeitraum fest. */
-  chooseTeacher(studentId: string, periodId: string, teacherId: string): void {
+  chooseTeacher(studentId: string, periodId: string, teacherId: string | null): void {
     this.mutateStudent(studentId, (student) => (student.periods[periodId] = teacherId));
   }
 

@@ -156,6 +156,11 @@ export function isSyncFile(name: string): boolean {
   );
 }
 
+/** Personen, Gruppen und Termine eines Lehrers in einem Berichtszeitraum */
+export function isPeriodFile(name: string): boolean {
+  return PERIOD_FILE.test(name);
+}
+
 export function isTeacherFile(name: string): boolean {
   return TEACHER_FILE.test(name);
 }

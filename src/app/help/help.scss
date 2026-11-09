@@ -170,3 +170,11 @@ section[id] {
   font: inherit;
   white-space: normal;
 }
+
+.demo {
+  border-left: 4px solid var(--primary);
+
+  h2 {
+    margin-top: 0;
+  }
+}

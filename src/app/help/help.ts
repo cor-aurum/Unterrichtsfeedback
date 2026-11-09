@@ -1,7 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { PLACEHOLDERS } from '../model';
+import { ActiveTeacher } from '../active-teacher';
+import { ConfigStore } from '../config.store';
+import { endDemo, startDemo } from '../demo';
+import { PLACEHOLDERS, teacherInstrument } from '../model';
 import { isNativeApp } from '../save-file';
+import { demoMode } from '../stored-signal';
 
 @Component({
   selector: 'app-help',
@@ -10,6 +14,21 @@ import { isNativeApp } from '../save-file';
   styleUrl: './help.scss',
 })
 export class Help {
+  private readonly activeTeacher = inject(ActiveTeacher);
+  private readonly config = inject(ConfigStore).config;
+  protected readonly demoMode = demoMode;
+
+  /** Man selbst ist in der Demo eine der Lehrkräfte, mit Name und Instrument wie bisher. */
+  protected startDemo(): void {
+    const teacher = this.activeTeacher.teacher();
+    const name = teacher.name.trim() && teacher.name !== 'Lehrkraft' ? teacher.name : 'Du';
+    startDemo({ name, instrument: teacherInstrument(teacher, this.config()).name });
+  }
+
+  protected endDemo(): void {
+    endDemo();
+  }
+
   /** Abschnitte in der Reihenfolge der Seite; die IDs stehen an den Abschnitten in help.html. */
   protected readonly contents = [
     { id: 'stunden', title: 'Stunden erfassen' },

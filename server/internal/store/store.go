@@ -18,6 +18,9 @@ var ErrNotFound = errors.New("nicht gefunden")
 // ErrTaken: Benutzername oder Lehrer sind schon vergeben.
 var ErrTaken = errors.New("schon vergeben")
 
+// ErrStale: Das Dokument wurde inzwischen von jemand anderem geändert (oder angelegt bzw. gelöscht).
+var ErrStale = errors.New("inzwischen geändert")
+
 type Store struct {
 	db *sql.DB
 }
@@ -308,6 +311,31 @@ func (s *Store) PutDoc(ctx context.Context, name string, content []byte, account
 			updated_at = excluded.updated_at, updated_by = excluded.updated_by
 		RETURNING revision`,
 		name, content, time.Now().Unix(), accountID).Scan(&revision)
+	return revision, err
+}
+
+// PutDocIf speichert ein Dokument nur, wenn es noch die Revision `expected` hat; 0 heißt: Es darf noch nicht
+// existieren. So überschreibt niemand unbemerkt, was ein anderes Gerät seit dem eigenen Lesen geschrieben hat.
+func (s *Store) PutDocIf(ctx context.Context, name string, content []byte, accountID, expected int64) (int64, error) {
+	var revision int64
+	var err error
+	now := time.Now().Unix()
+	if expected == 0 {
+		err = s.db.QueryRowContext(ctx, `
+			INSERT INTO docs (name, content, revision, updated_at, updated_by) VALUES (?, ?, 1, ?, ?)
+			ON CONFLICT(name) DO NOTHING
+			RETURNING revision`,
+			name, content, now, accountID).Scan(&revision)
+	} else {
+		err = s.db.QueryRowContext(ctx, `
+			UPDATE docs SET content = ?, revision = revision + 1, updated_at = ?, updated_by = ?
+			WHERE name = ? AND revision = ?
+			RETURNING revision`,
+			content, now, accountID, name, expected).Scan(&revision)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrStale
+	}
 	return revision, err
 }
 

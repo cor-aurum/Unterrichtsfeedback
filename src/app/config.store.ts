@@ -39,7 +39,7 @@ import {
 } from './model';
 import { addDays, daysBetween } from './calendar/appointments';
 import { saveFile } from './save-file';
-import { storedSignal } from './stored-signal';
+import { storageKey, storedSignal } from './stored-signal';
 import { DEFAULT_THEME_COLOR, isHexColor, themeFrom } from './theme';
 
 /** Angaben aus der Begrüßung beim ersten Start */
@@ -65,7 +65,7 @@ export class ConfigStore {
    */
   readonly setupPending = storedSignal<boolean>(
     'feedback.setupPending',
-    () => localStorage.getItem('feedback.config') === null,
+    () => localStorage.getItem(storageKey('feedback.config')) === null,
     (data) => data === true,
   );
   readonly config = storedSignal<FeedbackConfig>('feedback.config', defaultConfig, parseConfig);
@@ -1040,7 +1040,8 @@ function defaultGroupBlocks(): FixedBlock[] {
  * Vorlage beim ersten Start. Lehrer und Instrument sind vorläufig, bis die Begrüßung sie ersetzt
  * (`completeSetup`); es muss aber immer mindestens eins von beiden geben.
  */
-function defaultConfig(): FeedbackConfig {
+/** Die Beispielvorlage; der Demomodus baut darauf auf. */
+export function defaultConfig(): FeedbackConfig {
   const instrument = { id: newId(), name: 'Instrument' };
   const teacherId = newId();
 

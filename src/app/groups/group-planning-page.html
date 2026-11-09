@@ -145,6 +145,16 @@
               </select>
             </label>
           }
+          @if (bulkOptions(group); as options) {
+            @if (options.length > 0) {
+              <select class="add-all" [attr.aria-label]="'Alle hinzufügen zu ' + label(group)" (change)="addAll(group, $event)">
+                <option value="" selected>+ Alle hinzufügen …</option>
+                @for (option of options; track option.key) {
+                  <option [value]="'add:' + option.key">{{ option.label }} ({{ option.students.length }})</option>
+                }
+              </select>
+            }
+          }
           <ul class="members">
             @for (member of members(group); track member.id) {
               <li>

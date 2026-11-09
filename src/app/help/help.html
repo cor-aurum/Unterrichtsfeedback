@@ -30,6 +30,27 @@
   </li>
 </ol>
 
+<section class="card demo">
+  <h2>Ausprobieren im Demomodus</h2>
+  @if (demoMode) {
+    <p>
+      Du bist gerade im Demomodus. Probier alles aus; nichts davon landet in deinen echten Daten. Beim Beenden wird die
+      Demo verworfen, beim nächsten Start beginnt sie neu.
+    </p>
+    <button type="button" (click)="endDemo()">Demomodus beenden</button>
+  } @else {
+    <p>
+      Der Demomodus zeigt die App mit Beispieldaten: einen Lehrgang über eine Woche, der heute in einer Woche beginnt,
+      mit fünf Lehrkräften (darunter du), 40 Personen ohne Termine bei zwei davon, Frühstück, Mittag- und Abendessen
+      als allgemeinen Terminen und Unterrichtszeiten vormittags, nachmittags und abends. Deine echten Daten bleiben
+      unverändert und werden auch nicht mit einem Server abgeglichen. Mit <kbd>Jetzt beginnen lassen</kbd> startet der
+      Lehrgang sofort; alles schon Geplante wandert mit. Oben in der Leiste beendest du die Demo wieder;
+      alles, was du darin geändert hast, wird dabei verworfen.
+    </p>
+    <button type="button" (click)="startDemo()">Demomodus starten</button>
+  }
+</section>
+
 <nav class="card toc" aria-label="Inhalt">
   <strong>Inhalt</strong>
   @for (entry of contents; track entry.id) {
@@ -178,7 +199,7 @@
       <em>Neue Gruppe …</em> mit Namen, dann <kbd>… zuordnen</kbd>. Rechts stehen die Gruppen des Zeitraums mit
       Anzahl, Durchschnittsalter und Altersspanne; dort benennst du sie um, nimmst Mitglieder mit ✕ heraus oder legst
       mit <kbd>+ Gruppe</kbd> eine leere an. <kbd>Gruppe mit allen Schüler:innen dieser Lehrkraft</kbd> legt eine Gruppe mit
-      allen Personen der gewählten Lehrkraft im Zeitraum an; sie heißt wie die Lehrkraft und steht in ihrem Kalender. Bei mehreren Lehrkräften wählst du in jeder Gruppe unter <em>Termine im
+      allen Personen der gewählten Lehrkraft im Zeitraum an; sie heißt wie die Lehrkraft und steht in ihrem Kalender. Über <em>+ Alle hinzufügen …</em> in einer Gruppe nimmst du auf einmal alle Personen des Zeitraums oder alle Schüler:innen einer Lehrkraft auf; wer schon drin ist, bleibt drin. Bei mehreren Lehrkräften wählst du in jeder Gruppe unter <em>Termine im
       Kalender von</em> die Lehrkraft; die Gruppentermine wandern dann in deren Kalender. Zur Wahl stehen die Lehrkräfte
       des Berichtszeitraums. Darunter zeigt eine Grafik die Altersverteilung aller Gruppen.
     </li>
@@ -344,7 +365,17 @@
       steht der Vorname mit dem ersten Buchstaben des Nachnamens; wäre das nicht eindeutig, der volle Name, bei
       Gleichnamigen mit „sen.“/„jun.“ oder dem Geburtsjahr. Nach 90 Sekunden ohne Berührung springt die Ansicht zurück zu den Namen. <em>Planung beenden</em> (unten,
       mit der PIN, falls du eine vergeben hast) führt zurück in die App. Für Runden startest du erst mit einer kleinen
-      Höchstzahl und später erneut mit einer größeren. Pro Lehrkraft am besten nur ein Gerät gleichzeitig.
+      Höchstzahl und später erneut mit einer größeren.
+    </li>
+    <li>
+      <strong>Mehrere Tablets gleichzeitig:</strong> Mit Server kannst du die Planung auf mehreren Tablets zugleich
+      starten, auch für dieselbe Lehrkraft. Vor jeder Eintragung holt das Tablet den neuesten Stand vom Server und
+      speichert die Wahl sofort; hat ein anderes Tablet die Zeit gerade vergeben, sieht die Person „Diese Zeit wurde
+      gerade vergeben“ und wählt eine andere. Vergebene Zeiten verschwinden auf den anderen Tablets nach wenigen
+      Sekunden. Ist ein Tablet kurz ohne Verbindung, zeigt es einen roten Hinweis; die Termine bleiben dort
+      gespeichert und werden übertragen, sobald der Server wieder erreichbar ist. Ohne Server hat jedes Gerät seine
+      eigenen Daten – dann nur <strong>ein</strong> Tablet verwenden. Alle Geräte brauchen die aktuelle App, der
+      Server mindestens die Version mit geschütztem Speichern.
     </li>
     <li>
       <strong>Mehrere Lehrkräfte, Lehrkraft selbst wählen:</strong> Beim Start der Planung hakst du an, welche

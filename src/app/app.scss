@@ -172,6 +172,24 @@
     font-size: 0.9rem;
   }
 
+  // Demomodus: deutlich in der Leiste, ein Klick beendet ihn.
+  .demo-badge {
+    flex: none;
+    padding: 0.3rem 0.7rem;
+    border: 2px dashed var(--on-primary);
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.2);
+    color: var(--on-primary);
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+
+    .demo-end {
+      font-weight: 400;
+    }
+  }
+
   // Mit Server steht der Lehrer fest und wird nur angezeigt.
   .teacher-name {
     min-width: 0;
@@ -222,6 +240,14 @@
 }
 
 .sync-banner {
+  margin-bottom: 1rem;
+}
+
+.demo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
   margin-bottom: 1rem;
 }
 

@@ -241,3 +241,40 @@ func TestClientIP(t *testing.T) {
 		}
 	}
 }
+
+// Mit If-Match schreibt nur, wer den aktuellen Stand kennt; so überschreibt ein Tablet nicht die Buchung eines anderen.
+func TestPutWithIfMatch(t *testing.T) {
+	srv, base := setup(t)
+	anna := &client{t: t, base: base}
+	code, _, _ := srv.NewCode(context.Background(), store.Invite, "")
+	anna.session(anna.must(200, "POST", "/api/redeem", `{"code":"`+code+`","username":"anna","password":"geheim123","teacherId":"t-anna"}`))
+	put := func(match string) int {
+		req, _ := http.NewRequest("PUT", base+"/api/docs/zeitraum__t-anna.json", strings.NewReader(`{"students":[]}`))
+		req.Header.Set("Authorization", "Bearer "+anna.token)
+		if match != "" {
+			req.Header.Set("If-Match", match)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	for i, step := range []struct {
+		match string
+		want  int
+	}{
+		{"0", 200},   // neu: Revision 1
+		{"0", 412},   // gibt es schon
+		{`"1"`, 200}, // Revision 2
+		{"1", 412},   // veraltet
+		{"", 200},    // ohne If-Match wie bisher: Revision 3
+		{"3", 200},   // Revision 4
+		{"abc", 400},
+	} {
+		if got := put(step.match); got != step.want {
+			t.Fatalf("Schritt %d (If-Match %q): Status %d, erwartet %d", i, step.match, got, step.want)
+		}
+	}
+}

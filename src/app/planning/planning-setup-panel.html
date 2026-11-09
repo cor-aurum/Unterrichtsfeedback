@@ -9,6 +9,18 @@
     markiert, aber wählbar; Einzelunterricht bei anderen Lehrkräften und ein zweiter Termin am selben Tag sind
     ausgeschlossen. Belegte Zeiten erscheinen gar nicht, also auch keine Namen anderer.
   </p>
+  @if (withServer()) {
+    <p class="muted small">
+      Mehrere Tablets gleichzeitig gehen: Starte die Planung auf jedem Tablet, das mit dem Server verbunden ist. Vor
+      jeder Eintragung holt das Tablet den neuesten Stand; ist eine Zeit inzwischen an einem anderen Tablet vergeben,
+      bekommt die Person einen Hinweis und wählt eine andere.
+    </p>
+  } @else {
+    <p class="message warning">
+      Ohne Server nur <strong>ein</strong> Tablet verwenden: Jedes Gerät hat seine eigenen Daten, mehrere Tablets
+      würden dieselben Zeiten doppelt vergeben.
+    </p>
+  }
 
   @if (candidates().length > 1) {
     <div class="teachers">

@@ -20,6 +20,13 @@ export class ServerError extends Error {
   }
 }
 
+/** Die Datei wurde seit dem letzten Lesen auf einem anderen Gerät geändert; erst neu abgleichen. */
+export class StaleError extends ServerError {
+  constructor(readonly file: string) {
+    super(`„${file}“ wurde inzwischen auf einem anderen Gerät geändert.`, 412);
+  }
+}
+
 /** Inhalt eines Einladungs- oder Reset-Codes („UF1.…“) */
 export interface PackedCode {
   server: string;
@@ -67,9 +74,12 @@ async function request(
   url: string,
   method: string,
   path: string,
-  options: { token?: string; body?: string; contentType?: string } = {},
+  options: { token?: string; body?: string; contentType?: string; headers?: Record<string, string> } = {},
 ): Promise<Response> {
-  const headers: Record<string, string> = { 'Content-Type': options.contentType ?? 'application/json; charset=utf-8' };
+  const headers: Record<string, string> = {
+    'Content-Type': options.contentType ?? 'application/json; charset=utf-8',
+    ...options.headers,
+  };
   if (options.token) headers['Authorization'] = `Bearer ${options.token}`;
   const target = `${url}${path}`;
   try {
@@ -150,7 +160,7 @@ export const serverApi = {
   },
 
   /** Eigenes Konto; `foreignPeriods`: Berichtszeiträume, in denen der Lehrer nicht eingetragen ist */
-  me(login: ServerLogin): Promise<{ username: string; teacherId: string; foreignPeriods?: number }> {
+  me(login: ServerLogin): Promise<{ username: string; teacherId: string; foreignPeriods?: number; conditionalWrites?: boolean }> {
     return json(request(login.url, 'GET', '/api/me', { token: login.token }));
   },
 
@@ -186,6 +196,9 @@ export interface FeedState {
  * er ausgetragen wurde) überspringt die App.
  */
 export class ServerFolder implements SyncFolder {
+  /** Kennt der Server If-Match? Einmal gefragt; ältere Server lehnen den Header im Browser ab (CORS). */
+  private conditional?: Promise<boolean>;
+
   constructor(private readonly login: ServerLogin) {}
 
   get name(): string {
@@ -211,16 +224,32 @@ export class ServerFolder implements SyncFolder {
     return (await checked(await request(this.login.url, 'GET', `/api/docs/${encodeURIComponent(name)}`, { token: this.login.token }))).text();
   }
 
-  async write(name: string, text: string): Promise<void> {
+  async write(name: string, text: string, expected?: string): Promise<string | undefined> {
+    const guarded = expected !== undefined && (await this.supportsIfMatch());
     const response = await request(this.login.url, 'PUT', `/api/docs/${encodeURIComponent(name)}`, {
       token: this.login.token,
       body: text,
+      headers: guarded ? { 'If-Match': expected } : undefined,
     });
     if (response.status === 403 && name !== 'konfiguration.json') {
       console.warn(`„${name}“ übersprungen: kein Zugriff auf diesen Berichtszeitraum`);
-      return;
+      return undefined;
     }
-    await checked(response);
+    if (response.status === 412) throw new StaleError(name);
+    const answer = (await (await checked(response)).json().catch(() => ({}))) as { version?: string };
+    return answer.version;
+  }
+
+  private supportsIfMatch(): Promise<boolean> {
+    this.conditional ??= serverApi.me(this.login).then(
+      (me) => me.conditionalWrites === true,
+      () => {
+        // Beim nächsten Schreiben erneut fragen
+        this.conditional = undefined;
+        return false;
+      },
+    );
+    return this.conditional;
   }
 
   async remove(name: string): Promise<void> {

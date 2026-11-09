@@ -8,6 +8,7 @@ import { GroupsStore } from '../groups.store';
 import { isActiveIn, Student, Teacher, teacherInstrument, teacherOf, teachingWindowsOn, today } from '../model';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
+import { ServerSync, TransactResult } from '../sync/server-sync';
 
 /** Eine laufende Schüler-Planung auf diesem Gerät; solange sie läuft, zeigt die App nur die Planung. */
 export interface PlanningSession {
@@ -46,6 +47,7 @@ export class StudentPlanning {
   private readonly groupsStore = inject(GroupsStore);
   private readonly studentsStore = inject(StudentsStore);
   private readonly config = inject(ConfigStore).config;
+  private readonly sync = inject(ServerSync);
 
   readonly session = storedSignal<PlanningSession | null>('feedback.studentPlanning', () => null, parseSession);
   readonly active = computed(() => !!this.session());
@@ -183,15 +185,36 @@ export class StudentPlanning {
 
   /**
    * Trägt den Slot ein, wenn die Person noch wählen darf und er noch frei ist. Wählt sie ihren Lehrer noch, steht er
-   * damit für den Berichtszeitraum fest.
+   * damit für den Berichtszeitraum fest. Mit Server gilt der neueste Stand aller Tablets: Erst abgleichen, dann
+   * prüfen und eintragen, dann sofort speichern; war ein anderes Tablet schneller, ist die Zeit vergeben
+   * (`rejected`).
    */
-  book(student: Student, teacher: Teacher, slot: FreeSlot): boolean {
+  async book(student: Student, teacher: Teacher, slot: FreeSlot): Promise<TransactResult> {
+    const result = await this.sync.transact(() => this.tryBook(student.id, teacher, slot));
+    // Wurde die Buchung schon gespeichert, bevor ein späterer Schritt scheiterte, steht sie nun als eigene da.
+    return result === 'rejected' && this.hasOwn(student.id, teacher, slot) ? 'saved' : result;
+  }
+
+  /** Trägt ein und liefert die Rücknahme; `false`, wenn es nicht (mehr) geht */
+  private tryBook(studentId: string, teacher: Teacher, slot: FreeSlot): (() => void) | false {
     const session = this.session();
+    const student = this.studentsStore.allStudents().find((s) => s.id === studentId);
+    if (!session || !student || this.remaining(student) === 0) return false;
     const stillFree = this.slotsFor(student, teacher).some((s) => !s.own && s.date === slot.date && s.start === slot.start);
-    if (!session || !stillFree || this.remaining(student) === 0) return false;
-    if (this.needsTeacher(student)) this.studentsStore.chooseTeacher(student.id, session.periodId, teacher.id);
-    this.calendar.add({ date: slot.date, start: slot.start, durationMinutes: slot.durationMinutes, studentId: student.id });
-    return true;
+    if (!stillFree) return false;
+    const chosen = this.needsTeacher(student);
+    const previousTeacher = student.periods[session.periodId] ?? null;
+    if (chosen) this.studentsStore.chooseTeacher(student.id, session.periodId, teacher.id);
+    const id = this.calendar.add({ date: slot.date, start: slot.start, durationMinutes: slot.durationMinutes, studentId: student.id });
+    return () => {
+      this.calendar.remove(id);
+      if (chosen) this.studentsStore.chooseTeacher(student.id, session.periodId, previousTeacher);
+    };
+  }
+
+  private hasOwn(studentId: string, teacher: Teacher, slot: FreeSlot): boolean {
+    const student = this.studentsStore.allStudents().find((s) => s.id === studentId);
+    return !!student && this.slotsFor(student, teacher).some((s) => s.own && s.date === slot.date && s.start === slot.start);
   }
 
   unbook(appointmentId: string): void {
