@@ -19,6 +19,8 @@
           <img [src]="code" alt="QR-Code des Download-Links" width="180" height="180" />
           <button class="secondary" (click)="qrPdf()">QR-Code als PDF</button>
         </div>
+      } @else if (!error()) {
+        <p class="muted small">QR-Code wird erzeugt …</p>
       }
       <p class="muted small">
         Gilt bis {{ expires() }} (zwei Wochen nach Ende des Zeitraums).

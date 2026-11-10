@@ -57,6 +57,7 @@
             "allowedCommonJsDependencies": [
               "core-js",
               "qrcode",
+              "dijkstrajs",
               "raf",
               "rgbcolor",
               "html2canvas",

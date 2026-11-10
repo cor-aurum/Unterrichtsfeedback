@@ -90,7 +90,17 @@ export class PlanLinkPanel {
   private show(state: PlanLinkState): void {
     this.state.set(state);
     this.qrCode.set(null);
-    if (state.url) void qrDataUrl(state.url).then((url) => this.state()?.url === state.url && this.qrCode.set(url));
+    if (state.url) void this.renderQrCode(state.url);
+  }
+
+  private async renderQrCode(url: string): Promise<void> {
+    try {
+      const code = await qrDataUrl(url);
+      if (this.state()?.url === url) this.qrCode.set(code);
+    } catch (e) {
+      console.error('QR-Code nicht erzeugt', e);
+      this.error.set(`Der QR-Code ließ sich nicht erzeugen (${e instanceof Error ? e.message : String(e)}). Bitte die Seite neu laden.`);
+    }
   }
 
   /** A4-Seite zum Aushängen oder Verschicken: Zeitraum, QR-Code, Link und eine kurze Anleitung */
@@ -128,6 +138,8 @@ export class PlanLinkPanel {
 }
 
 async function qrDataUrl(url: string): Promise<string> {
-  const QRCode = await import('qrcode');
+  // CommonJS-Paket: Je nach Build stehen die Funktionen direkt am Modul oder unter `default`.
+  const module = await import('qrcode');
+  const QRCode = (module as unknown as { default?: typeof module }).default ?? module;
   return QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 2, width: 640 });
 }
