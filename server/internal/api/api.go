@@ -67,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/merges", s.authed(s.addMerge))
 	mux.HandleFunc("GET /api/feed", s.authed(s.getFeed))
 	mux.HandleFunc("PUT /api/feed", s.authed(s.putFeed))
+	mux.HandleFunc("PUT /api/feeds/{teacher}", s.authed(s.putTeacherFeed))
 	mux.HandleFunc("POST /api/feed/address", s.authed(s.newFeedAddress))
 	mux.HandleFunc("DELETE /api/feed/address", s.authed(s.deleteFeedAddress))
 	mux.HandleFunc("GET /api/kalender/{file}", s.calendar)

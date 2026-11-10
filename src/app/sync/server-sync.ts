@@ -1,6 +1,8 @@
 import { effect, inject, Injectable, signal, untracked } from '@angular/core';
 import { BackupService } from '../backup';
-import { CalendarFeed } from '../calendar/calendar-feed';
+import { addDays } from '../calendar/appointments';
+import { CalendarFeed, FEED_DAYS_BACK } from '../calendar/calendar-feed';
+import { today } from '../model';
 import { ConfigStore } from '../config.store';
 import { PersonMerger } from '../person-merger';
 import { PlanPublisher } from '../plans/plan-publisher';
@@ -54,6 +56,10 @@ export class ServerSync {
   private readonly configStore = inject(ConfigStore);
   /** Prüfsumme des zuletzt gesendeten Abo-Kalenders, damit er nur bei Änderungen erneut geht */
   private readonly publishedFeed = storedSignal<string>('feedback.publishedFeed', () => '');
+  /** Wie `publishedFeed`, für die Kalender der Kolleg:innen (Lehrer-ID → Prüfsumme) */
+  private readonly publishedColleagueFeeds = storedSignal<Record<string, string>>('feedback.publishedColleagueFeeds', () => ({}), (data) =>
+    data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, string>) : {},
+  );
 
   /** Anmeldung samt Token; liegt nur auf diesem Gerät */
   readonly login = storedSignal<ServerLogin | null>('feedback.server', () => null);
@@ -382,21 +388,55 @@ export class ServerSync {
 
   /**
    * Schickt den Kalender für das Abo, wenn er sich seit dem letzten Mal geändert hat (`force`: auf jeden Fall). Der
-   * Server erzeugt ihn nicht selbst; er ist so aktuell wie der letzte Abgleich eines Geräts dieses Lehrers. Fehler
-   * stören den Abgleich nicht, z. B. bei einem älteren Server ohne Abo.
+   * Server erzeugt ihn nicht selbst. Damit er nicht erst aktuell wird, wenn die Lehrkraft ihre App öffnet, schickt
+   * jedes Gerät auch die Kalender der Kolleg:innen aus denselben Berichtszeiträumen mit. Fehler stören den Abgleich
+   * nicht, z. B. bei einem älteren Server ohne Abo.
    */
   async publishFeed(force = false): Promise<void> {
     const login = this.login();
     const calendar = login && this.feed.render(login.teacherId);
     if (!login || !calendar) return;
     const fingerprint = checksum(`${login.url}|${login.teacherId}|${withoutStamps(calendar)}`);
-    if (!force && fingerprint === this.publishedFeed()) return;
-    try {
-      await serverApi.putFeed(login, calendar);
-      this.publishedFeed.set(fingerprint);
-    } catch (e) {
-      console.warn('Kalender für das Abo nicht gesendet', e);
+    if (force || fingerprint !== this.publishedFeed()) {
+      try {
+        await serverApi.putFeed(login, calendar);
+        this.publishedFeed.set(fingerprint);
+      } catch (e) {
+        console.warn('Kalender für das Abo nicht gesendet', e);
+      }
     }
+    await this.publishColleagueFeeds(login);
+  }
+
+  /**
+   * Kalender der Kolleg:innen. Lehnt der Server einen ab (diese App sieht nicht alle Zeiträume der Lehrkraft, kein
+   * Konto, älterer Server), gilt er bis zur nächsten Änderung als erledigt; dann schickt ihn deren eigene App.
+   */
+  private async publishColleagueFeeds(login: ServerLogin): Promise<void> {
+    for (const teacherId of this.colleaguesOf(login.teacherId)) {
+      const calendar = this.feed.render(teacherId);
+      if (!calendar) continue;
+      const fingerprint = checksum(`${login.url}|${teacherId}|${withoutStamps(calendar)}`);
+      if (fingerprint === this.publishedColleagueFeeds()[teacherId]) continue;
+      try {
+        await serverApi.putTeacherFeed(login, teacherId, calendar);
+      } catch (e) {
+        if (!(e instanceof ServerError && [403, 404, 405, 409].includes(e.status))) {
+          console.warn('Kalender einer Kollegin oder eines Kollegen nicht gesendet', e);
+          continue;
+        }
+      }
+      this.publishedColleagueFeeds.update((map) => ({ ...map, [teacherId]: fingerprint }));
+    }
+  }
+
+  /** Lehrkräfte, mit denen man einen Berichtszeitraum teilt, der für das Abo noch zählt */
+  private colleaguesOf(teacherId: string): string[] {
+    const cutoff = addDays(today(), -FEED_DAYS_BACK);
+    const periods = this.configStore
+      .config()
+      .reportPeriods.filter((p) => !p.placeholder && p.to >= cutoff && p.teacherIds.includes(teacherId));
+    return [...new Set(periods.flatMap((p) => p.teacherIds))].filter((id) => id !== teacherId);
   }
 
   private async readServer(): Promise<SyncFiles> {

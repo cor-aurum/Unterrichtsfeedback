@@ -140,8 +140,11 @@ Geräte werden dabei abgemeldet. Reset-Codes gelten einmal und zwei Tage. Benutz
 
 Jeder Lehrer kann in der App (Kalender → Kalender-Abo) eine Abo-Adresse für Google-, Apple- oder Outlook-Kalender
 einrichten: `https://feedback.example.de/api/kalender/<Schlüssel>.ics`. Den Kalender erzeugt die App bei jedem
-Abgleich und schickt ihn mit; der Server liefert ihn nur aus. Er ist also so aktuell wie der letzte Abgleich eines
-Geräts dieses Lehrers.
+Abgleich und schickt ihn mit; der Server liefert ihn nur aus. Damit er nicht erst aktuell wird, wenn der Lehrer selbst
+seine App öffnet, schickt jede App auch die Kalender der Kolleg:innen aus denselben Berichtszeiträumen
+(`PUT /api/feeds/{Lehrer-ID}`). Der Server nimmt das nur an, wenn das Konto in allen Zeiträumen dieses Lehrers
+eingetragen ist, die nicht länger als 28 Tage vorbei sind – sonst fehlten Termine aus den anderen. Ohne Abo des
+Lehrers speichert er nichts.
 
 Kalender-Apps können sich nicht anmelden, deshalb ist die Adresse selbst der Schlüssel (256 Bit Zufall). Wer sie
 kennt, sieht die Termine mit den Namen der Personen. Eine neue Adresse in der App macht die alte sofort ungültig. Die
@@ -206,6 +209,7 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `POST /api/merges`        | Zwei Personen zusammenführen: `{from, into}`                           |
 | `GET /api/feed`           | Eigenes Kalender-Abo: `{url, updatedAt}`; `url` leer ohne Abo          |
 | `PUT /api/feed`           | Kalender (iCalendar) für das Abo senden                                |
+| `PUT /api/feeds/{Lehrer-ID}` | Abo-Kalender eines Lehrers senden, auch eines Kollegen: `403` ohne gemeinsamen Zeitraum, `409`, wenn er in Zeiträumen ist, die das Konto nicht sieht |
 | `POST/DELETE /api/feed/address` | Neue Abo-Adresse (die alte gilt nicht mehr) bzw. Abo beenden     |
 | `GET /api/kalender/{Schlüssel}.ics` | Der Kalender für die Kalender-App, ohne Anmeldung            |
 | `GET /api/plans/{Zeitraum}` | Download-Link des Zeitraums (nur seine Lehrkräfte): `{url, updatedAt, expiresAt}`; `url` leer ohne Link |

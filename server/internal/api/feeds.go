@@ -51,7 +51,7 @@ func (s *Server) putFeed(w http.ResponseWriter, r *http.Request, account store.A
 		fail(w, http.StatusRequestEntityTooLarge, "Der Kalender ist zu groß.")
 		return
 	}
-	if !bytes.HasPrefix(content, []byte("BEGIN:VCALENDAR")) {
+	if !isCalendar(content) {
 		fail(w, http.StatusBadRequest, "Das ist kein Kalender im iCalendar-Format.")
 		return
 	}
@@ -60,6 +60,10 @@ func (s *Server) putFeed(w http.ResponseWriter, r *http.Request, account store.A
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func isCalendar(content []byte) bool {
+	return bytes.HasPrefix(content, []byte("BEGIN:VCALENDAR"))
 }
 
 // newFeedAddress richtet das Abo ein oder ersetzt seine Adresse; die alte gilt danach nicht mehr.

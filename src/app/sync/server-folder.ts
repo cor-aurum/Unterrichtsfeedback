@@ -174,6 +174,15 @@ export const serverApi = {
     await checked(await request(login.url, 'PUT', '/api/feed', options));
   },
 
+  /**
+   * Abo-Kalender einer Kollegin oder eines Kollegen aus denselben Berichtszeiträumen. Der Server lehnt ab (403/409),
+   * wenn diese App nicht alle laufenden Zeiträume der Lehrkraft sieht; ältere Server kennen das nicht (404).
+   */
+  async putTeacherFeed(login: ServerLogin, teacherId: string, calendar: string): Promise<void> {
+    const options = { token: login.token, body: calendar, contentType: 'text/calendar; charset=utf-8' };
+    await checked(await request(login.url, 'PUT', `/api/feeds/${encodeURIComponent(teacherId)}`, options));
+  },
+
   /** Richtet das Abo ein oder ersetzt seine Adresse; die alte gilt danach nicht mehr. */
   newFeedAddress(login: ServerLogin): Promise<FeedState> {
     return json(request(login.url, 'POST', '/api/feed/address', { token: login.token }));
