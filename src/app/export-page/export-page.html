@@ -145,6 +145,15 @@
     </p>
   }
 
+  @if (demoMode) {
+    <p class="message">
+      Im Demomodus gibt es keine Verbindung zum Server, damit die Beispieldaten nicht bei deinen Kolleg:innen landen.
+      @if (realLogin; as login) {
+        Außerhalb der Demo bleibst du mit {{ login.url }} als „{{ login.username }}“ verbunden; den Download-Link für
+        Pläne kannst du trotzdem ausprobieren (Konfiguration → beim Zeitraum).
+      }
+    </p>
+  } @else {
   @switch (sync.status()) {
     @case ('off') {
       <app-server-login-panel [teacherId]="activeTeacher.teacher().id" (connected)="connected($event)" />
@@ -208,6 +217,7 @@
         <button class="secondary" (click)="disconnectServer()">Abmelden</button>
       </div>
     }
+  }
   }
 </section>
 

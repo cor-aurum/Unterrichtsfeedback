@@ -54,6 +54,8 @@ type planPerson struct {
 }
 
 type planDay struct {
+	// Tag als JJJJ-MM-TT und lesbar, z. B. „Dienstag, 17. November 2026“
+	Day     string      `json:"day"`
 	Date    string      `json:"date"`
 	Entries []planEntry `json:"entries"`
 }
@@ -62,6 +64,12 @@ type planEntry struct {
 	Time     string `json:"time"`
 	Title    string `json:"title"`
 	Location string `json:"location"`
+	// Termin (ID in der App) und Lehrkraft, für Tausch und Dazukommen; leer bei allgemeinen Terminen
+	Slot    string `json:"slot,omitempty"`
+	Teacher string `json:"teacher,omitempty"`
+	// Ein einzelner Einzeltermin lässt sich tauschen; dazukommen kann man zu ihm und zu spontanen Gruppen.
+	Swap bool `json:"swap,omitempty"`
+	Join bool `json:"join,omitempty"`
 }
 
 type planAnswer struct {
@@ -86,7 +94,11 @@ func (s *Server) planPeriod(w http.ResponseWriter, r *http.Request, account stor
 		internal(w, err)
 		return "", time.Time{}, false
 	}
-	if !members.In(periodID, account.TeacherID) {
+	if isDemoPlan(periodID) && periodID != DemoPlanPrefix+account.TeacherID {
+		fail(w, http.StatusForbidden, "Das ist nicht dein Demo-Link.")
+		return "", time.Time{}, false
+	}
+	if !isDemoPlan(periodID) && !members.In(periodID, account.TeacherID) {
 		fail(w, http.StatusForbidden, "Den Download-Link verwalten nur die Lehrkräfte des Berichtszeitraums.")
 		return "", time.Time{}, false
 	}
@@ -104,6 +116,9 @@ func (s *Server) planPeriod(w http.ResponseWriter, r *http.Request, account stor
 
 // planLastDay: Der Link gilt bis 14 Tage nach dem Ende des Zeitraums; ändert sich das Ende, wandert er mit.
 func (s *Server) planLastDay(ctx context.Context, periodID string) (time.Time, error) {
+	if isDemoPlan(periodID) {
+		return s.demoLastDay(ctx, periodID)
+	}
 	content, _, err := s.store.Doc(ctx, access.PeriodDocName(periodID))
 	if err != nil {
 		return time.Time{}, err
@@ -117,6 +132,31 @@ func (s *Server) planLastDay(ctx context.Context, periodID string) (time.Time, e
 		return time.Time{}, fmt.Errorf("Ende des Berichtszeitraums %q: %w", end, err)
 	}
 	return day.AddDate(0, 0, PlanDaysAfterPeriod), nil
+}
+
+// Demo-Links: Im Demomodus gibt es den Berichtszeitraum nur in der App, nicht auf dem Server. Jedes Konto hat dafür
+// einen eigenen Link unter `demo-konto-<Lehrer-ID>`. Er gilt bis drei Tage nach der letzten Aktualisierung; beim
+// Verlassen der Demo löscht ihn die App.
+const (
+	DemoPlanPrefix = "demo-konto-"
+	DemoPlanDays   = 3
+)
+
+func isDemoPlan(periodID string) bool {
+	return strings.HasPrefix(periodID, DemoPlanPrefix)
+}
+
+func (s *Server) demoLastDay(ctx context.Context, periodID string) (time.Time, error) {
+	since := time.Now()
+	link, err := s.store.Plan(ctx, periodID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return time.Time{}, err
+	}
+	if err == nil && !link.UpdatedAt.IsZero() {
+		since = link.UpdatedAt
+	}
+	day := time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, time.Local)
+	return day.AddDate(0, 0, DemoPlanDays), nil
 }
 
 func (s *Server) getPlan(w http.ResponseWriter, r *http.Request, account store.Account) {
@@ -212,6 +252,13 @@ func parsePlans(content []byte) (planContent, error) {
 		case !isPDF(person.PDF):
 			return plans, fmt.Errorf("PDF von %s fehlt", person.ID)
 		}
+		for _, day := range person.Days {
+			for _, entry := range day.Entries {
+				if entry.Slot != "" && !personIDPattern.MatchString(entry.Slot) {
+					return plans, fmt.Errorf("ungültiger Termin %q", entry.Slot)
+				}
+			}
+		}
 		seen[person.ID] = true
 	}
 	return plans, nil
@@ -232,7 +279,12 @@ func (s *Server) publicPlans(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	renderPage(w, http.StatusOK, plansPage, pageData{Plans: plans, Base: s.planURL(link.Token), Updated: updatedText(link)})
+	pending, err := s.pendingRequests(r.Context(), link.PeriodID)
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	renderPage(w, http.StatusOK, plansPage, pageData{Plans: plans, Base: s.planURL(link.Token), Updated: updatedText(link), Pending: pending})
 }
 
 // publicPlanFile liefert zu einer Person ihre Seite, ihr PDF (`<id>.pdf`) oder ihren Kalender (`<id>.ics`).
@@ -256,10 +308,9 @@ func (s *Server) publicPlanFile(w http.ResponseWriter, r *http.Request) {
 		renderPage(w, http.StatusNotFound, messagePage, pageData{Message: "Diesen Plan gibt es nicht (mehr). Bitte wähle deinen Namen in der Liste."})
 		return
 	}
-	base := s.planURL(link.Token)
 	switch ext {
 	case "":
-		renderPage(w, http.StatusOK, personPage, pageData{Plans: plans, Person: person, Base: base, Updated: updatedText(link)})
+		s.renderPerson(w, r, plans, link, person)
 	case ".pdf":
 		data, _ := base64.StdEncoding.DecodeString(person.PDF)
 		serveFile(w, r, "application/pdf", "Plan "+person.Label+".pdf", link.UpdatedAt, data)
@@ -338,6 +389,24 @@ type pageData struct {
 	Base    string
 	Updated string
 	Message string
+	// Zurück zur Seite der Person, z. B. nach einem Fehler beim Anfragen
+	Back string
+	// Hinweis nach einer Aktion, z. B. „Deine Anfrage ist verschickt.“
+	Notice   string
+	Incoming []requestView
+	History  []requestView
+	// Termine anderer zum Tauschen oder Dazukommen
+	Own     *slotView
+	Options []slotView
+	// Namensliste: offene Anfragen an jede Person
+	Pending map[string]int
+	// Nach dem Anfragen: wem man Bescheid sagen sollte, mit Link zu dessen Seite
+	Tell *tellView
+}
+
+// Script ist das einzige Skript der Seiten: Teilen und Kopieren des Links nach einer Anfrage.
+func (pageData) Script() template.HTML {
+	return template.HTML("<script>" + pageScript + "</script>")
 }
 
 // Color ist die Themenfarbe der App; nur geprüfte Werte landen im CSS.
@@ -357,7 +426,7 @@ func (d pageData) Webcal() template.URL {
 func renderPage(w http.ResponseWriter, status int, page *template.Template, data pageData) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'")
+	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'self'; script-src '"+pageScriptHash+"'")
 	privateHeaders(h)
 	var out bytes.Buffer
 	if err := page.Execute(&out, data); err != nil {
@@ -395,10 +464,21 @@ h2 { margin: 22px 0 8px; font-size: 1.05rem; color: #44505c; }
 .entry { display: flex; gap: 14px; padding: 4px 0; }
 .time { flex: 0 0 auto; min-width: 7.5em; font-variant-numeric: tabular-nums; font-weight: 600; }
 .back { display: inline-block; margin-bottom: 14px; color: inherit; }
+.what { flex: 1 1 auto; }
+.small-link { color: inherit; font-size: .9rem; white-space: nowrap; }
+.notice { background: #e8f3ea; border-radius: 10px; padding: 12px 16px; }
+.request { background: #fff8e6; border: 1px solid #f0d9a0; border-radius: 10px; padding: 4px 16px 10px; margin-bottom: 10px; }
+.request .actions { margin: 8px 0 4px; }
+button.button { border: 0; font: inherit; cursor: pointer; }
+button.button.secondary { border: 1px solid #c3ccd5; }
+.badge { display: block; margin-top: 4px; font-size: .8rem; font-weight: 600; color: #8a5a00; }
+.tell { background: #eef4fb; border-radius: 10px; padding: 4px 16px 12px; margin-bottom: 12px; }
+.tell input { width: 100%; padding: 10px; border: 1px solid #c3ccd5; border-radius: 8px; font: inherit; font-size: .9rem; }
+.option { display: flex; gap: 12px; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #e3e8ec; border-radius: 10px; padding: 10px 16px; margin-bottom: 8px; }
 footer { margin-top: 28px; }
 </style>
 </head>
-<body><main>{{block "content" .}}{{end}}</main></body>
+<body><main>{{block "content" .}}{{end}}</main>{{.Script}}</body>
 </html>`
 
 var (
@@ -412,7 +492,7 @@ var (
 {{if .Plans.People}}
 <p>Tippe auf deinen Namen.</p>
 <nav class="names">
-{{range .Plans.People}}<a href="{{$.Base}}/{{.ID}}">{{.Label}}</a>
+{{range .Plans.People}}<a href="{{$.Base}}/{{.ID}}">{{.Label}}{{with index $.Pending .ID}}<span class="badge">{{if eq . 1}}1 Anfrage{{else}}{{.}} Anfragen{{end}}</span>{{end}}</a>
 {{end}}
 </nav>
 {{else}}
@@ -429,6 +509,27 @@ var (
   <h1>{{.Person.Label}}</h1>
   <p class="muted">{{.Plans.Title}} · {{.Plans.Dates}}</p>
 </header>
+{{if .Notice}}<p class="notice" role="status">{{.Notice}}</p>{{end}}
+{{with .Tell}}
+<section class="tell">
+  <p>Sag <strong>{{.Label}}</strong> Bescheid, damit die Anfrage nicht untergeht – z. B. per Nachricht mit dem Link zu der Seite:</p>
+  <input type="text" readonly value="{{.URL}}" aria-label="Link zur Seite von {{.Label}}">
+  <div class="actions">
+    <button class="button" type="button" hidden data-share="{{.Text}}" data-url="{{.URL}}">Teilen …</button>
+    <button class="button secondary" type="button" hidden data-copy="{{.URL}}">Link kopieren</button>
+  </div>
+</section>
+{{end}}
+{{range .Incoming}}
+<section class="request">
+  <p>{{.Text}}</p>
+  <form method="post" action="{{$.Base}}/{{$.Person.ID}}/antworten" class="actions">
+    <input type="hidden" name="anfrage" value="{{.ID}}">
+    <button class="button" name="antwort" value="ja">Annehmen</button>
+    <button class="button secondary" name="antwort" value="nein">Ablehnen</button>
+  </form>
+</section>
+{{end}}
 <div class="actions">
   <a class="button" href="{{.Base}}/{{.Person.ID}}.pdf" download>Plan als PDF</a>
   <a class="button secondary" href="{{.Base}}/{{.Person.ID}}.ics" download>Kalenderdatei (.ics)</a>
@@ -439,15 +540,54 @@ var (
 {{range .Person.Days}}
 <section class="day">
   <h3>{{.Date}}</h3>
-  {{range .Entries}}<div class="entry"><span class="time">{{.Time}}</span><span>{{.Title}}{{if .Location}} · {{.Location}}{{end}}</span></div>
+  {{range .Entries}}<div class="entry"><span class="time">{{.Time}}</span><span class="what">{{.Title}}{{if .Location}} · {{.Location}}{{end}}</span>{{if .Swap}}<a class="small-link" href="{{$.Base}}/{{$.Person.ID}}/tauschen?termin={{.Slot}}">Tauschen</a>{{end}}</div>
   {{end}}
 </section>
 {{else}}
 <p>Für dich sind noch keine Termine eingetragen.</p>
 {{end}}
+<p><a class="button secondary" href="{{.Base}}/{{.Person.ID}}/dazukommen">Bei jemandem dazukommen …</a></p>
+{{if .History}}
+<h2>Deine Anfragen</h2>
+{{range .History}}
+<section class="request">
+  <p>{{.Text}}<br><span class="muted">{{.Status}}</span></p>
+  {{if .Withdraw}}<form method="post" action="{{$.Base}}/{{$.Person.ID}}/antworten">
+    <input type="hidden" name="anfrage" value="{{.ID}}">
+    <button class="button secondary" name="antwort" value="zurueck">Zurückziehen</button>
+  </form>{{end}}
+</section>
+{{end}}
+{{end}}
 {{if .Updated}}<footer><p class="muted">Stand: {{.Updated}}</p></footer>{{end}}
 {{end}}`))
 
+	// choosePage: Termine anderer zum Tauschen (mit Own) oder zum Dazukommen
+	choosePage = template.Must(template.Must(template.New("choose").Parse(pageLayout)).Parse(`
+{{define "title"}}{{.Person.Label}} – {{.Plans.Title}}{{end}}
+{{define "content"}}
+<a class="back" href="{{.Base}}/{{.Person.ID}}">← Zurück zu deinen Terminen</a>
+<header>
+  {{if .Own}}<h1>Termin tauschen</h1>
+  <p>Dein Termin: <strong>{{.Own.Label}}</strong> · {{.Own.Title}}</p>
+  <p class="muted">Wähle, mit wem du tauschen möchtest. Die andere Person muss zustimmen.</p>
+  {{else}}<h1>Bei jemandem dazukommen</h1>
+  <p class="muted">Wähle einen Unterricht, zu dem du dazukommen möchtest. Die Person muss zustimmen; danach habt ihr den Termin gemeinsam.</p>{{end}}
+</header>
+{{range .Options}}
+<form method="post" action="{{$.Base}}/{{$.Person.ID}}/anfragen" class="option">
+  <input type="hidden" name="art" value="{{if $.Own}}swap{{else}}join{{end}}">
+  {{if $.Own}}<input type="hidden" name="mein" value="{{$.Own.Slot}}">{{end}}
+  <input type="hidden" name="an" value="{{.Person}}">
+  <input type="hidden" name="ziel" value="{{.Slot}}">
+  <span><strong>{{.Label}}</strong><br>{{.PersonLabel}} · {{.Title}}</span>
+  <button class="button">{{if $.Own}}Tausch anfragen{{else}}Anfragen{{end}}</button>
+</form>
+{{else}}
+<p>Gerade gibt es dafür keine passenden Termine.</p>
+{{end}}
+{{end}}`))
+
 	messagePage = template.Must(template.Must(template.New("message").Parse(pageLayout)).Parse(`
-{{define "content"}}<header><h1>Pläne</h1><p>{{.Message}}</p></header>{{end}}`))
+{{define "content"}}<header><h1>Pläne</h1><p>{{.Message}}</p></header>{{if .Back}}<p><a class="back" href="{{.Back}}">← Zurück</a></p>{{end}}{{end}}`))
 )

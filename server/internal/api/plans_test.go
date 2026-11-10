@@ -114,3 +114,29 @@ func planPath(t *testing.T, text string) string {
 	}
 	return path
 }
+
+// Im Demomodus: ein Link je Konto ohne Berichtszeitraum auf dem Server; fremde Demo-Links bleiben tabu.
+func TestDemoPlan(t *testing.T) {
+	srv, base := setup(t)
+	code, _, err := srv.NewCode(context.Background(), store.Invite, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	anna := &client{t: t, base: base}
+	anna.session(anna.must(200, "POST", "/api/redeem", `{"code":"`+code+`","username":"anna","password":"geheim123","teacherId":"t-anna"}`))
+	guest := &client{t: t, base: base}
+
+	anna.must(403, "POST", "/api/plans/demo-konto-t-ben/address", "")
+	var answer planAnswer
+	_ = json.Unmarshal([]byte(anna.must(200, "GET", "/api/plans/demo-konto-t-anna", "")), &answer)
+	if answer.URL != "" || answer.ExpiresAt == "" {
+		t.Fatalf("ohne Demo-Link: %+v", answer)
+	}
+	link := planPath(t, anna.must(200, "POST", "/api/plans/demo-konto-t-anna/address", ""))
+	anna.must(204, "PUT", "/api/plans/demo-konto-t-anna", plansJSON("Lea", pdfBase64))
+	if page := guest.must(200, "GET", link+"/s-lea", ""); !strings.Contains(page, "Raum 3") {
+		t.Fatalf("Demo-Seite: %s", page)
+	}
+	anna.must(204, "DELETE", "/api/plans/demo-konto-t-anna", "")
+	guest.must(404, "GET", link, "")
+}

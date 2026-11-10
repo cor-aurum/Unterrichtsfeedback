@@ -48,10 +48,12 @@ func (s *Store) SetPlanToken(ctx context.Context, periodID, token string) error 
 	return err
 }
 
-// DeletePlan löscht Link und Pläne des Zeitraums.
+// DeletePlan löscht Link, Pläne und Anfragen des Zeitraums.
 func (s *Store) DeletePlan(ctx context.Context, periodID string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM plans WHERE period_id = ?`, periodID)
-	return err
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM plans WHERE period_id = ?`, periodID); err != nil {
+		return err
+	}
+	return s.deletePlanRequests(ctx, periodID)
 }
 
 // PutPlanContent speichert die Pläne; ErrNotFound, wenn es für den Zeitraum keinen Link gibt.

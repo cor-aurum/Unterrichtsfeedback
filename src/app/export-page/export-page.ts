@@ -9,7 +9,8 @@ import { ConfigStore } from '../config.store';
 import { PdfExport } from '../pdf-export';
 import { labelOf, ReportPeriod } from '../report-period';
 import { isNativeApp } from '../save-file';
-import { storageKey } from '../stored-signal';
+import { demoMode, storageKey } from '../stored-signal';
+import { realServerLogin } from '../plans/plan-access';
 import { StudentLabelPipe } from '../student-label.pipe';
 import { StudentsStore } from '../students.store';
 import { GroupsStore } from '../groups.store';
@@ -30,6 +31,9 @@ export class ExportPage {
   protected readonly nativeApp = isNativeApp;
   protected readonly backup = inject(BackupService);
   protected readonly sync = inject(ServerSync);
+  protected readonly demoMode = demoMode;
+  /** Im Demomodus: die echte Anmeldung außerhalb der Demo, nur zur Anzeige */
+  protected readonly realLogin = demoMode ? realServerLogin() : null;
   protected readonly activeTeacher = inject(ActiveTeacher);
   protected readonly message = signal<{ text: string; error: boolean } | null>(null);
   protected readonly reportPeriod = inject(ReportPeriod);

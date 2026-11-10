@@ -31,8 +31,9 @@ import { readImageFile } from './image-file';
 import { InstrumentSelect } from '../instrument-select';
 import { TeachingWindowsEditor } from './teaching-windows-editor';
 import { PlanLinkPanel } from '../plans/plan-link-panel';
+import { realServerLogin } from '../plans/plan-access';
 import { labelOf, ReportPeriod } from '../report-period';
-import { storedSignal } from '../stored-signal';
+import { demoMode, storedSignal } from '../stored-signal';
 import { serverApi } from '../sync/server-folder';
 import { ServerSync } from '../sync/server-sync';
 import { DEFAULT_THEME_COLOR, isHexColor } from '../theme';
@@ -79,6 +80,8 @@ type LogoSlot = (typeof LOGO_SLOTS)[number];
 export class ConfigEditor {
   protected readonly store = inject(ConfigStore);
   protected readonly sync = inject(ServerSync);
+  /** Download-Links gibt es mit Server; im Demomodus mit der echten Anmeldung (siehe `PlanLinkPanel`). */
+  protected readonly planLinkLogin = demoMode ? signal(realServerLogin()).asReadonly() : this.sync.login;
   protected readonly reportPeriod = inject(ReportPeriod);
   protected readonly activeTeacher = inject(ActiveTeacher);
   protected readonly tabs = CONFIG_TABS;

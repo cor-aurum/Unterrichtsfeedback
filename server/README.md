@@ -161,6 +161,22 @@ gilt bis 14 Tage nach dem Ende des Zeitraums (danach `410`). Die Seite braucht k
 Suchmaschinen gesperrt. Wer den Link nicht in den Zugriffsprotokollen haben will, schließt `/api/plan/` vom
 Protokoll aus.
 
+Im Demomodus der App gibt es den Berichtszeitraum nur auf dem Gerät. Jedes Konto kann dafür einen Demo-Link unter
+der ID `demo-konto-<Lehrer-ID>` anlegen, ohne Zeitraum auf dem Server. Er gilt bis drei Tage nach der letzten
+Aktualisierung; die App löscht ihn beim Verlassen der Demo.
+
+### Tauschen und Dazukommen
+
+Auf der Seite einer Person lässt sich ein einzelner künftiger Einzeltermin mit dem einer anderen Person bei derselben
+Lehrkraft tauschen, oder man fragt, ob man zum Unterricht einer anderen Person dazukommen darf (auch bei einer anderen
+Lehrkraft). Die andere Person nimmt auf ihrer Seite an oder lehnt ab; eine Anmeldung gibt es nicht. Angenommene
+Anfragen holt die App einer Lehrkraft des Zeitraums beim Abgleich ab (`GET /api/plans/{Zeitraum}/requests`), ändert
+die Daten und meldet `applied` oder `failed` mit Grund. Beim Dazukommen wird der Termin zum Termin einer neuen Gruppe
+ohne Namen. Je Person gibt es höchstens 10 offene Anfragen, je Zeitraum 500.
+Die Namensliste zeigt offene Anfragen je Person; nach einer Anfrage bietet die Seite den Link zur Seite der gefragten
+Person zum Teilen an. Das ist das einzige JavaScript der Seiten, erlaubt über seinen Hash in der
+Content-Security-Policy.
+
 ## Sicherung
 
 Alle Daten stehen in der SQLite-Datei. Eine konsistente Kopie im laufenden Betrieb:
@@ -195,7 +211,11 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `GET /api/plans/{Zeitraum}` | Download-Link des Zeitraums (nur seine Lehrkräfte): `{url, updatedAt, expiresAt}`; `url` leer ohne Link |
 | `PUT /api/plans/{Zeitraum}` | Pläne senden: `{title, dates, color, people: [{id, label, days, ics, pdf}]}`; `404` ohne Link |
 | `POST /api/plans/{Zeitraum}/address` | Neuer Download-Link (der alte gilt nicht mehr)                 |
-| `DELETE /api/plans/{Zeitraum}` | Link und Pläne löschen                                            |
+| `DELETE /api/plans/{Zeitraum}` | Link, Pläne und Anfragen löschen                                  |
+| `GET /api/plans/{Zeitraum}/requests` | Angenommene Anfragen zum Übernehmen: `[{id, kind, from, to, fromSlot, toSlot}]` |
+| `POST /api/plans/{Zeitraum}/requests/{id}` | Übernommen melden: `{status: "applied"\|"failed", note}`      |
 | `GET /api/plan/{Schlüssel}[/{Person}[.pdf\|.ics]]` | Namensliste, Seite, PDF oder Kalender einer Person, ohne Anmeldung |
+| `GET /api/plan/{Schlüssel}/{Person}/tauschen\|dazukommen` | Termine anderer zum Tauschen bzw. Dazukommen        |
+| `POST /api/plan/{Schlüssel}/{Person}/anfragen\|antworten` | Anfrage stellen bzw. annehmen, ablehnen, zurückziehen (Formulare) |
 
 Angemeldet wird mit `Authorization: Bearer <token>`. Fehler kommen als `{error: "…"}` mit einem Text für die App.

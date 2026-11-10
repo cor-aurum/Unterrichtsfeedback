@@ -197,6 +197,18 @@ export const serverApi = {
     await checked(await request(login.url, 'DELETE', planPath(periodId), { token: login.token }));
   },
 
+  /** Anfragen von der Download-Seite, die angenommen sind und in die Daten gehören */
+  planRequests(login: ServerLogin, periodId: string): Promise<AcceptedPlanRequest[]> {
+    return json(request(login.url, 'GET', `${planPath(periodId)}/requests`, { token: login.token }));
+  },
+
+  /** Meldet, dass die App eine Anfrage übernommen hat (`applied`) oder warum nicht (`failed`). */
+  async planRequestDone(login: ServerLogin, periodId: string, id: string, status: 'applied' | 'failed', note: string): Promise<void> {
+    const body = JSON.stringify({ status, note });
+    const path = `${planPath(periodId)}/requests/${encodeURIComponent(id)}`;
+    await checked(await request(login.url, 'POST', path, { token: login.token, body }));
+  },
+
   /** Wirft `ServerError` mit Status 404, wenn es für den Zeitraum keinen Link gibt. */
   async putPlan(login: ServerLogin, periodId: string, plans: string): Promise<void> {
     await checked(await request(login.url, 'PUT', planPath(periodId), { token: login.token, body: plans }));
@@ -205,6 +217,16 @@ export const serverApi = {
 
 function planPath(periodId: string): string {
   return `/api/plans/${encodeURIComponent(periodId)}`;
+}
+
+/** Tausch zweier Termine (`fromSlot` gegen `toSlot`) oder Dazukommen von `from` zum Termin `toSlot` von `to` */
+export interface AcceptedPlanRequest {
+  id: string;
+  kind: 'swap' | 'join';
+  from: string;
+  to: string;
+  fromSlot: string;
+  toSlot: string;
 }
 
 export interface PlanLinkState {

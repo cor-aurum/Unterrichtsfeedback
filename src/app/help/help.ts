@@ -22,11 +22,11 @@ export class Help {
   protected startDemo(): void {
     const teacher = this.activeTeacher.teacher();
     const name = teacher.name.trim() && teacher.name !== 'Lehrkraft' ? teacher.name : 'Du';
-    startDemo({ name, instrument: teacherInstrument(teacher, this.config()).name });
+    void startDemo({ name, instrument: teacherInstrument(teacher, this.config()).name });
   }
 
   protected endDemo(): void {
-    endDemo();
+    void endDemo();
   }
 
   /** Abschnitte in der Reihenfolge der Seite; die IDs stehen an den Abschnitten in help.html. */

@@ -3,6 +3,7 @@ import { SharedAppointment } from './calendar/shared-appointments';
 import { defaultConfig } from './config.store';
 import { FeedbackConfig, Instrument, ReportPeriodEntry, Student, Teacher, TeachingWindow, today } from './model';
 import { DEMO_FLAG, DEMO_PREFIX } from './stored-signal';
+import { deleteDemoPlanLink } from './plans/plan-access';
 
 /** Wer die Demo startet, ist darin selbst eine der Lehrkräfte. */
 export interface DemoSelf {
@@ -44,7 +45,9 @@ const LAST_NAMES = ['Becker', 'Hartmann', 'Keller', 'Lorenz', 'Möller', 'Neuman
  * Lehrkräfte (darunter man selbst), 40 Personen ohne Termine bei zwei von ihnen und die Mahlzeiten als allgemeine
  * Termine. Die echten Daten bleiben unberührt; die App lädt neu.
  */
-export function startDemo(self: DemoSelf): void {
+export async function startDemo(self: DemoSelf): Promise<void> {
+  // Ein Demo-Link von einer früheren Demo, die nicht über „Demo beenden“ verlassen wurde
+  await deleteDemoPlanLink();
   clearDemoData();
   for (const [key, value] of Object.entries(demoData(self))) {
     localStorage.setItem(DEMO_PREFIX + key, JSON.stringify(value));
@@ -88,7 +91,8 @@ function shiftDates(value: unknown, days: number): unknown {
 }
 
 /** Beendet den Demomodus; alles, was darin geändert wurde, ist danach weg. */
-export function endDemo(): void {
+export async function endDemo(): Promise<void> {
+  await deleteDemoPlanLink();
   clearDemoData();
   localStorage.removeItem(DEMO_FLAG);
   location.hash = '#/hilfe';

@@ -4,7 +4,7 @@ import { CalendarFeed } from '../calendar/calendar-feed';
 import { ConfigStore } from '../config.store';
 import { PersonMerger } from '../person-merger';
 import { PlanPublisher } from '../plans/plan-publisher';
-import { storageKey, storedSignal } from '../stored-signal';
+import { demoMode, storageKey, storedSignal } from '../stored-signal';
 import { checksum } from './checksum';
 import { mergePeriodFile } from './merge-files';
 import { ServerError, ServerFolder, ServerLogin, serverApi, StaleError } from './server-folder';
@@ -101,6 +101,11 @@ export class ServerSync {
       const interval = this.fastPolling() ? FAST_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
       if (Date.now() - this.lastPoll >= interval - 500) syncIfVisible();
     }, FAST_POLL_INTERVAL_MS);
+    // Im Demomodus gelangen die Beispieldaten nie auf den Server; eine Anmeldung aus älteren Versionen verfällt.
+    if (demoMode) {
+      this.login.set(null);
+      return;
+    }
     this.run(() => this.restore());
   }
 
@@ -109,6 +114,7 @@ export class ServerSync {
    * Gerät oder für einen neuen Lehrer; sonst wird abgeglichen (liegen auf beiden Seiten Daten, wird gefragt).
    */
   connect(login: ServerLogin, mode: 'sync' | 'load' = 'sync'): Promise<void> {
+    if (demoMode) return Promise.reject(new Error('Im Demomodus ist keine Verbindung zum Server möglich.'));
     const previous = this.login();
     const sameAccount = previous?.url === login.url && previous.teacherId === login.teacherId;
     this.use(login, sameAccount);

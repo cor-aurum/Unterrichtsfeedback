@@ -191,7 +191,7 @@
         <button type="submit" class="start">Los geht’s</button>
       </form>
 
-      @if (serverStep() === 'none') {
+      @if (serverStep() === 'none' && !demoMode) {
       <div class="restore">
         <p class="muted small">
           Du hast einen <strong>Einladungscode</strong> oder ein Konto auf einem Unterrichtsfeedback-Server?

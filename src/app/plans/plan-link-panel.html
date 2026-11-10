@@ -5,6 +5,11 @@
     oder Kalenderdatei herunter. Verschicke ihn z. B. per Mail an deine Liste oder häng den QR-Code aus. Die Pläne
     bleiben aktuell, solange der Link besteht.
   </p>
+  @if (demoMode) {
+    <p class="message small">
+      Demomodus: Der Link zeigt die Demodaten über deinen Server. Er wird gelöscht, wenn du die Demo beendest.
+    </p>
+  }
   @if (!login()) {
     <p class="muted small">Dafür musst du am Server angemeldet sein.</p>
   } @else if (state(); as link) {
@@ -23,7 +28,8 @@
         <p class="muted small">QR-Code wird erzeugt …</p>
       }
       <p class="muted small">
-        Gilt bis {{ expires() }} (zwei Wochen nach Ende des Zeitraums).
+        Gilt bis {{ expires() }}
+        ({{ demoMode ? 'drei Tage nach der letzten Aktualisierung' : 'zwei Wochen nach Ende des Zeitraums' }}).
         @if (link.updatedAt) {
           Pläne zuletzt aktualisiert: {{ formatTime(link.updatedAt) }}.
         }

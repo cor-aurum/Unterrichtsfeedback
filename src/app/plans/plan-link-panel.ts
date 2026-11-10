@@ -1,8 +1,10 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
+import { demoMode } from '../stored-signal';
 import { formatShortDate, ReportPeriodEntry } from '../model';
 import { safeFileName, saveFile } from '../save-file';
 import { PlanLinkState, ServerLogin, serverApi } from '../sync/server-folder';
 import { ServerSync } from '../sync/server-sync';
+import { planServerId, realServerLogin } from './plan-access';
 import { PlanPublisher } from './plan-publisher';
 
 /**
@@ -17,9 +19,10 @@ import { PlanPublisher } from './plan-publisher';
 })
 export class PlanLinkPanel {
   readonly period = input.required<ReportPeriodEntry>();
-  private readonly sync = inject(ServerSync);
   private readonly publisher = inject(PlanPublisher);
-  protected readonly login = this.sync.login;
+  /** Im Demomodus die echte Anmeldung: Der Demo-Link wird beim Verlassen der Demo gelöscht. */
+  protected readonly login = demoMode ? signal(realServerLogin()).asReadonly() : inject(ServerSync).login;
+  protected readonly demoMode = demoMode;
 
   protected readonly state = signal<PlanLinkState | null>(null);
   protected readonly qrCode = signal<string | null>(null);
@@ -37,14 +40,14 @@ export class PlanLinkPanel {
   }
 
   private async load(): Promise<void> {
-    await this.action(async (login) => this.show(await serverApi.plan(login, this.period().id)));
+    await this.action(async (login) => this.show(await serverApi.plan(login, this.serverId(login))));
   }
 
   protected async create(): Promise<void> {
     await this.action(async (login) => {
-      await serverApi.newPlanAddress(login, this.period().id);
+      await serverApi.newPlanAddress(login, this.serverId(login));
       await this.publisher.publish(login, this.period(), true);
-      this.show(await serverApi.plan(login, this.period().id));
+      this.show(await serverApi.plan(login, this.serverId(login)));
     });
   }
 
@@ -58,8 +61,8 @@ export class PlanLinkPanel {
   protected async remove(): Promise<void> {
     if (!confirm('Link löschen? Die Pläne sind danach unter keinem Link mehr abrufbar.')) return;
     await this.action(async (login) => {
-      await serverApi.deletePlan(login, this.period().id);
-      this.show(await serverApi.plan(login, this.period().id));
+      await serverApi.deletePlan(login, this.serverId(login));
+      this.show(await serverApi.plan(login, this.serverId(login)));
     });
   }
 
@@ -67,9 +70,13 @@ export class PlanLinkPanel {
   protected async refresh(): Promise<void> {
     await this.action(async (login) => {
       await this.publisher.publish(login, this.period(), true);
-      this.show(await serverApi.plan(login, this.period().id));
+      this.show(await serverApi.plan(login, this.serverId(login)));
       this.message.set('Die Pläne sind auf dem neuesten Stand.');
     });
+  }
+
+  private serverId(login: ServerLogin): string {
+    return planServerId(this.period(), login);
   }
 
   private async action(run: (login: ServerLogin) => Promise<void>): Promise<void> {

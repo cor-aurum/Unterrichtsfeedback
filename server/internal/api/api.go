@@ -76,6 +76,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/plans/{period}/address", s.authed(s.newPlanAddress))
 	mux.HandleFunc("GET /api/plan/{token}", s.publicPlans)
 	mux.HandleFunc("GET /api/plan/{token}/{file}", s.publicPlanFile)
+	mux.HandleFunc("GET /api/plan/{token}/{person}/tauschen", s.swapPage)
+	mux.HandleFunc("GET /api/plan/{token}/{person}/dazukommen", s.joinPage)
+	mux.HandleFunc("POST /api/plan/{token}/{person}/anfragen", s.createRequest)
+	mux.HandleFunc("POST /api/plan/{token}/{person}/antworten", s.answerRequest)
+	mux.HandleFunc("GET /api/plans/{period}/requests", s.authed(s.acceptedRequests))
+	mux.HandleFunc("POST /api/plans/{period}/requests/{id}", s.authed(s.requestDone))
 	return s.cors(mux)
 }
 

@@ -1,4 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { demoMode } from '../stored-signal';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
@@ -37,6 +38,8 @@ const COLOR_PRESETS = [DEFAULT_THEME_COLOR, '#d32f2f', '#c2185b', '#7b1fa2', '#3
   styleUrl: './welcome-dialog.scss',
 })
 export class WelcomeDialog {
+  /** Im Demomodus keine Server-Anmeldung, damit die Beispieldaten nicht auf den Server gelangen */
+  protected readonly demoMode = demoMode;
   private readonly configStore = inject(ConfigStore);
   private readonly backup = inject(BackupService);
   private readonly router = inject(Router);

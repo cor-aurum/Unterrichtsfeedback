@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { DestroyRef, effect, inject, Injectable } from '@angular/core';
 import { addDays, minutesOf, startMinutes, timeOf } from '../calendar/appointments';
 import { CalendarStore } from '../calendar/calendar.store';
 import { CalendarEvent, toICalendar } from '../calendar/ical';
@@ -9,18 +9,19 @@ import {
   formatLongDate,
   formatShortDate,
   Group,
-  groupTeacherOf,
   isActiveIn,
   locationIn,
   ReportPeriodEntry,
   Student,
   Teacher,
-  teacherOf,
   today,
 } from '../model';
 import { PersonalPlan, personalPlanPdfs, ScheduleDay } from '../pdf-export';
 import { planningLabels, shortName } from '../planning/planning-labels';
-import { storedSignal } from '../stored-signal';
+import { demoMode, storedSignal } from '../stored-signal';
+import { planServerId, realServerLogin } from './plan-access';
+import { appointmentTeacher, isOpenSingle, isSpontaneous } from './plan-slots';
+import { PlanRequests } from './plan-requests';
 import { StudentsStore } from '../students.store';
 import { checksum } from '../sync/checksum';
 import { ServerError, ServerLogin, serverApi } from '../sync/server-folder';
@@ -29,6 +30,8 @@ import { ServerError, ServerLogin, serverApi } from '../sync/server-folder';
 export const PLAN_DAYS_AFTER_PERIOD = 14;
 /** Wartezeit nach einer Änderung, damit z. B. beim Eintragen am Tablet nicht jede Buchung alle PDFs neu erzeugt */
 const PUBLISH_DELAY_MS = 15_000;
+/** Im Demomodus: so oft nach angenommenen Anfragen sehen (sonst nach jedem Abgleich) */
+const DEMO_POLL_MS = 20_000;
 /** Vorschlag an Kalender-Apps, die den Plan abonniert haben */
 const REFRESH_HOURS = 1;
 
@@ -41,6 +44,11 @@ interface PlanEvent extends CalendarEvent {
   title: string;
   startMinutes: number;
   durationMinutes: number;
+  /** Termin und Lehrkraft, für Tausch und Dazukommen auf der Download-Seite; fehlen bei allgemeinen Terminen */
+  slot?: string;
+  teacher?: string;
+  swap?: boolean;
+  join?: boolean;
 }
 
 /** Plan einer Person, noch ohne PDF und Kalenderdatei */
@@ -68,12 +76,37 @@ export class PlanPublisher {
   private readonly studentsStore = inject(StudentsStore);
   private readonly groupsStore = inject(GroupsStore);
   private readonly calendar = inject(CalendarStore);
+  private readonly requests = inject(PlanRequests);
   /** Was zuletzt je Zeitraum geschickt (oder mangels Link nicht gebraucht) wurde, als Prüfsumme */
   private readonly published = storedSignal<Record<string, string>>('feedback.publishedPlans', () => ({}), (data) =>
     data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, string>) : {},
   );
   private timer?: ReturnType<typeof setTimeout>;
   private running: Promise<void> | null = null;
+
+  constructor() {
+    if (demoMode) this.publishInDemo();
+  }
+
+  /**
+   * Im Demomodus läuft kein Abgleich, der die Pläne anstößt. Mit echter Anmeldung gehen sie nach Änderungen an den
+   * Demo-Link, und angenommene Anfragen werden regelmäßig übernommen.
+   */
+  private publishInDemo(): void {
+    const login = realServerLogin();
+    if (!login) return;
+    effect(() => {
+      // Abhängigkeiten: alles, was in den Plänen steht
+      this.calendar.appointments();
+      this.calendar.sharedAppointments();
+      this.groupsStore.allGroups();
+      this.studentsStore.allStudents();
+      this.config();
+      this.schedule(login);
+    });
+    const poll = setInterval(() => this.schedule(login), DEMO_POLL_MS);
+    inject(DestroyRef).onDestroy(() => clearInterval(poll));
+  }
 
   /**
    * Nach jedem Abgleich: Haben sich die Pläne eines laufenden Zeitraums geändert, gehen sie kurz darauf an den Server.
@@ -96,6 +129,12 @@ export class PlanPublisher {
     }
     this.running = (async () => {
       for (const period of this.periodsOf(login)) {
+        // Erst Tausch und Dazukommen übernehmen, dann gehen die geänderten Pläne gleich mit.
+        try {
+          await this.requests.apply(login, period);
+        } catch (e) {
+          console.warn(`Anfragen für ${period.name} nicht übernommen`, e);
+        }
         try {
           await this.publish(login, period);
         } catch (e) {
@@ -107,11 +146,14 @@ export class PlanPublisher {
     this.running = null;
   }
 
-  /** Eigene Zeiträume, deren Link noch gelten kann */
+  /** Eigene Zeiträume, deren Link noch gelten kann; im Demomodus der Demolehrgang */
   private periodsOf(login: ServerLogin): ReportPeriodEntry[] {
     const day = today();
     return this.config().reportPeriods.filter(
-      (p) => !p.placeholder && p.teacherIds.includes(login.teacherId) && addDays(p.to, PLAN_DAYS_AFTER_PERIOD) >= day,
+      (p) =>
+        !p.placeholder &&
+        (demoMode || p.teacherIds.includes(login.teacherId)) &&
+        addDays(p.to, PLAN_DAYS_AFTER_PERIOD) >= day,
     );
   }
 
@@ -122,7 +164,7 @@ export class PlanPublisher {
     if (!force && this.published()[period.id] === fingerprint) return 'unchanged';
     let result: PublishResult = 'published';
     try {
-      await serverApi.putPlan(login, period.id, await this.render(draft, period));
+      await serverApi.putPlan(login, planServerId(period, login), await this.render(draft, period));
     } catch (e) {
       if (!(e instanceof ServerError && e.status === 404)) throw e;
       result = 'noLink';
@@ -141,7 +183,7 @@ export class PlanPublisher {
       .map((student) => ({
         id: student.id,
         label: labels.get(student.id) ?? student.name,
-        events: [...this.lessonEvents(student, groups, period, config), ...shared].sort(byTime),
+        events: [...this.lessonEvents(student, groups, labels, period, config), ...shared].sort(byTime),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'de'));
     return {
@@ -152,18 +194,35 @@ export class PlanPublisher {
     };
   }
 
-  /** Einzel- und Gruppentermine der Person im Zeitraum */
-  private lessonEvents(student: Student, groups: Group[], period: ReportPeriodEntry, config: FeedbackConfig): PlanEvent[] {
+  /**
+   * Einzel- und Gruppentermine der Person im Zeitraum. Einzelne künftige Einzeltermine lassen sich auf der
+   * Download-Seite tauschen; zu ihnen und zu spontanen Gruppen kann man dort dazukommen.
+   */
+  private lessonEvents(
+    student: Student,
+    groups: Group[],
+    labels: Map<string, string>,
+    period: ReportPeriodEntry,
+    config: FeedbackConfig,
+  ): PlanEvent[] {
     const own = new Map(groups.filter((g) => g.memberIds.includes(student.id)).map((g) => [g.id, g]));
     return this.calendar
       .occurrences(period.from, period.to, (a) => a.studentId === student.id || (!!a.groupId && own.has(a.groupId)))
       .map(({ date, appointment }) => {
         const group = appointment.groupId ? own.get(appointment.groupId) : undefined;
         const teacher = appointmentTeacher(appointment.teacherId, group, student, config, period.id);
-        const title = group
-          ? `${group.name.trim() ? `Gruppe ${group.name.trim()}` : 'Gruppenunterricht'} bei ${teacher.name}`
-          : `Unterricht bei ${teacher.name}`;
-        return planEvent(appointment.id, date, startMinutes(appointment), appointment.durationMinutes, title, locationIn(teacher, period.id));
+        const event = planEvent(
+          appointment.id,
+          date,
+          startMinutes(appointment),
+          appointment.durationMinutes,
+          lessonTitle(student, group, labels, teacher),
+          locationIn(teacher, period.id),
+        );
+        const single = isOpenSingle(appointment);
+        const swap = single && appointment.studentId === student.id;
+        const join = swap || (single && !!group && isSpontaneous(group));
+        return { ...event, slot: appointment.id, teacher: teacher.id, swap, join };
       });
   }
 
@@ -190,10 +249,19 @@ export class PlanPublisher {
         id: person.id,
         label: person.label,
         days: scheduleDays(person.events).map((day) => ({
+          day: day.date,
           date: formatLongDate(day.date),
           entries: person.events
             .filter((e) => e.date === day.date)
-            .map((e) => ({ time: e.time, title: e.title, location: e.location ?? '' })),
+            .map((e) => ({
+              time: e.time,
+              title: e.title,
+              location: e.location ?? '',
+              slot: e.slot,
+              teacher: e.teacher,
+              swap: e.swap,
+              join: e.join,
+            })),
         })),
         ics: toICalendar(`${draft.title}: ${person.label}`, person.events, new Date(), { refreshHours: REFRESH_HOURS }),
         pdf: await toBase64(pdfs[index]),
@@ -203,17 +271,12 @@ export class PlanPublisher {
   }
 }
 
-/** Lehrer eines Termins: eine Ausnahme am Termin, sonst der der Gruppe oder der Person im Zeitraum */
-function appointmentTeacher(
-  exceptionId: string | undefined,
-  group: Group | undefined,
-  student: Student,
-  config: FeedbackConfig,
-  periodId: string,
-): Teacher {
-  const exception = config.teachers.find((t) => t.id === exceptionId);
-  if (exception) return exception;
-  return group ? groupTeacherOf(group, config) : teacherOf(student, config, periodId);
+/** „Unterricht bei …“; Gruppen ohne Namen nennen die anderen Mitglieder, z. B. „Unterricht mit Ben L. bei …“ */
+function lessonTitle(student: Student, group: Group | undefined, labels: Map<string, string>, teacher: Teacher): string {
+  if (!group) return `Unterricht bei ${teacher.name}`;
+  if (group.name.trim()) return `Gruppe ${group.name.trim()} bei ${teacher.name}`;
+  const others = group.memberIds.filter((id) => id !== student.id).map((id) => labels.get(id)).filter(Boolean);
+  return others.length ? `Unterricht mit ${others.join(', ')} bei ${teacher.name}` : `Gruppenunterricht bei ${teacher.name}`;
 }
 
 /** Termin für Plan und Kalender; bis Mitternacht endet er um 24:00, nicht um 0:00 desselben Tages. */
