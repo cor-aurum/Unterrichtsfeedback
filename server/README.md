@@ -148,6 +148,19 @@ kennt, sieht die Termine mit den Namen der Personen. Eine neue Adresse in der Ap
 Adresse steht in den Zugriffsprotokollen des Proxys; wer sie dort nicht haben will, schließt `/api/kalender/` vom
 Protokoll aus.
 
+## Download-Link für Pläne
+
+Für jeden Berichtszeitraum kann eine seiner Lehrkräfte in der App (Konfiguration → Allgemein → beim Zeitraum) einen
+Download-Link erzeugen: `https://feedback.example.de/api/plan/<Schlüssel>`. Die Seite dahinter zeigt die Kurznamen
+aller Personen im Zeitraum; wer auf einen Namen tippt, sieht dessen Einzel- und Gruppentermine sowie die allgemeinen
+Termine für alle Lehrkräfte und lädt sie als PDF oder Kalenderdatei (auch als Abo) herunter. Namen, Termine, PDFs
+und Kalender erzeugt die App, sobald sich etwas ändert, und schickt sie mit; der Server zeigt sie nur an.
+
+Wie beim Kalender-Abo ist der Link selbst der Schlüssel (256 Bit Zufall), ein neuer macht den alten ungültig. Er
+gilt bis 14 Tage nach dem Ende des Zeitraums (danach `410`). Die Seite braucht kein JavaScript und ist für
+Suchmaschinen gesperrt. Wer den Link nicht in den Zugriffsprotokollen haben will, schließt `/api/plan/` vom
+Protokoll aus.
+
 ## Sicherung
 
 Alle Daten stehen in der SQLite-Datei. Eine konsistente Kopie im laufenden Betrieb:
@@ -179,5 +192,10 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `PUT /api/feed`           | Kalender (iCalendar) für das Abo senden                                |
 | `POST/DELETE /api/feed/address` | Neue Abo-Adresse (die alte gilt nicht mehr) bzw. Abo beenden     |
 | `GET /api/kalender/{Schlüssel}.ics` | Der Kalender für die Kalender-App, ohne Anmeldung            |
+| `GET /api/plans/{Zeitraum}` | Download-Link des Zeitraums (nur seine Lehrkräfte): `{url, updatedAt, expiresAt}`; `url` leer ohne Link |
+| `PUT /api/plans/{Zeitraum}` | Pläne senden: `{title, dates, color, people: [{id, label, days, ics, pdf}]}`; `404` ohne Link |
+| `POST /api/plans/{Zeitraum}/address` | Neuer Download-Link (der alte gilt nicht mehr)                 |
+| `DELETE /api/plans/{Zeitraum}` | Link und Pläne löschen                                            |
+| `GET /api/plan/{Schlüssel}[/{Person}[.pdf\|.ics]]` | Namensliste, Seite, PDF oder Kalender einer Person, ohne Anmeldung |
 
 Angemeldet wird mit `Authorization: Bearer <token>`. Fehler kommen als `{error: "…"}` mit einem Text für die App.

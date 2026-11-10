@@ -182,7 +182,38 @@ export const serverApi = {
   async endFeed(login: ServerLogin): Promise<void> {
     await checked(await request(login.url, 'DELETE', '/api/feed/address', { token: login.token }));
   },
+
+  /** Download-Link eines Berichtszeitraums: `url` ist leer, solange es keinen gibt. */
+  plan(login: ServerLogin, periodId: string): Promise<PlanLinkState> {
+    return json(request(login.url, 'GET', planPath(periodId), { token: login.token }));
+  },
+
+  /** Richtet den Link ein oder ersetzt ihn; der alte gilt danach nicht mehr. */
+  newPlanAddress(login: ServerLogin, periodId: string): Promise<PlanLinkState> {
+    return json(request(login.url, 'POST', `${planPath(periodId)}/address`, { token: login.token }));
+  },
+
+  async deletePlan(login: ServerLogin, periodId: string): Promise<void> {
+    await checked(await request(login.url, 'DELETE', planPath(periodId), { token: login.token }));
+  },
+
+  /** Wirft `ServerError` mit Status 404, wenn es für den Zeitraum keinen Link gibt. */
+  async putPlan(login: ServerLogin, periodId: string, plans: string): Promise<void> {
+    await checked(await request(login.url, 'PUT', planPath(periodId), { token: login.token, body: plans }));
+  },
 };
+
+function planPath(periodId: string): string {
+  return `/api/plans/${encodeURIComponent(periodId)}`;
+}
+
+export interface PlanLinkState {
+  url: string;
+  /** Wann zuletzt Pläne geschickt wurden (ISO); fehlt, wenn noch nie */
+  updatedAt?: string;
+  /** Letzter Tag, an dem der Link gilt (JJJJ-MM-TT) */
+  expiresAt: string;
+}
 
 export interface FeedState {
   url: string;

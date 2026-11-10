@@ -30,6 +30,7 @@ import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
 import { InstrumentSelect } from '../instrument-select';
 import { TeachingWindowsEditor } from './teaching-windows-editor';
+import { PlanLinkPanel } from '../plans/plan-link-panel';
 import { labelOf, ReportPeriod } from '../report-period';
 import { storedSignal } from '../stored-signal';
 import { serverApi } from '../sync/server-folder';
@@ -71,7 +72,7 @@ type LogoSlot = (typeof LOGO_SLOTS)[number];
 
 @Component({
   selector: 'app-config-editor',
-  imports: [BlockContentEditor, NgTemplateOutlet, InstrumentSelect, TeachingWindowsEditor],
+  imports: [BlockContentEditor, NgTemplateOutlet, InstrumentSelect, TeachingWindowsEditor, PlanLinkPanel],
   templateUrl: './config-editor.html',
   styleUrl: './config-editor.scss',
 })

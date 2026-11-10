@@ -1,0 +1,55 @@
+<details class="plan-link" (toggle)="toggled($event)">
+  <summary>Download-Link für die Pläne</summary>
+  <p class="muted small">
+    Ein Link für alle Personen im Zeitraum: Wer ihn öffnet, tippt auf seinen Namen und lädt seine Termine als PDF
+    oder Kalenderdatei herunter. Verschicke ihn z. B. per Mail an deine Liste oder häng den QR-Code aus. Die Pläne
+    bleiben aktuell, solange der Link besteht.
+  </p>
+  @if (!login()) {
+    <p class="muted small">Dafür musst du am Server angemeldet sein.</p>
+  } @else if (state(); as link) {
+    @if (link.url) {
+      <div class="row link">
+        <input type="text" readonly [value]="link.url" (focus)="selectAll($event)" aria-label="Download-Link" />
+        <button class="secondary" (click)="copy(link.url)">Kopieren</button>
+        <a [href]="link.url" target="_blank" rel="noopener noreferrer">Seite öffnen</a>
+      </div>
+      @if (qrCode(); as code) {
+        <div class="qr">
+          <img [src]="code" alt="QR-Code des Download-Links" width="180" height="180" />
+          <button class="secondary" (click)="qrPdf()">QR-Code als PDF</button>
+        </div>
+      }
+      <p class="muted small">
+        Gilt bis {{ expires() }} (zwei Wochen nach Ende des Zeitraums).
+        @if (link.updatedAt) {
+          Pläne zuletzt aktualisiert: {{ formatTime(link.updatedAt) }}.
+        }
+      </p>
+      <p class="message warning small">
+        Wer den Link hat, sieht die Vornamen aller Personen im Zeitraum und kann jeden Plan öffnen. Gib ihn nur an die
+        Teilnehmenden weiter. Ist er in falsche Hände geraten, erzeuge einen neuen.
+      </p>
+      <div class="row actions">
+        <button class="secondary" [disabled]="busy()" (click)="refresh()">Jetzt aktualisieren</button>
+        <button class="secondary" [disabled]="busy()" (click)="renew()">Neuen Link erzeugen</button>
+        <button class="secondary" [disabled]="busy()" (click)="remove()">Link löschen</button>
+      </div>
+    } @else {
+      <div class="row actions">
+        <button [disabled]="busy()" (click)="create()">Link erzeugen</button>
+      </div>
+    }
+  } @else if (busy()) {
+    <p class="muted small">Wird geladen …</p>
+  }
+  @if (busy() && state()) {
+    <p class="muted small">Einen Moment …</p>
+  }
+  @if (message(); as text) {
+    <p class="message small" role="status">{{ text }}</p>
+  }
+  @if (error(); as text) {
+    <p class="message error small">{{ text }}</p>
+  }
+</details>

@@ -70,6 +70,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/feed/address", s.authed(s.newFeedAddress))
 	mux.HandleFunc("DELETE /api/feed/address", s.authed(s.deleteFeedAddress))
 	mux.HandleFunc("GET /api/kalender/{file}", s.calendar)
+	mux.HandleFunc("GET /api/plans/{period}", s.authed(s.getPlan))
+	mux.HandleFunc("PUT /api/plans/{period}", s.authed(s.putPlan))
+	mux.HandleFunc("DELETE /api/plans/{period}", s.authed(s.deletePlan))
+	mux.HandleFunc("POST /api/plans/{period}/address", s.authed(s.newPlanAddress))
+	mux.HandleFunc("GET /api/plan/{token}", s.publicPlans)
+	mux.HandleFunc("GET /api/plan/{token}/{file}", s.publicPlanFile)
 	return s.cors(mux)
 }
 

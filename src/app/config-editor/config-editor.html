@@ -177,6 +177,9 @@
                     }
                   </div>
                 }
+                @if (sync.login() && !period.placeholder && !locked(period)) {
+                  <app-plan-link-panel [period]="period" />
+                }
               </li>
             }
           </ul>

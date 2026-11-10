@@ -99,6 +99,22 @@ func PeriodOf(content []byte) (string, []string, error) {
 	return file.Period.ID, file.Period.TeacherIDs, nil
 }
 
+// PeriodEnd liest den letzten Tag (JJJJ-MM-TT) aus dem Dokument eines Berichtszeitraums.
+func PeriodEnd(content []byte) (string, error) {
+	var file struct {
+		Period struct {
+			To string `json:"to"`
+		} `json:"period"`
+	}
+	if err := json.Unmarshal(content, &file); err != nil {
+		return "", fmt.Errorf("Berichtszeitraum lässt sich nicht lesen: %w", err)
+	}
+	if file.Period.To == "" {
+		return "", errors.New("der Berichtszeitraum hat kein Ende")
+	}
+	return file.Period.To, nil
+}
+
 // HasPeriods ist wahr, wenn eine Konfiguration noch Berichtszeiträume enthält (ältere App-Versionen).
 func HasPeriods(config []byte) bool {
 	var file struct {

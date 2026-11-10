@@ -214,9 +214,37 @@ interface ListDocument {
   noAppointments: string;
 }
 
+/** Ein Plan je Person für den Download-Link (siehe `PlanPublisher`): ihre Termine als Terminliste im Hochformat */
+export interface PersonalPlan {
+  /** Name der Person, steht groß oben */
+  title: string;
+  days: ScheduleDay[];
+}
+
+/** PDFs der Pläne, in derselben Reihenfolge; Logo und Bilder werden nur einmal vorbereitet. */
+export async function personalPlanPdfs(config: FeedbackConfig, plans: PersonalPlan[], range: SchedulePeriod): Promise<Blob[]> {
+  const [{ jsPDF }, prepared] = await Promise.all([import('jspdf'), forPrint(config)]);
+  return plans.map((plan) => {
+    const list = listDocumentWith(new jsPDF({ unit: 'mm', format: 'a4', compress: true }), config, prepared, plan.title, range);
+    writeScheduleDays(list, plan.days, false, () => undefined);
+    list.writer.addFooters();
+    return list.writer.toBlob();
+  });
+}
+
 async function listDocument(config: FeedbackConfig, title: string, range: SchedulePeriod): Promise<ListDocument> {
   const [{ jsPDF }, prepared] = await Promise.all([import('jspdf'), forPrint(config)]);
-  const writer = new PdfWriter(new jsPDF({ unit: 'mm', format: 'a4' }), pdfColors(pdfTheme(config)), prepared.pdfLayout);
+  return listDocumentWith(new jsPDF({ unit: 'mm', format: 'a4' }), config, prepared, title, range);
+}
+
+function listDocumentWith(
+  doc: jsPDF,
+  config: FeedbackConfig,
+  prepared: FeedbackConfig,
+  title: string,
+  range: SchedulePeriod,
+): ListDocument {
+  const writer = new PdfWriter(doc, pdfColors(pdfTheme(config)), prepared.pdfLayout);
   const heading = [title, range.label].filter((part) => part.trim()).join(' · ');
   writer.beginSection(heading, { left: config.calendarPdf.footer, center: '', right: 'Seite {seite} von {seiten}' });
   const writeTitle = () => {

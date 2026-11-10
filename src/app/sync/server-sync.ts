@@ -3,7 +3,9 @@ import { BackupService } from '../backup';
 import { CalendarFeed } from '../calendar/calendar-feed';
 import { ConfigStore } from '../config.store';
 import { PersonMerger } from '../person-merger';
+import { PlanPublisher } from '../plans/plan-publisher';
 import { storageKey, storedSignal } from '../stored-signal';
+import { checksum } from './checksum';
 import { mergePeriodFile } from './merge-files';
 import { ServerError, ServerFolder, ServerLogin, serverApi, StaleError } from './server-folder';
 import { SyncFolder } from './sync-folder';
@@ -48,6 +50,7 @@ export class ServerSync {
   private readonly backup = inject(BackupService);
   private readonly merger = inject(PersonMerger);
   private readonly feed = inject(CalendarFeed);
+  private readonly plans = inject(PlanPublisher);
   private readonly configStore = inject(ConfigStore);
   /** Prüfsumme des zuletzt gesendeten Abo-Kalenders, damit er nur bei Änderungen erneut geht */
   private readonly publishedFeed = storedSignal<string>('feedback.publishedFeed', () => '');
@@ -356,6 +359,7 @@ export class ServerSync {
     this.status.set('ok');
     this.error.set(null);
     await this.publishFeed();
+    this.plans.schedule(this.login());
     await this.countForeignPeriods();
   }
 
@@ -434,18 +438,4 @@ function withoutStamps(calendar: string): string {
 
 function checksums(files: SyncFiles): Checksums {
   return Object.fromEntries([...files].map(([name, content]) => [name, checksum(content)]));
-}
-
-/** cyrb53: schnelle Prüfsumme, um geänderte Dateien zu erkennen (keine Sicherheitsfunktion) */
-function checksum(text: string): string {
-  let h1 = 0xdeadbeef;
-  let h2 = 0x41c6ce57;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }

@@ -1,0 +1,44 @@
+:host {
+  display: block;
+  flex: 1 1 100%;
+  padding-left: 1.6rem;
+  font-size: 0.9rem;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+
+  input {
+    flex: 1 1 18rem;
+    min-width: 0;
+    font-family: monospace;
+  }
+}
+
+.qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin: 0.75rem 0;
+
+  img {
+    border: 1px solid #d5dbe1;
+    border-radius: 6px;
+    background: #fff;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
