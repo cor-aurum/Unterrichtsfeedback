@@ -480,17 +480,23 @@ function periodFiles(data: AppData, naming: FileNaming = 'readable'): { name: st
     }
     return files.get(key)!;
   };
-  /** Datei zu einem Datum der Person: ihr Zeitraum, in dem es liegt, sonst ihr spätester */
-  const studentTargets = new Map<string, (date: string) => PeriodFile>();
+  /**
+   * Datei eines Termins oder einer Stunde der Person: die ihres gespeicherten Zeitraums, sonst die ihres frühesten
+   * Zeitraums, in dem der Tag liegt (siehe `studentPeriodOn`), sonst die ihres spätesten
+   */
+  const studentTargets = new Map<string, (date: string, periodId?: string) => PeriodFile>();
   for (const student of data.students) {
     const own = periods.filter((period) => Object.hasOwn(student.periods, period.id));
     const targets = own.map((period) => ({ period, file: fileOf(period.id, teacherOf(student, config, period.id).id) }));
     const fallback = targets.at(-1)?.file ?? fileOf('', teacherOf(student, config, '').id);
-    const target = (date: string) => targets.find(({ period }) => containsDate(period, date))?.file ?? fallback;
+    const target = (date: string, periodId?: string) =>
+      targets.find(({ period }) => period.id === periodId)?.file ??
+      targets.find(({ period }) => containsDate(period, date))?.file ??
+      fallback;
     studentTargets.set(student.id, target);
     const { periods: _p, legacyTeacherId: _l, lessons, ...rest } = student;
     for (const file of new Set([fallback, ...targets.map((t) => t.file)])) {
-      file.students.push({ ...rest, lessons: lessons.filter((lesson) => target(lesson.date) === file) });
+      file.students.push({ ...rest, lessons: lessons.filter((lesson) => target(lesson.date, lesson.periodId) === file) });
     }
   }
   const knownPeriods = new Set(periods.map((period) => period.id));
@@ -502,7 +508,7 @@ function periodFiles(data: AppData, naming: FileNaming = 'readable'): { name: st
   }
   for (const appointment of data.appointments) {
     const owner = appointmentOwner(appointment);
-    const file = groupFiles.get(owner) ?? studentTargets.get(owner)?.(appointment.date) ?? fileOf('', config.teachers[0].id);
+    const file = groupFiles.get(owner) ?? studentTargets.get(owner)?.(appointment.date, appointment.periodId) ?? fileOf('', config.teachers[0].id);
     file.appointments.push(appointment);
   }
   const names = periodFileNames([...files.values()], config, naming);

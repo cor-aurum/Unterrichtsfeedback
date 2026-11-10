@@ -1,6 +1,6 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { ConfigStore, isPeriod } from './config.store';
-import { containsDate, formatDate, Lesson, Period, periodTeachers, ReportPeriodEntry, Teacher, today } from './model';
+import { containsDate, formatDate, Lesson, lessonPeriodId, Period, periodTeachers, ReportPeriodEntry, Student, Teacher, today } from './model';
 import { storageKey, storedSignal } from './stored-signal';
 
 /** Früher galt ein unbenannter Zeitraum nur auf dem Gerät; er wird beim ersten Start übernommen. */
@@ -45,9 +45,15 @@ export class ReportPeriod {
     return containsDate(this.period(), date);
   }
 
-  /** Stunden einer Person oder Gruppe im Zeitraum */
-  lessonsOf(owner: { lessons: Lesson[] }): Lesson[] {
-    return owner.lessons.filter((lesson) => this.contains(lesson.date));
+  /**
+   * Stunden einer Person oder Gruppe im Zeitraum. Bei Personen zählt der Zeitraum der Stunde (siehe
+   * `lessonPeriodId`), damit eine Stunde an einem Tag in zwei Zeiträumen nur in einem Bericht steht; Gruppen gehören
+   * ohnehin zu einem Zeitraum.
+   */
+  lessonsOf(owner: { lessons: Lesson[] } | Student): Lesson[] {
+    if (!('periods' in owner)) return owner.lessons.filter((lesson) => this.contains(lesson.date));
+    const period = this.period();
+    return owner.lessons.filter((lesson) => lessonPeriodId(owner, lesson, this.periods()) === period.id);
   }
 
   /** Ein auf diesem Gerät gewählter Zeitraum einer älteren Version wird zum benannten Zeitraum. */

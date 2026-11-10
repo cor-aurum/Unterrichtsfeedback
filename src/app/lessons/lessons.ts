@@ -179,7 +179,8 @@ export class Lessons {
    * selbst, wenn sie außerhalb liegt.
    */
   protected generalLessons(student: Student, lesson: Lesson): Lesson[] {
-    return this.reportPeriod.contains(lesson.date) ? this.reportPeriod.lessonsOf(student) : [lesson];
+    const inPeriod = this.reportPeriod.lessonsOf(student);
+    return inPeriod.some((l) => l.id === lesson.id) ? inPeriod : [lesson];
   }
 
   protected isGeneralChecked(student: Student, lesson: Lesson, sectionId: string, itemId: string): boolean {

@@ -70,7 +70,10 @@ export class StudentPlanning {
     const counts = new Map<string, Occurrence[]>();
     if (!session) return counts;
     const inCalendars = this.inCalendars(this.teachers());
-    for (const occurrence of this.calendar.occurrences(session.from, session.to, (a) => !!a.studentId && inCalendars(a))) {
+    // Nur Termine dieser Planung: An Tagen in zwei Zeiträumen zählen die des anderen nicht mit.
+    const inSession = (a: Appointment) =>
+      !!a.studentId && inCalendars(a) && this.groupsStore.appointmentPeriodId(a) === session.periodId;
+    for (const occurrence of this.calendar.occurrences(session.from, session.to, inSession)) {
       const id = occurrence.appointment.studentId!;
       counts.set(id, [...(counts.get(id) ?? []), occurrence]);
     }
@@ -205,7 +208,13 @@ export class StudentPlanning {
     const chosen = this.needsTeacher(student);
     const previousTeacher = student.periods[session.periodId] ?? null;
     if (chosen) this.studentsStore.chooseTeacher(student.id, session.periodId, teacher.id);
-    const id = this.calendar.add({ date: slot.date, start: slot.start, durationMinutes: slot.durationMinutes, studentId: student.id });
+    const id = this.calendar.add({
+      date: slot.date,
+      start: slot.start,
+      durationMinutes: slot.durationMinutes,
+      studentId: student.id,
+      periodId: session.periodId,
+    });
     return () => {
       this.calendar.remove(id);
       if (chosen) this.studentsStore.chooseTeacher(student.id, session.periodId, previousTeacher);
@@ -257,7 +266,7 @@ export class StudentPlanning {
     const blockers = this.calendar.blockersOf(teacher.id, from, to);
     const slots: FreeSlot[] = [];
     for (const date of daysBetween(from, to)) {
-      for (const window of teachingWindowsOn(teacher, config, date)) {
+      for (const window of teachingWindowsOn(teacher, config, date, this.session()?.periodId)) {
         for (let start = minutesOf(window.from); start + duration <= minutesOf(window.to); start += duration) {
           if (!isUpcoming(date, timeOf(start))) continue;
           const taken = (byDay.get(date) ?? []).some(({ appointment }) => {

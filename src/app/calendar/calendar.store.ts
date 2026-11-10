@@ -11,6 +11,7 @@ import {
   today,
 } from '../model';
 import { storedSignal } from '../stored-signal';
+import { ReportPeriod } from '../report-period';
 import { StudentsStore } from '../students.store';
 import {
   addDays,
@@ -47,6 +48,7 @@ export class CalendarStore {
   private readonly config = inject(ConfigStore).config;
   /** Auch Personen anderer Zeiträume, damit ihre Stunden im Kalender bleiben */
   private readonly students = inject(StudentsStore).allStudents;
+  private readonly reportPeriod = inject(ReportPeriod);
   readonly appointments = storedSignal<Appointment[]>('feedback.appointments', () => [], (data) =>
     parseAppointments(data, this.config().reportPeriods),
   );
@@ -65,16 +67,27 @@ export class CalendarStore {
     });
   }
 
-  /** Liefert die ID des neuen Termins */
+  /**
+   * Liefert die ID des neuen Termins. Termine von Personen gehören zum gewählten Berichtszeitraum, wenn nichts
+   * anderes angegeben ist (z. B. der einer Planung).
+   */
   add(appointment: Omit<Appointment, 'id'>): string {
     const id = newId();
-    this.appointments.update((list) => [...list, { ...appointment, id }]);
+    const periodId = appointment.studentId ? (appointment.periodId ?? this.reportPeriod.period().id) : undefined;
+    this.appointments.update((list) => [...list, { ...appointment, id, ...(periodId ? { periodId } : {}) }]);
     return id;
   }
 
-  /** Bei Terminserien gilt die Änderung für alle Wiederholungen. */
+  /** Bei Terminserien gilt die Änderung für alle Wiederholungen. Der Berichtszeitraum bleibt, wenn er nicht mitkommt. */
   update(id: string, change: Omit<Appointment, 'id'>): void {
-    this.appointments.update((list) => list.map((a) => (a.id === id ? { ...change, id } : a)));
+    this.appointments.update((list) =>
+      list.map((a) => {
+        if (a.id !== id) return a;
+        const periodId = change.studentId ? (change.periodId ?? a.periodId) : undefined;
+        const { periodId: _, ...rest } = change;
+        return { ...rest, id, ...(periodId ? { periodId } : {}) };
+      }),
+    );
   }
 
   remove(id: string): void {
@@ -191,7 +204,7 @@ export class CalendarStore {
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     for (let offset = 0; offset < SLOT_SEARCH_DAYS; offset++) {
       const date = addDays(firstDay, offset);
-      const windows = teachingWindowsOn(teacher, this.config(), date);
+      const windows = teachingWindowsOn(teacher, this.config(), date, this.reportPeriod.period().id);
       for (const window of windows) {
         for (let start = minutesOf(window.from); start + duration <= minutesOf(window.to); start += duration) {
           if (offset === 0 && start <= nowMinutes) continue;
@@ -230,7 +243,7 @@ export class CalendarStore {
     const duration = settings.defaultDurationMinutes;
     const slots: FreeSlot[] = [];
     for (const date of days) {
-      const windows = teachingWindowsOn(teacher, this.config(), date);
+      const windows = teachingWindowsOn(teacher, this.config(), date, this.reportPeriod.period().id);
       for (const window of windows) {
         for (let start = minutesOf(window.from); start + duration <= minutesOf(window.to); start += duration) {
           const repeat = weekly ? this.untilPeriodEnd(date, 7) : undefined;

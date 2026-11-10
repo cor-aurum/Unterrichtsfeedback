@@ -129,7 +129,7 @@ export class AutoSchedulePanel {
     if (this.periodError() || this.freeSlots().length > 0) return null;
     const days = this.mode() === 'weekly' ? daysBetween(this.from(), addDays(this.from(), 6)) : daysBetween(this.from(), this.to());
     const config = this.config();
-    if (days.every((date) => teachingWindowsOn(this.teacher(), config, date).length === 0)) {
+    if (days.every((date) => teachingWindowsOn(this.teacher(), config, date, this.reportPeriod.period().id).length === 0)) {
       return `${this.teacher().name} hat an diesen Tagen keine Unterrichtszeiten (Konfiguration → Lehrer:innen, je Berichtszeitraum).`;
     }
     return 'Alle Unterrichtszeiten an diesen Tagen sind schon belegt oder blockiert.';

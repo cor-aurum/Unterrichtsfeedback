@@ -99,7 +99,7 @@ export class CalendarTablePanel {
       start: appointment.start,
       end: endTime(appointment),
       durationMinutes: appointment.durationMinutes,
-      location: locationOn(teacher, this.config(), date),
+      location: this.groupsStore.appointmentLocation(appointment, date),
       teachers: [teacher.name],
     };
   }

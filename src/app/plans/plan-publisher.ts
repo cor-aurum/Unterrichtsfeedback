@@ -1,5 +1,5 @@
 import { DestroyRef, effect, inject, Injectable } from '@angular/core';
-import { addDays, minutesOf, startMinutes, timeOf } from '../calendar/appointments';
+import { addDays, Appointment, minutesOf, startMinutes, timeOf } from '../calendar/appointments';
 import { CalendarStore } from '../calendar/calendar.store';
 import { CalendarEvent, toICalendar } from '../calendar/ical';
 import { ConfigStore } from '../config.store';
@@ -10,7 +10,6 @@ import {
   formatShortDate,
   Group,
   isActiveIn,
-  locationIn,
   ReportPeriodEntry,
   Student,
   Teacher,
@@ -20,7 +19,7 @@ import { PersonalPlan, personalPlanPdfs, ScheduleDay } from '../pdf-export';
 import { planningLabels, shortName } from '../planning/planning-labels';
 import { demoMode, storedSignal } from '../stored-signal';
 import { planServerId, realServerLogin } from './plan-access';
-import { appointmentTeacher, isOpenSingle, isSpontaneous } from './plan-slots';
+import { isOpenSingle, isSpontaneous } from './plan-slots';
 import { PlanRequests } from './plan-requests';
 import { StudentsStore } from '../students.store';
 import { checksum } from '../sync/checksum';
@@ -207,23 +206,28 @@ export class PlanPublisher {
   ): PlanEvent[] {
     const own = new Map(groups.filter((g) => g.memberIds.includes(student.id)).map((g) => [g.id, g]));
     return this.calendar
-      .occurrences(period.from, period.to, (a) => a.studentId === student.id || (!!a.groupId && own.has(a.groupId)))
+      .occurrences(period.from, period.to, (a) => this.ownIn(a, student, period) || (!!a.groupId && own.has(a.groupId)))
       .map(({ date, appointment }) => {
         const group = appointment.groupId ? own.get(appointment.groupId) : undefined;
-        const teacher = appointmentTeacher(appointment.teacherId, group, student, config, period.id);
+        const teacher = this.groupsStore.calendarTeacherOf(appointment);
         const event = planEvent(
           appointment.id,
           date,
           startMinutes(appointment),
           appointment.durationMinutes,
           lessonTitle(student, group, labels, teacher),
-          locationIn(teacher, period.id),
+          this.groupsStore.appointmentLocation(appointment, date),
         );
         const single = isOpenSingle(appointment);
         const swap = single && appointment.studentId === student.id;
         const join = swap || (single && !!group && isSpontaneous(group));
         return { ...event, slot: appointment.id, teacher: teacher.id, swap, join };
       });
+  }
+
+  /** Einzeltermin der Person in diesem Zeitraum (an Tagen in zwei Zeiträumen gehört er nur zu einem) */
+  private ownIn(appointment: Appointment, student: Student, period: ReportPeriodEntry): boolean {
+    return appointment.studentId === student.id && this.groupsStore.appointmentPeriodId(appointment) === period.id;
   }
 
   /**

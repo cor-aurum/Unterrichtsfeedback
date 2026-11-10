@@ -1,5 +1,5 @@
 import { Appointment } from '../calendar/appointments';
-import { FeedbackConfig, Group, groupTeacherOf, Student, Teacher, teacherOf, today } from '../model';
+import { Group, today } from '../model';
 
 /**
  * Gruppen, die auf der Download-Seite entstehen, wenn jemand zum Unterricht einer anderen Person dazukommt. Sie
@@ -20,17 +20,4 @@ export function isSpontaneous(group: Group): boolean {
 export function isOpenSingle(appointment: Appointment): boolean {
   const once = !appointment.repeat || appointment.repeat.count <= 1;
   return once && !appointment.lessonId && appointment.date >= today();
-}
-
-/** Lehrer eines Termins: eine Ausnahme am Termin, sonst der der Gruppe oder der Person im Zeitraum */
-export function appointmentTeacher(
-  exceptionId: string | undefined,
-  group: Group | undefined,
-  student: Student,
-  config: FeedbackConfig,
-  periodId: string,
-): Teacher {
-  const exception = config.teachers.find((t) => t.id === exceptionId);
-  if (exception) return exception;
-  return group ? groupTeacherOf(group, config) : teacherOf(student, config, periodId);
 }

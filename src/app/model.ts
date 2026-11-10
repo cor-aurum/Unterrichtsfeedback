@@ -185,6 +185,20 @@ export function containsDate(period: Period, date: string): boolean {
   return date >= period.from && date <= period.to;
 }
 
+/**
+ * Für Termine und Stunden ohne gespeicherten Zeitraum (ältere Daten): der früheste Zeitraum der Person, in dem der
+ * Tag liegt. Überall dieselbe Regel – auch für die Ablage auf dem Server –, unabhängig vom gewählten Zeitraum.
+ */
+export function studentPeriodOn(student: Student, date: string, periods: ReportPeriodEntry[]): string | null {
+  const own = periods.filter((period) => Object.hasOwn(student.periods, period.id) && containsDate(period, date));
+  return own.sort((a, b) => a.from.localeCompare(b.from))[0]?.id ?? null;
+}
+
+/** Berichtszeitraum einer Stunde der Person: der gespeicherte, sonst wie `studentPeriodOn` */
+export function lessonPeriodId(student: Student, lesson: Lesson, periods: ReportPeriodEntry[]): string | null {
+  return lesson.periodId ?? studentPeriodOn(student, lesson.date, periods);
+}
+
 /** Unterricht gibt es nur an Tagen in einem Berichtszeitraum. */
 export function isTeachingDay(config: FeedbackConfig, date: string): boolean {
   return config.reportPeriods.some((period) => containsDate(period, date));
@@ -355,9 +369,13 @@ export function teachingWindowsFor(teacher: Teacher, periodId: string | null): T
  * liegt (bei mehreren der, in dem der Lehrer aktiv ist) – die gemeinsamen des Zeitraums oder, ohne sie, die eigenen
  * des Lehrers. Außerhalb der Berichtszeiträume gibt es keinen Unterricht.
  */
-export function teachingWindowsOn(teacher: Teacher, config: FeedbackConfig, date: string): TeachingWindow[] {
-  const periods = config.reportPeriods.filter((period) => containsDate(period, date));
-  const period = periods.find((p) => p.teacherIds.includes(teacher.id)) ?? periods[0];
+export function teachingWindowsOn(
+  teacher: Teacher,
+  config: FeedbackConfig,
+  date: string,
+  preferredPeriodId?: string,
+): TeachingWindow[] {
+  const period = periodOfTeacherOn(teacher, config, date, preferredPeriodId);
   if (!period) return [];
   const day = (new Date(date + 'T00:00:00Z').getUTCDay() + 6) % 7;
   return (period.sharedWindows ?? teachingWindowsFor(teacher, period.id))
@@ -372,10 +390,23 @@ export function locationIn(teacher: Teacher, periodId: string | null): string {
 }
 
 /** Ort des Lehrers an einem Tag: der des Berichtszeitraums, in dem der Tag liegt (wie bei `teachingWindowsOn`) */
-export function locationOn(teacher: Teacher, config: FeedbackConfig, date: string): string {
+export function locationOn(teacher: Teacher, config: FeedbackConfig, date: string, preferredPeriodId?: string): string {
+  return locationIn(teacher, periodOfTeacherOn(teacher, config, date, preferredPeriodId)?.id ?? null);
+}
+
+/**
+ * Zeitraum eines Lehrers an einem Tag: bei mehreren überlappenden der bevorzugte (z. B. der auf dem Gerät gewählte
+ * oder der eines Termins), wenn der Lehrer in ihm aktiv ist; sonst der erste, in dem er aktiv ist; sonst irgendeiner.
+ */
+function periodOfTeacherOn(
+  teacher: Teacher,
+  config: FeedbackConfig,
+  date: string,
+  preferredPeriodId?: string,
+): ReportPeriodEntry | undefined {
   const periods = config.reportPeriods.filter((period) => containsDate(period, date));
-  const period = periods.find((p) => p.teacherIds.includes(teacher.id)) ?? periods[0];
-  return locationIn(teacher, period?.id ?? null);
+  const active = periods.filter((p) => p.teacherIds.includes(teacher.id));
+  return active.find((p) => p.id === preferredPeriodId) ?? active[0] ?? periods[0];
 }
 
 export function teacherInstrument(teacher: Teacher, config: FeedbackConfig): Instrument {
@@ -582,6 +613,11 @@ export interface Lesson {
   start?: string;
   /** Länge in Minuten; nur bei Stunden aus dem Kalender bekannt */
   durationMinutes?: number;
+  /**
+   * Berichtszeitraum, zu dem die Stunde gehört; gesetzt bei neuen Stunden. Überlappen sich Zeiträume, entscheidet
+   * er (nicht das Datum), in welchem Bericht sie steht. Ältere Stunden: siehe `lessonPeriodId`.
+   */
+  periodId?: string;
   /** Angehakte Textbausteine je Abschnitt (Abschnitts-ID → Item-IDs) */
   checked: Record<string, string[]>;
   /** Freitext je Abschnitt (Abschnitts-ID → Text) */

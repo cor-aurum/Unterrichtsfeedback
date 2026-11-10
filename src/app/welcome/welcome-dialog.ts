@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { demoMode } from '../stored-signal';
+import { suggestHomeScreen } from './home-screen';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
@@ -40,6 +41,8 @@ const COLOR_PRESETS = [DEFAULT_THEME_COLOR, '#d32f2f', '#c2185b', '#7b1fa2', '#3
 export class WelcomeDialog {
   /** Im Demomodus keine Server-Anmeldung, damit die Beispieldaten nicht auf den Server gelangen */
   protected readonly demoMode = demoMode;
+  /** Auf iPhone und iPad im Browser: zum Home-Bildschirm hinzufügen, damit Safari die Daten nicht löscht */
+  protected readonly homeScreenHint = suggestHomeScreen();
   private readonly configStore = inject(ConfigStore);
   private readonly backup = inject(BackupService);
   private readonly router = inject(Router);

@@ -10,6 +10,13 @@
   <section class="welcome card" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
     <img class="logo" src="logo.png" alt="" />
     <h1 id="welcome-title">Willkommen!</h1>
+    @if (homeScreenHint) {
+      <p class="message home-screen">
+        <strong>Auf iPhone und iPad:</strong> Füge diese Seite über <em>Teilen</em> (□↑) →
+        <em>Zum Home-Bildschirm</em> hinzu und öffne sie von dort. Sonst löscht Safari deine Daten, wenn du die Seite
+        sieben Tage lang nicht benutzt.
+      </p>
+    }
     @if (choosingTeacher()) {
       <p class="muted">
         Die Daten sind eingespielt (Berichtszeitraum „{{ selectedPeriod.period().name }}“). Wer bist du? Wähle dich aus

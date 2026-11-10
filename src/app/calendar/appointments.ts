@@ -30,6 +30,12 @@ export interface Appointment {
    * Lehrer ausnahmsweise eine Person eines anderen Lehrers unterrichtet.
    */
   teacherId?: string;
+  /**
+   * Berichtszeitraum eines Termins einer Person; gesetzt bei neuen Terminen. Überlappen sich Zeiträume, entscheidet
+   * er, in welchem Kalender, Plan und welcher Datei der Termin steht. Gruppentermine gehören zum Zeitraum der Gruppe;
+   * ältere Termine ohne ihn: siehe `studentPeriodOn`.
+   */
+  periodId?: string;
 }
 
 /** Welche Termine gemeint sind: die Termine dieser Personen und Gruppen (IDs) oder alle, für die die Funktion passt */
@@ -205,6 +211,7 @@ export function parseAppointments(data: unknown, periods: Period[]): Appointment
       ...withRepeat(parseRecurrence(a, periods)),
       ...(typeof a.lessonId === 'string' ? { lessonId: a.lessonId } : {}),
       ...(typeof a.teacherId === 'string' ? { teacherId: a.teacherId } : {}),
+      ...(typeof a.periodId === 'string' && typeof a.studentId === 'string' ? { periodId: a.periodId } : {}),
     }));
 }
 
@@ -252,6 +259,7 @@ export function withLessonAppointments(
         start: lesson.start!,
         durationMinutes: lesson.durationMinutes ?? existing?.durationMinutes ?? defaultDurationMinutes,
         lessonId: lesson.id,
+        ...(kind === 'student' && lesson.periodId ? { periodId: lesson.periodId } : {}),
       });
     }
   }

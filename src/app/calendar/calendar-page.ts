@@ -1,4 +1,4 @@
-import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
+import { Component, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
@@ -144,6 +144,12 @@ export class CalendarPage {
    * (siehe `weekStartOf`).
    */
   protected readonly weekStart = signal(this.weekStartOf(this.defaultDate()));
+  /** Über ein `computed`: Der Zeitraum ist nach jeder Änderung der Konfiguration ein neues Objekt, die ID bleibt. */
+  private readonly periodId = computed(() => this.reportPeriod.period().id);
+  constructor() {
+    this.followPeriod();
+  }
+
   /**
    * Die Woche als Zeitraster: je Tag die Einträge mit Beginn und Dauer, sich überschneidende nebeneinander.
    * Ganztägige Blocker stehen über dem Raster.
@@ -164,7 +170,8 @@ export class CalendarPage {
       const fullDay = blockerParts.filter(({ part }) => part.start === '00:00' && part.end === '24:00');
       const items: WeekItem[] = [
         ...occurrences
-          .filter((o) => o.date === date && this.reportPeriod.contains(date))
+          // An Tagen in mehreren Zeiträumen nur die Termine des gewählten
+          .filter((o) => o.date === date && this.reportPeriod.contains(date) && this.inSelectedPeriod(o.appointment))
           .map((occurrence) => ({ kind: 'appointment' as const, occurrence, ...spanOf(occurrence.appointment) })),
         ...shared.filter((o) => o.date === date).map(({ appointment }) => ({ kind: 'shared' as const, shared: appointment, ...spanOf(appointment) })),
         ...blockerParts
@@ -185,7 +192,7 @@ export class CalendarPage {
         otherPeriod: this.otherPeriodOn(date),
         fullDayBlockers: fullDay.map(({ blocker }) => blocker),
         items: withLanes(items),
-        windows: all ? [] : teachingWindowsOn(this.teacher(), config, date),
+        windows: all ? [] : teachingWindowsOn(this.teacher(), config, date, this.reportPeriod.period().id),
       };
     });
   });
@@ -456,6 +463,11 @@ export class CalendarPage {
     return this.teachers().find((t) => t.id === teacherId)?.name ?? '';
   }
 
+  /** Gehört der Termin zum gewählten Berichtszeitraum? (wichtig an Tagen, die in mehreren liegen) */
+  private inSelectedPeriod(appointment: Appointment): boolean {
+    return this.groupsStore.appointmentPeriodId(appointment) === this.reportPeriod.period().id;
+  }
+
   private calendarTeacherOf(appointment: Appointment): Teacher {
     return this.groupsStore.calendarTeacherOf(appointment);
   }
@@ -473,7 +485,7 @@ export class CalendarPage {
     this.draft.update((current) => {
       if (!current) return current;
       const teacher = this.teachers().find((t) => t.id === teacherId);
-      const start = !current.id && teacher ? teachingWindowsOn(teacher, this.config(), current.date)[0]?.from : undefined;
+      const start = !current.id && teacher ? teachingWindowsOn(teacher, this.config(), current.date, this.reportPeriod.period().id)[0]?.from : undefined;
       const draft = { ...current, calendarTeacherId: teacherId, ...(start ? { start } : {}) };
       const group = draft.groupId ? this.groupsById().get(draft.groupId) : undefined;
       if (!group || groupTeacherOf(group, this.config()).id === teacherId) return draft;
@@ -595,6 +607,25 @@ export class CalendarPage {
   private periodAt(date: string): ReportPeriodEntry | undefined {
     const selected = this.reportPeriod.period();
     return containsDate(selected, date) ? selected : this.config().reportPeriods.find((p) => containsDate(p, date));
+  }
+
+  /**
+   * Wird oben in der Leiste ein anderer Berichtszeitraum gewählt, zeigt der Kalender ihn: die Woche von heute, wenn
+   * heute in ihm liegt, sonst seine erste Woche. Liegt die gezeigte Woche schon im Zeitraum (z. B. nach „Zum Beginn
+   * …“), bleibt sie.
+   */
+  private followPeriod(): void {
+    let previous = untracked(this.periodId);
+    effect(() => {
+      const id = this.periodId();
+      if (id === previous) return;
+      previous = id;
+      untracked(() => {
+        const start = this.weekStart();
+        const shown = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+        if (!shown.some((date) => this.reportPeriod.contains(date))) this.weekStart.set(this.weekStartOf(this.defaultDate()));
+      });
+    });
   }
 
   /** Zeiträume für den Sprung an ihren Beginn, nach Beginn sortiert */
@@ -757,7 +788,7 @@ export class CalendarPage {
     const firstGroup = this.groupsStore.groups()[0];
     const teacher =
       forGroup && this.groups().length === 0 && firstGroup ? groupTeacherOf(firstGroup, this.config()) : this.teacher();
-    const firstWindow = teachingWindowsOn(teacher, this.config(), date)[0];
+    const firstWindow = teachingWindowsOn(teacher, this.config(), date, this.reportPeriod.period().id)[0];
     this.closeForms();
     this.draft.set({
       id: null,
@@ -839,7 +870,9 @@ export class CalendarPage {
       this.message.set(this.noLessonText(draft.date));
       return;
     }
-    const { id, lessonId, teacherId: _, calendarTeacherId, extraGroupIds, ...rest } = draft;
+    const { id, lessonId, teacherId: _, calendarTeacherId, extraGroupIds, ...draftRest } = draft;
+    // Neue Termine einer Person gehören zum gewählten Zeitraum; danach richtet sich auch ihr Lehrer.
+    const rest = draftRest.studentId && !draftRest.periodId ? { ...draftRest, periodId: this.reportPeriod.period().id } : draftRest;
     // Steht der Termin nicht im Kalender des Lehrers der Person oder Gruppe, ist er eine Ausnahme.
     const exception = this.calendarTeacherOf(rest as Appointment).id !== calendarTeacherId;
     const appointment = exception ? { ...rest, teacherId: calendarTeacherId } : rest;
@@ -910,8 +943,10 @@ export class CalendarPage {
     const teachers = teachersInOrderOn(this.config(), from).filter((t) => this.activeTeacher.isVisible(t.id)).map((teacher) => ({
       name: teacher.name,
       // Der Ort am ersten Tag; meist liegt der Zeitraum der Liste in einem Berichtszeitraum.
-      location: locationOn(teacher, this.config(), from),
-      windowsByDate: Object.fromEntries(daysBetween(from, to).map((date) => [date, teachingWindowsOn(teacher, this.config(), date)])),
+      location: locationOn(teacher, this.config(), from, this.reportPeriod.period().id),
+      windowsByDate: Object.fromEntries(
+        daysBetween(from, to).map((date) => [date, teachingWindowsOn(teacher, this.config(), date, this.reportPeriod.period().id)]),
+      ),
       days: this.scheduleDays(teacher, from, to, true),
     }));
     if (this.pdfFormat() === 'individual') {
@@ -946,7 +981,9 @@ export class CalendarPage {
           date,
           entry: {
             time: `${appointment.start}–${endTime(appointment)}`,
-            name: [names.get(appointment.groupId!) ?? 'Gruppe', locationOn(teacher, config, date), teacher.name].filter((p) => p).join(' · '),
+            name: [names.get(appointment.groupId!) ?? 'Gruppe', this.groupsStore.appointmentLocation(appointment, date), teacher.name]
+              .filter((p) => p)
+              .join(' · '),
             startMinutes: startMinutes(appointment),
             durationMinutes: appointment.durationMinutes,
           },
@@ -989,8 +1026,8 @@ export class CalendarPage {
         date,
         columns: teachers.map((teacher) => ({
           name: teacher.name,
-          location: locationOn(teacher, config, date),
-          teachingWindows: teachingWindowsOn(teacher, config, date),
+          location: locationOn(teacher, config, date, this.reportPeriod.period().id),
+          teachingWindows: teachingWindowsOn(teacher, config, date, this.reportPeriod.period().id),
           entries: entries.get(teacher.id)!,
         })),
         shared: shared.map((appointment) => ({

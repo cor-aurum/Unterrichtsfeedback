@@ -204,14 +204,15 @@ export class StudentsStore {
     this.selectStudent(studentId);
     const student = this.selectedStudent();
     if (!student) return false;
-    const existing = lessonAt(student, date, time?.start);
+    // Nur Stunden dieses Zeitraums: An Tagen in zwei Zeiträumen hat die Person in jedem ihre eigene.
+    const existing = lessonAt({ lessons: this.reportPeriod.lessonsOf(student) }, date, time?.start);
     if (existing) {
       if (time && !existing.start) this.mutateLesson(studentId, existing.id, (lesson) => Object.assign(lesson, time));
       this.selectedLessonId.set(existing.id);
       return true;
     }
     if (!this.canHaveLesson(student, date)) return false;
-    const lesson: Lesson = { id: newId(), date, ...time, checked: {}, texts: {} };
+    const lesson: Lesson = { id: newId(), date, ...time, periodId: this.periodId(), checked: {}, texts: {} };
     this.mutateStudent(studentId, (s) => s.lessons.push(lesson));
     this.selectedLessonId.set(lesson.id);
     return true;
@@ -363,6 +364,7 @@ export function parseLesson(lesson: Partial<Lesson>): Lesson {
     date: lesson.date,
     ...(start ? { start } : {}),
     ...(durationMinutes ? { durationMinutes } : {}),
+    ...(typeof lesson.periodId === 'string' ? { periodId: lesson.periodId } : {}),
     checked: isRecord(lesson.checked) ? lesson.checked : {},
     texts: isRecord(lesson.texts) ? lesson.texts : {},
   };

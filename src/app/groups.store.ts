@@ -1,10 +1,23 @@
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
-import { Appointment, ownerOf, withLessonAppointments } from './calendar/appointments';
+import { Appointment, withLessonAppointments } from './calendar/appointments';
 import { CalendarStore } from './calendar/calendar.store';
 import { ConfigStore } from './config.store';
 import { withPeriodMembership } from './period-membership';
 import { ReportPeriod } from './report-period';
-import { Group, groupLabel, groupTeacherOf, Lesson, lessonAt, newId, Teacher, teacherOf, today } from './model';
+import {
+  Group,
+  groupLabel,
+  groupTeacherOf,
+  Lesson,
+  lessonAt,
+  locationIn,
+  locationOn,
+  newId,
+  studentPeriodOn,
+  Teacher,
+  teacherOf,
+  today,
+} from './model';
 import { storedSignal } from './stored-signal';
 import { isRecord, parseLesson, sortedLessons, StudentsStore } from './students.store';
 
@@ -56,29 +69,53 @@ export class GroupsStore {
   }
 
   /**
-   * Termine im Kalender des Lehrers: die seiner Personen und Gruppen, außer sie sind ausnahmsweise einem anderen
-   * Lehrer zugeordnet, und Termine anderer Personen, die ausnahmsweise ihm zugeordnet sind.
+   * Termine im Kalender des Lehrers: die seiner Personen und Gruppen – mit dem Lehrer, den die Person im Zeitraum
+   * des Termins hat –, außer sie sind ausnahmsweise einem anderen Lehrer zugeordnet, und Termine anderer Personen, die
+   * ausnahmsweise ihm zugeordnet sind. Hängt nicht vom gewählten Zeitraum ab, damit jedes Gerät denselben Kalender
+   * (und dasselbe Abo) erzeugt.
    */
   calendarFilter(teacher: Teacher): (appointment: Appointment) => boolean {
-    const owners = this.calendarOwnerIds(teacher);
-    return (appointment) => (appointment.teacherId ? appointment.teacherId === teacher.id : owners.has(ownerOf(appointment)));
+    return (appointment) => this.calendarTeacherOf(appointment).id === teacher.id;
   }
 
   /**
-   * In wessen Kalender der Termin steht: bei Ausnahmen der eingetragene Lehrer, sonst der der Person oder Gruppe;
-   * ohne beide der erste Lehrer.
+   * In wessen Kalender der Termin steht: bei Ausnahmen der eingetragene Lehrer, sonst der der Gruppe oder der der
+   * Person im Zeitraum des Termins; ohne beide der erste Lehrer.
    */
   calendarTeacherOf(appointment: Appointment): Teacher {
     const config = this.config();
-    const exception = config.teachers.find((t) => t.id === appointment.teacherId);
+    const exception = appointment.teacherId ? config.teachers.find((t) => t.id === appointment.teacherId) : undefined;
     if (exception) return exception;
-    const group = appointment.groupId ? this.allGroups().find((g) => g.id === appointment.groupId) : undefined;
+    const group = appointment.groupId ? this.groupsById().get(appointment.groupId) : undefined;
     if (group) return groupTeacherOf(group, config);
-    const student = appointment.studentId
-      ? this.studentsStore.allStudents().find((s) => s.id === appointment.studentId)
-      : undefined;
-    return student ? teacherOf(student, config, this.periodId()) : config.teachers[0];
+    const student = appointment.studentId ? this.studentsById().get(appointment.studentId) : undefined;
+    if (!student) return config.teachers[0];
+    return teacherOf(student, config, this.appointmentPeriodId(appointment) ?? this.periodId());
   }
+
+  /**
+   * Berichtszeitraum eines Termins: bei Gruppen der der Gruppe, sonst der gespeicherte oder – bei älteren Terminen –
+   * der früheste Zeitraum der Person, in dem der Tag liegt (`studentPeriodOn`); `null`, wenn keiner passt.
+   */
+  appointmentPeriodId(appointment: Appointment): string | null {
+    if (appointment.groupId) return this.groupsById().get(appointment.groupId)?.periodId ?? null;
+    if (appointment.periodId) return appointment.periodId;
+    const student = appointment.studentId ? this.studentsById().get(appointment.studentId) : undefined;
+    return student ? studentPeriodOn(student, appointment.date, this.config().reportPeriods) : null;
+  }
+
+  /** Ort eines Termins an einem Tag: der seines Lehrers im Zeitraum des Termins */
+  appointmentLocation(appointment: Appointment, date: string): string {
+    const teacher = this.calendarTeacherOf(appointment);
+    const periodId = this.appointmentPeriodId(appointment);
+    const period = this.config().reportPeriods.find((p) => p.id === periodId);
+    return period?.teacherIds.includes(teacher.id)
+      ? locationIn(teacher, period.id)
+      : locationOn(teacher, this.config(), date, periodId ?? undefined);
+  }
+
+  private readonly studentsById = computed(() => new Map(this.studentsStore.allStudents().map((s) => [s.id, s])));
+  private readonly groupsById = computed(() => new Map(this.allGroups().map((g) => [g.id, g])));
 
   /** Anzeigename je Termin-Besitzer: der Name der Person oder „Gruppe …“, auch aus anderen Zeiträumen */
   readonly ownerNames = computed(() => {

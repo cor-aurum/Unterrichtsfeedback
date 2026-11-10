@@ -7,7 +7,7 @@ import { ReportPeriodEntry, Student, Teacher, teacherOf } from '../model';
 import { StudentsStore } from '../students.store';
 import { AcceptedPlanRequest, ServerError, ServerLogin, serverApi } from '../sync/server-folder';
 import { planServerId } from './plan-access';
-import { appointmentTeacher, isOpenSingle, spontaneousGroupId } from './plan-slots';
+import { isOpenSingle, spontaneousGroupId } from './plan-slots';
 
 const CHANGED = 'Der Termin hat sich inzwischen geändert.';
 
@@ -57,9 +57,8 @@ export class PlanRequests {
     if (mine.studentId !== from.id || theirs.studentId !== to.id || !isOpenSingle(mine) || !isOpenSingle(theirs)) {
       return CHANGED;
     }
-    const config = this.config();
-    const teacher = appointmentTeacher(mine.teacherId, undefined, from, config, period.id);
-    if (teacher.id !== appointmentTeacher(theirs.teacherId, undefined, to, config, period.id).id) {
+    const teacher = this.groupsStore.calendarTeacherOf(mine);
+    if (teacher.id !== this.groupsStore.calendarTeacherOf(theirs).id) {
       return 'Die Termine sind bei verschiedenen Lehrkräften.';
     }
     this.calendar.update(mine.id, this.assignedTo(mine, to, teacher, period));
@@ -67,11 +66,15 @@ export class PlanRequests {
     return null;
   }
 
-  /** Termin für eine andere Person; hat sie eine andere Lehrkraft, bleibt er als Ausnahme bei dieser. */
+  /**
+   * Termin für eine andere Person; hat sie eine andere Lehrkraft, bleibt er als Ausnahme bei dieser. Der Zeitraum des
+   * Termins bleibt und wird festgeschrieben.
+   */
   private assignedTo(appointment: Appointment, student: Student, teacher: Teacher, period: ReportPeriodEntry): Omit<Appointment, 'id'> {
     const { id: _id, teacherId: _teacher, studentId: _student, ...rest } = appointment;
-    const own = teacherOf(student, this.config(), period.id).id === teacher.id;
-    return { ...rest, studentId: student.id, ...(own ? {} : { teacherId: teacher.id }) };
+    const periodId = this.groupsStore.appointmentPeriodId(appointment) ?? period.id;
+    const own = teacherOf(student, this.config(), periodId).id === teacher.id;
+    return { ...rest, studentId: student.id, periodId, ...(own ? {} : { teacherId: teacher.id }) };
   }
 
   /**
@@ -89,10 +92,11 @@ export class PlanRequests {
       return null;
     }
     if (target.studentId !== to.id || !isOpenSingle(target)) return CHANGED;
-    const teacher = appointmentTeacher(target.teacherId, undefined, to, this.config(), period.id);
+    const teacher = this.groupsStore.calendarTeacherOf(target);
+    const periodId = this.groupsStore.appointmentPeriodId(target) ?? period.id;
     this.groupsStore.allGroups.update((groups) => [
       ...groups.filter((g) => g.id !== groupId),
-      { id: groupId, name: '', memberIds: [to.id, from.id], teacherId: teacher.id, periodId: period.id, lessons: [], generalTexts: {} },
+      { id: groupId, name: '', memberIds: [to.id, from.id], teacherId: teacher.id, periodId, lessons: [], generalTexts: {} },
     ]);
     const { id: _id, studentId: _student, teacherId: _teacher, ...rest } = target;
     this.calendar.update(target.id, { ...rest, groupId });
