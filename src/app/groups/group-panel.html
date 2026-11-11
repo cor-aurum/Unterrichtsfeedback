@@ -26,7 +26,7 @@
       [placeholder]="label()"
       (change)="store.update(group().id, { name: valueOf($event).trim() })"
     />
-    @if (teachers().length > 1) {
+    @if (teachers().length > 1 && !group().auto) {
       <label class="muted" for="group-teacher">Termine im Kalender von</label>
       <select id="group-teacher" (change)="store.update(group().id, { teacherId: valueOf($event) })">
         @for (teacher of groupTeachers(); track teacher.id) {
@@ -35,6 +35,13 @@
       </select>
     }
     <span class="muted">Mitglieder</span>
+    @if (group().auto) {
+      <p class="muted small auto-note">
+        Automatische Gruppe: Mitglieder sind immer alle Personen, die in diesem Berichtszeitraum
+        {{ teacherName() }} als Lehrkraft haben. Ändert sich die Lehrkraft einer Person – auch beim Selbsteintragen –,
+        ändert sich die Gruppe mit. Löschen lässt sie sich nicht.
+      </p>
+    }
     <div class="members">
       @for (entry of candidates(); track entry.teacher.id) {
         @if (candidates().length > 1) {
@@ -42,7 +49,12 @@
         }
         @for (student of entry.students; track student.id) {
           <label>
-            <input type="checkbox" [checked]="isMember(student)" (change)="store.toggleMember(group().id, student.id)" />
+            <input
+              type="checkbox"
+              [checked]="isMember(student)"
+              [disabled]="group().auto"
+              (change)="store.toggleMember(group().id, student.id)"
+            />
             {{ student | studentLabel }}
             @if (otherGroupsText(student); as text) {
               <span class="other-groups">{{ text }}</span>
@@ -53,7 +65,9 @@
         <p class="muted">Lege zuerst Personen an.</p>
       }
     </div>
-    <button class="danger" (click)="removeGroup()">Gruppe löschen</button>
+    @if (!group().auto) {
+      <button class="danger" (click)="removeGroup()">Gruppe löschen</button>
+    }
   </div>
 </section>
 

@@ -173,9 +173,11 @@ export class StudentPlanning {
     periodId: string,
     from: string,
     to: string,
+    /** Über den Link: alle Personen des Zeitraums, nicht nur die dieser Lehrkräfte */
+    everyone = false,
   ): { slots: number; days: number; students: number; share: number } {
     const teachers = this.config().teachers.filter((t) => teacherIds.includes(t.id));
-    const students = this.studentsOf(teacherIds, periodId);
+    const students = everyone ? this.periodStudents(periodId) : this.studentsOf(teacherIds, periodId);
     if (teachers.length === 0 || students.length === 0 || from > to) {
       return { slots: 0, days: 0, students: students.length, share: 0 };
     }
@@ -257,14 +259,20 @@ export class StudentPlanning {
   /** Legt den Termin an (`id`: fest, z. B. für Eintragungen über den Link) und liefert die Rücknahme. */
   private enter(scope: PlanningScope, student: Student, teacher: Teacher, slot: FreeSlot, choosing: boolean, id?: string): () => void {
     const previousTeacher = student.periods[scope.periodId] ?? null;
-    if (choosing) this.studentsStore.chooseTeacher(student.id, scope.periodId, teacher.id);
+    if (choosing) {
+      this.studentsStore.chooseTeacher(student.id, scope.periodId, teacher.id);
+      this.groupsStore.syncAutoGroups();
+    }
     const appointmentId = this.calendar.add(
       { date: slot.date, start: slot.start, durationMinutes: slot.durationMinutes, studentId: student.id, periodId: scope.periodId },
       id,
     );
     return () => {
       this.calendar.remove(appointmentId);
-      if (choosing) this.studentsStore.chooseTeacher(student.id, scope.periodId, previousTeacher);
+      if (choosing) {
+        this.studentsStore.chooseTeacher(student.id, scope.periodId, previousTeacher);
+        this.groupsStore.syncAutoGroups();
+      }
     };
   }
 
@@ -289,7 +297,9 @@ export class StudentPlanning {
   // --- Selbsteintragung über den Download-Link ---
 
   /**
-   * Freie Zeiten je Lehrkraft und je Person, was davon für sie passt. Ab Beginn des heutigen Tages (nicht ab jetzt),
+   * Freie Zeiten je Lehrkraft und je Person, was davon für sie passt – für alle Personen des Zeitraums: Wessen
+   * Lehrkraft nicht dabei ist (z. B. die Leitung als Standard, die keinen Einzelunterricht gibt), wählt zuerst eine
+   * der Lehrkräfte; mit dem ersten Termin wird sie ihre Lehrkraft. Ab Beginn des heutigen Tages (nicht ab jetzt),
    * damit sich das Angebot nicht mit jeder Stunde ändert und neue Pläne nötig macht; vergangene Zeiten blendet die
    * Seite aus.
    */
@@ -299,15 +309,13 @@ export class StudentPlanning {
     const from = scope.from > today() ? scope.from : today();
     const free = teachers.map((teacher) => ({ teacher, slots: this.freeSlotsOf(teacher, from, scope.to, scope.periodId, false) }));
     const lessons = this.lessonsIn({ ...scope, teacherIds: teachers.map((t) => t.id) });
-    const withLessons = this.withLessonsIn(scope.periodId);
     const individual = groupBy(this.calendar.occurrences(from, scope.to, (a) => !!a.studentId), (o) => o.appointment.studentId!);
     const groupLessons = groupBy(this.calendar.occurrences(from, scope.to, (a) => !!a.groupId), (o) => o.appointment.groupId!);
     const groups = this.groupsStore.allGroups();
     const filters = new Map(teachers.map((t) => [t.id, this.groupsStore.calendarFilter(t)]));
     const names = this.groupsStore.ownerNames();
-    const people = this.studentsOf(scope.teacherIds, scope.periodId).map((student): PersonOffer => {
-      const choosing = teachers.length > 1 && !withLessons.has(student.id);
-      const teacherId = choosing ? null : teacherOf(student, config, scope.periodId).id;
+    const people = this.periodStudents(scope.periodId).map((student): PersonOffer => {
+      const teacherId = this.choosesTeacher(scope, student) ? null : teacherOf(student, config, scope.periodId).id;
       const all = lessons.get(student.id) ?? [];
       const own = all.filter(({ date }) => date >= from);
       const ownDays = new Set(own.map(({ date }) => date));
@@ -340,7 +348,7 @@ export class StudentPlanning {
    * Seite der Person.
    */
   bookingProblem(scope: PlanningScope, studentId: string, teacherId: string, slot: FreeSlot): string | null {
-    const student = this.studentsOf(scope.teacherIds, scope.periodId).find((s) => s.id === studentId);
+    const student = this.periodStudents(scope.periodId).find((s) => s.id === studentId);
     const teacher = this.teachersById(scope.teacherIds).find((t) => t.id === teacherId);
     if (!student || !teacher) return 'Bei dieser Lehrkraft kannst du dich nicht mehr selbst eintragen.';
     if (!this.choosesTeacher(scope, student) && teacherOf(student, this.config(), scope.periodId).id !== teacher.id) {
@@ -361,8 +369,12 @@ export class StudentPlanning {
     if (student && teacher) this.enter(scope, student, teacher, slot, this.choosesTeacher(scope, student), id);
   }
 
-  /** Wählt die Person ihre Lehrkraft noch? */
+  /**
+   * Wählt die Person über den Link ihre Lehrkraft noch? Ja, wenn ihre Lehrkraft nicht dabei ist, und bei mehreren,
+   * solange sie im Zeitraum keinen Termin hat.
+   */
   private choosesTeacher(scope: PlanningScope, student: Student): boolean {
+    if (!scope.teacherIds.includes(teacherOf(student, this.config(), scope.periodId).id)) return true;
     return scope.teacherIds.length > 1 && !this.withLessonsIn(scope.periodId).has(student.id);
   }
 
@@ -370,6 +382,14 @@ export class StudentPlanning {
 
   private teachersById(ids: string[]): Teacher[] {
     return ids.map((id) => this.config().teachers.find((t) => t.id === id)).filter((t): t is Teacher => !!t);
+  }
+
+  /** Alle Personen im Zeitraum, nach Namen */
+  private periodStudents(periodId: string): Student[] {
+    return this.studentsStore
+      .allStudents()
+      .filter((s) => isActiveIn(s, periodId))
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }
 
   private studentsOf(teacherIds: string[], periodId: string): Student[] {

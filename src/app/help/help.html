@@ -41,8 +41,9 @@
   } @else {
     <p>
       Der Demomodus zeigt die App mit Beispieldaten: einen Lehrgang über eine Woche, der heute in einer Woche beginnt,
-      mit fünf Lehrkräften (darunter du), 40 Personen ohne Termine bei zwei davon, Frühstück, Mittag- und Abendessen
-      als allgemeinen Terminen und Unterrichtszeiten vormittags, nachmittags und abends. Deine echten Daten bleiben
+      mit fünf Lehrkräften (darunter du), 40 Personen ohne Einzeltermine bei zwei davon, Frühstück, Mittag- und
+      Abendessen als allgemeinen Terminen, je Lehrkraft ihrer automatischen Gruppe mit einem täglichen Termin direkt
+      nach dem Frühstück und Unterrichtszeiten vormittags, nachmittags und abends. Deine echten Daten bleiben
       unverändert und werden auch nicht mit einem Server abgeglichen; anmelden oder mit einem Server verbinden geht
       in der Demo nicht. Bist du schon verbunden, kannst du den Download-Link mit den Demodaten trotzdem ausprobieren
       (siehe <em>Pläne zum Herunterladen</em>). Mit <kbd>Jetzt beginnen lassen</kbd> startet der
@@ -117,6 +118,13 @@
     <li>
       Gruppentermine stehen im Kalender der Lehrkraft, die du bei der Gruppe unter <em>Termine im Kalender von</em>
       einstellst.
+    </li>
+    <li>
+      <strong>Automatische Gruppen:</strong> Jede Lehrkraft hat in jedem Berichtszeitraum eine Gruppe „Alle von …“
+      mit allen Personen, die sie dort als Lehrkraft haben. Wechselt eine Person die Lehrkraft – unter Personen oder
+      beim Selbsteintragen über den Link –, wechselt sie auch die Gruppe. Mitglieder lassen sich dort nicht
+      ankreuzen, und löschen lässt sich die Gruppe nicht; Name, Gruppentermine und Gruppenstunden gehen wie bei
+      anderen Gruppen.
     </li>
     <li>
       <strong>Gruppenstunde:</strong> <kbd>+ Neue Gruppenstunde</kbd> oder ein Klick auf den Gruppentermin legt eine
@@ -578,7 +586,10 @@
     <li>
       <strong>Selbst eintragen über den Link:</strong> Unter dem Download-Link startest du mit
       <kbd>Selbsteintragung starten</kbd> dasselbe wie „Schüler:innen tragen sich ein“ am Tablet, nur auf der Seite
-      jeder Person: Lehrkräfte, Von/Bis und Höchstzahl je Person (vorgeschlagen ist der faire Anteil). Auf ihrer Seite
+      jeder Person: Lehrkräfte, Von/Bis und Höchstzahl je Person (vorgeschlagen ist der faire Anteil). Mitmachen
+      können alle Personen des Zeitraums: Wessen Lehrkraft nicht unter den gewählten ist (z. B. die Leitung, die als
+      Standard eingetragen ist, aber keinen Einzelunterricht gibt), wählt zuerst eine von ihnen und hat sie mit dem
+      ersten Termin als Lehrkraft. Auf ihrer Seite
       tippt die Person auf <em>Termine wählen</em> und dann auf eine freie Zeit ihrer Lehrkraft; es gelten dieselben
       Regeln wie am Tablet (⚠ bei eigenem Gruppenunterricht, kein Einzelunterricht bei anderen und nur ein Termin am
       Tag; wer im Zeitraum noch keinen Termin hat, wählt bei mehreren Lehrkräften zuerst die eigene). Wer zuerst kommt,

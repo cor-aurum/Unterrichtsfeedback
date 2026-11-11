@@ -54,6 +54,7 @@ export class GroupPanel {
   protected readonly members = computed(() => memberNames(this.group(), this.studentsStore.students()));
   protected readonly teachers = inject(ActiveTeacher).visibleTeachers;
   protected readonly groupTeacherId = computed(() => groupTeacherOf(this.group(), this.config()).id);
+  protected readonly teacherName = computed(() => groupTeacherOf(this.group(), this.config()).name);
   /** Gemeinsame Gruppen-Abschnitte und die eigenen des Lehrers der Gruppe */
   protected readonly sections = computed(() => configForTeacher(this.config(), this.groupTeacherId()).groupSections);
   /** Lehrer des Zeitraums der Gruppe; ihr bisheriger bleibt wählbar */

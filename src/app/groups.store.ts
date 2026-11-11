@@ -2,6 +2,7 @@ import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { Appointment, withLessonAppointments } from './calendar/appointments';
 import { CalendarStore } from './calendar/calendar.store';
 import { ConfigStore } from './config.store';
+import { withAutoGroups } from './groups/auto-groups';
 import { withPeriodMembership } from './period-membership';
 import { ReportPeriod } from './report-period';
 import {
@@ -66,6 +67,24 @@ export class GroupsStore {
       this.studentsStore.allStudents.set(migrated.students);
       this.allGroups.set(migrated.groups);
     });
+    // Je Lehrkraft eine automatische Gruppe mit allen ihren Personen; sie folgt jeder Änderung der Lehrkraft.
+    effect(() => {
+      this.allGroups();
+      this.studentsStore.allStudents();
+      this.config();
+      untracked(() => this.syncAutoGroups());
+    });
+  }
+
+  /**
+   * Führt die automatischen Gruppen sofort nach, z. B. direkt nachdem eine Person beim Eintragen ihre Lehrkraft
+   * gewählt hat; sonst geschähe das erst, wenn die Effekte das nächste Mal laufen, und Pläne aus demselben Durchlauf
+   * zeigten noch die alte Gruppe.
+   */
+  syncAutoGroups(): void {
+    const groups = this.allGroups();
+    const next = withAutoGroups(groups, this.studentsStore.allStudents(), this.config());
+    if (next !== groups) this.allGroups.set(next);
   }
 
   /**
@@ -201,7 +220,9 @@ export class GroupsStore {
     this.mutate(groupId, (group) => Object.assign(group, change));
   }
 
+  /** Bei automatischen Gruppen nicht: Ihre Mitglieder ergeben sich aus der Lehrkraft der Personen. */
   toggleMember(groupId: string, studentId: string): void {
+    if (this.allGroups().find((g) => g.id === groupId)?.auto) return;
     this.mutate(groupId, (group) => {
       group.memberIds = group.memberIds.includes(studentId)
         ? group.memberIds.filter((id) => id !== studentId)
@@ -209,8 +230,9 @@ export class GroupsStore {
     });
   }
 
-  /** Mit der Gruppe entfallen ihre Gruppenstunden und Termine. */
+  /** Mit der Gruppe entfallen ihre Gruppenstunden und Termine. Automatische Gruppen bleiben. */
   remove(groupId: string): void {
+    if (this.allGroups().find((g) => g.id === groupId)?.auto) return;
     this.allGroups.update((groups) => groups.filter((g) => g.id !== groupId));
     this.calendar.removeForOwner(groupId);
     if (this.selectedGroupId() === groupId) this.select(null);
@@ -357,5 +379,6 @@ export function parseGroups(data: unknown): Group[] {
       // Ältere Gruppen haben noch keine eigenen Stunden.
       lessons: Array.isArray(g.lessons) ? g.lessons.map(parseLesson) : [],
       generalTexts: isRecord(g.generalTexts) ? g.generalTexts : {},
+      ...(g.auto === true ? { auto: true } : {}),
     }));
 }

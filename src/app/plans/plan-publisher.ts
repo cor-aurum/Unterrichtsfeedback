@@ -347,7 +347,9 @@ export class PlanPublisher {
 /** „Unterricht bei …“; Gruppen ohne Namen nennen die anderen Mitglieder, z. B. „Unterricht mit Ben L. bei …“ */
 function lessonTitle(student: Student, group: Group | undefined, labels: Map<string, string>, teacher: Teacher): string {
   if (!group) return `Unterricht bei ${teacher.name}`;
-  if (group.name.trim()) return `Gruppe ${group.name.trim()} bei ${teacher.name}`;
+  const name = group.name.trim();
+  // „Gruppe Alle von Anna bei Anna“ wäre doppelt.
+  if (name) return name.includes(teacher.name) ? `Gruppe ${name}` : `Gruppe ${name} bei ${teacher.name}`;
   const others = group.memberIds.filter((id) => id !== student.id).map((id) => labels.get(id)).filter(Boolean);
   return others.length ? `Unterricht mit ${others.join(', ')} bei ${teacher.name}` : `Gruppenunterricht bei ${teacher.name}`;
 }

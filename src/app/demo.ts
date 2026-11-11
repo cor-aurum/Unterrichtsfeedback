@@ -1,7 +1,8 @@
-import { addDays, daysFrom } from './calendar/appointments';
+import { addDays, Appointment, daysFrom } from './calendar/appointments';
 import { SharedAppointment } from './calendar/shared-appointments';
 import { defaultConfig } from './config.store';
-import { FeedbackConfig, Instrument, ReportPeriodEntry, Student, Teacher, TeachingWindow, today } from './model';
+import { autoGroupId, autoGroupMembers, autoGroupName } from './groups/auto-groups';
+import { FeedbackConfig, Group, Instrument, ReportPeriodEntry, Student, Teacher, TeachingWindow, today } from './model';
 import { DEMO_FLAG, DEMO_PREFIX } from './stored-signal';
 import { deleteDemoPlanLink } from './plans/plan-access';
 
@@ -28,6 +29,8 @@ const MEALS: [string, string, number][] = [
   ['Mittagessen', '12:30', 60],
   ['Abendessen', '18:00', 60],
 ];
+/** Gruppenunterricht jeder Lehrkraft mit allen ihren Personen, jeden Tag direkt nach dem Frühstück */
+const GROUP_LESSON: [string, number] = ['08:30', 60];
 const OTHER_TEACHERS: [string, string][] = [
   ['Clara Brandt', 'Klavier'],
   ['Jonas Feld', 'Gitarre'],
@@ -42,8 +45,8 @@ const LAST_NAMES = ['Becker', 'Hartmann', 'Keller', 'Lorenz', 'Möller', 'Neuman
 
 /**
  * Startet den Demomodus mit frischen Beispieldaten: ein einwöchiger Lehrgang ab heute in einer Woche, fünf
- * Lehrkräfte (darunter man selbst), 40 Personen ohne Termine bei zwei von ihnen und die Mahlzeiten als allgemeine
- * Termine. Die echten Daten bleiben unberührt; die App lädt neu.
+ * Lehrkräfte (darunter man selbst), 40 Personen ohne Einzeltermine bei zwei von ihnen, die Mahlzeiten als allgemeine
+ * Termine und je Lehrkraft ihre automatische Gruppe mit einem täglichen Termin nach dem Frühstück. Die echten Daten bleiben unberührt; die App lädt neu.
  */
 export async function startDemo(self: DemoSelf): Promise<void> {
   // Ein Demo-Link von einer früheren Demo, die nicht über „Demo beenden“ verlassen wurde
@@ -153,12 +156,32 @@ function demoData(self: DemoSelf): Record<string, unknown> {
     allTeachers: true,
     blocksPlanning: true,
   }));
+  // Die automatischen Gruppen der Lehrkräfte (die App führt sie ohnehin nach) mit ihrem täglichen Termin
+  const groups: Group[] = teachers.map((t) => ({
+    id: autoGroupId(PERIOD_ID, t.id),
+    name: autoGroupName(t.name),
+    memberIds: autoGroupMembers(students, demoConfig, PERIOD_ID, t.id),
+    teacherId: t.id,
+    periodId: PERIOD_ID,
+    lessons: [],
+    generalTexts: {},
+    auto: true,
+  }));
+  const [groupStart, groupMinutes] = GROUP_LESSON;
+  const appointments: Appointment[] = groups.map((group, i) => ({
+    id: `demo-gruppentermin-${i + 1}`,
+    groupId: group.id,
+    date: from,
+    start: groupStart,
+    durationMinutes: groupMinutes,
+    repeat: { everyDays: 1, count: 7 },
+  }));
   return {
     'feedback.config': demoConfig,
     'feedback.setupPending': false,
     'feedback.students': students,
-    'feedback.groups': [],
-    'feedback.appointments': [],
+    'feedback.groups': groups,
+    'feedback.appointments': appointments,
     'feedback.blockers': [],
     'feedback.sharedAppointments': sharedAppointments,
     'feedback.activeTeacher': me.id,

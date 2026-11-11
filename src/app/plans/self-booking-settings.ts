@@ -39,7 +39,7 @@ export class SelfBookingSettings {
   protected readonly to = linkedSignal(() => this.running()?.to ?? this.period().to);
   /** Leer: der faire Anteil */
   protected readonly max = linkedSignal<number | null>(() => this.running()?.maxPerStudent ?? null);
-  protected readonly fair = computed(() => this.planning.fairShare(this.teacherIds(), this.period().id, this.from(), this.to()));
+  protected readonly fair = computed(() => this.planning.fairShare(this.teacherIds(), this.period().id, this.from(), this.to(), true));
   protected readonly effectiveMax = computed(() => this.max() ?? this.fair().share);
   protected readonly valid = computed(
     () => this.teacherIds().length > 0 && this.from() <= this.to() && this.to() >= today() && this.effectiveMax() > 0,

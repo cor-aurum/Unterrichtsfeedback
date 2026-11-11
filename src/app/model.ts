@@ -590,6 +590,11 @@ export interface Group {
   lessons: Lesson[];
   /** Freitexte der allgemeinen Gruppen-Abschnitte (Abschnitts-ID → Text) */
   generalTexts: Record<string, string>;
+  /**
+   * Automatische Gruppe der Lehrkraft (`teacherId`) im Zeitraum: Mitglieder sind immer alle Personen, die sie dort
+   * haben (siehe `withAutoGroups`); von Hand ändern lassen sie sich nicht.
+   */
+  auto?: boolean;
 }
 
 export function groupTeacherOf(group: Group, config: FeedbackConfig): Teacher {
