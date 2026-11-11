@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
@@ -7,6 +7,7 @@ import {
   activeTeachersOn,
   containsDate,
   formatDate,
+  formatLongDate,
   Group,
   groupLabel,
   groupMembers,
@@ -79,6 +80,8 @@ interface BlockerDraft {
 
 /** Längster Zeitraum für die PDF-Liste, damit niemand versehentlich Jahrzehnte exportiert. */
 const MAX_PDF_DAYS = 366;
+/** Bis zu dieser Breite zeigt der Kalender einen Tag statt der Woche (wie die schmale Ansicht der App). */
+const NARROW_MAX_PX = 700;
 
 @Component({
   selector: 'app-calendar-page',
@@ -146,9 +149,43 @@ export class CalendarPage {
   protected readonly weekStart = signal(this.weekStartOf(this.defaultDate()));
   /** Über ein `computed`: Der Zeitraum ist nach jeder Änderung der Konfiguration ein neues Objekt, die ID bleibt. */
   private readonly periodId = computed(() => this.reportPeriod.period().id);
+  /** Schmaler Bildschirm (Handy): Der Kalender zeigt einen Tag statt der Woche und blättert tageweise. */
+  protected readonly narrow = signal(false);
+  /** Zuletzt gewählter Tag; liegt er nicht in der gezeigten Woche, gilt `shownDay` */
+  private readonly chosenDay = signal<string | null>(null);
   constructor() {
     this.followPeriod();
+    this.watchWidth();
   }
+
+  private watchWidth(): void {
+    if (typeof matchMedia !== 'function') return;
+    const query = matchMedia(`(max-width: ${NARROW_MAX_PX}px)`);
+    const update = () => this.narrow.set(query.matches);
+    update();
+    query.addEventListener('change', update);
+    inject(DestroyRef).onDestroy(() => query.removeEventListener('change', update));
+  }
+
+  /**
+   * Der Tag, den der Kalender auf schmalem Bildschirm zeigt: der gewählte, wenn er in der Woche liegt, sonst heute,
+   * sonst der erste Tag der Woche im Berichtszeitraum.
+   */
+  protected readonly shownDay = computed(() => {
+    const dates = daysBetween(this.weekStart(), addDays(this.weekStart(), 6));
+    const chosen = this.chosenDay();
+    if (chosen && dates.includes(chosen)) return chosen;
+    if (dates.includes(this.today)) return this.today;
+    return dates.find((date) => this.reportPeriod.contains(date)) ?? dates[0];
+  });
+
+  /** Die gezeigten Tage: die Woche, auf schmalem Bildschirm nur `shownDay` */
+  protected readonly days = computed(() => {
+    const week = this.week();
+    if (!this.narrow()) return week;
+    const day = this.shownDay();
+    return week.filter((d) => d.date === day);
+  });
 
   /**
    * Die Woche als Zeitraster: je Tag die Einträge mit Beginn und Dauer, sich überschneidende nebeneinander.
@@ -202,7 +239,7 @@ export class CalendarPage {
    * Woche, mindestens sechs Stunden; ohne beides 8 bis 18 Uhr.
    */
   protected readonly gridHours = computed(() => {
-    const days = this.week();
+    const days = this.days();
     const starts = days.flatMap((d) => [...d.items.map((i) => i.startMinutes), ...d.windows.map((w) => minutesOf(w.from))]);
     const ends = days.flatMap((d) => [
       ...d.items.map((i) => i.startMinutes + i.durationMinutes),
@@ -397,7 +434,9 @@ export class CalendarPage {
     const start = timeOf(Math.floor(minutes / 15) * 15);
     this.newShared(date, start);
   }
-  protected readonly weekLabel = computed(() => formatPeriod(this.weekStart(), addDays(this.weekStart(), 6)));
+  protected readonly weekLabel = computed(() =>
+    this.narrow() ? formatLongDate(this.shownDay()) : formatPeriod(this.weekStart(), addDays(this.weekStart(), 6)),
+  );
 
   protected readonly draft = signal<Draft | null>(null);
   protected readonly blockerDraft = signal<BlockerDraft | null>(null);
@@ -590,8 +629,21 @@ export class CalendarPage {
     });
   }
 
+  /** ‹ und ›: auf schmalem Bildschirm einen Tag, sonst eine Woche weiter oder zurück */
+  protected step(direction: -1 | 1): void {
+    if (this.narrow()) this.showDate(addDays(this.shownDay(), direction));
+    else this.moveWeek(direction);
+  }
+
   protected showToday(): void {
-    this.weekStart.set(this.weekStartOf(this.today));
+    this.showDate(this.today);
+  }
+
+  /** Zeigt die Woche mit dem Tag und auf schmalem Bildschirm den Tag selbst. */
+  private showDate(date: string): void {
+    const start = this.weekStart();
+    if (date < start || date > addDays(start, 6)) this.weekStart.set(this.weekStartOf(date));
+    this.chosenDay.set(date);
   }
 
   /**
@@ -623,7 +675,7 @@ export class CalendarPage {
       untracked(() => {
         const start = this.weekStart();
         const shown = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-        if (!shown.some((date) => this.reportPeriod.contains(date))) this.weekStart.set(this.weekStartOf(this.defaultDate()));
+        if (!shown.some((date) => this.reportPeriod.contains(date))) this.showDate(this.defaultDate());
       });
     });
   }
@@ -640,7 +692,7 @@ export class CalendarPage {
     select.value = '';
     if (!period) return;
     this.reportPeriod.select(period.id);
-    this.weekStart.set(this.weekStartOf(period.from));
+    this.showDate(period.from);
   }
 
   /**
@@ -696,7 +748,7 @@ export class CalendarPage {
     } else {
       this.calendar.addBlocker(blocker);
     }
-    this.weekStart.set(this.weekStartOf(draft.fromDate));
+    this.showDate(draft.fromDate);
     this.closeForms();
   }
 
@@ -891,7 +943,7 @@ export class CalendarPage {
     }
     const extra = !id && rest.groupId ? (extraGroupIds ?? []).filter((groupId) => groupId !== rest.groupId) : [];
     this.addForGroups(rest, extra);
-    this.weekStart.set(this.weekStartOf(draft.date));
+    this.showDate(draft.date);
     this.draft.set(null);
     this.noteOtherCalendar(calendarTeacherId);
     if (extra.length > 0) this.notice.set(`${extra.length + 1} Gruppentermine eingetragen, jeweils im Kalender der Lehrkraft der Gruppe.`);

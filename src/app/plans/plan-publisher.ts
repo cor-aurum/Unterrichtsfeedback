@@ -5,6 +5,7 @@ import { CalendarEvent, toICalendar } from '../calendar/ical';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
 import {
+  activeSelfBooking,
   FeedbackConfig,
   formatLongDate,
   formatShortDate,
@@ -17,9 +18,11 @@ import {
 } from '../model';
 import { PersonalPlan, personalPlanPdfs, ScheduleDay } from '../pdf-export';
 import { planningLabels, shortName } from '../planning/planning-labels';
+import { isOwnOneOff, PersonOffer, StudentPlanning } from '../planning/student-planning';
 import { demoMode, storedSignal } from '../stored-signal';
 import { planServerId, realServerLogin } from './plan-access';
 import { isOpenSingle, isSpontaneous } from './plan-slots';
+import { PlanBookings } from './plan-bookings';
 import { PlanRequests } from './plan-requests';
 import { StudentsStore } from '../students.store';
 import { checksum } from '../sync/checksum';
@@ -55,6 +58,7 @@ interface PersonDraft {
   id: string;
   label: string;
   events: PlanEvent[];
+  booking?: PersonBookingDraft;
 }
 
 interface PlansDraft {
@@ -62,6 +66,24 @@ interface PlansDraft {
   dates: string;
   color: string;
   people: PersonDraft[];
+  booking?: BookingDraft;
+}
+
+/** Selbsteintragung über den Link, wie der Server sie liest (siehe server/internal/api/plan_bookings.go) */
+interface BookingDraft {
+  from: string;
+  to: string;
+  max: number;
+  teachers: { id: string; name: string; instrument: string; slots: { date: string; time: string; minutes: number }[] }[];
+}
+
+interface PersonBookingDraft {
+  /** Leer, solange die Person ihre Lehrkraft noch wählt */
+  teacher: string;
+  count: number;
+  own: { slot: string; teacher: string; date: string; time: string; minutes: number; removable: boolean }[];
+  skip: Record<string, number[]>;
+  clash: Record<string, { i: number; group: string }[]>;
 }
 
 /**
@@ -76,6 +98,8 @@ export class PlanPublisher {
   private readonly groupsStore = inject(GroupsStore);
   private readonly calendar = inject(CalendarStore);
   private readonly requests = inject(PlanRequests);
+  private readonly bookings = inject(PlanBookings);
+  private readonly planning = inject(StudentPlanning);
   /** Was zuletzt je Zeitraum geschickt (oder mangels Link nicht gebraucht) wurde, als Prüfsumme */
   private readonly published = storedSignal<Record<string, string>>('feedback.publishedPlans', () => ({}), (data) =>
     data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, string>) : {},
@@ -135,6 +159,11 @@ export class PlanPublisher {
           console.warn(`Anfragen für ${period.name} nicht übernommen`, e);
         }
         try {
+          await this.bookings.apply(login, period);
+        } catch (e) {
+          console.warn(`Eintragungen für ${period.name} nicht übernommen`, e);
+        }
+        try {
           await this.publish(login, period);
         } catch (e) {
           console.warn(`Pläne für ${period.name} nicht gesendet`, e);
@@ -178,11 +207,13 @@ export class PlanPublisher {
     const labels = planningLabels(students, shortName);
     const groups = this.groupsStore.allGroups().filter((g) => g.periodId === period.id);
     const shared = this.sharedEvents(period);
+    const { booking, bookingPeople } = this.bookingDraft(period);
     const people = students
       .map((student) => ({
         id: student.id,
         label: labels.get(student.id) ?? student.name,
         events: [...this.lessonEvents(student, groups, labels, period, config), ...shared].sort(byTime),
+        ...(bookingPeople.has(student.id) ? { booking: bookingPeople.get(student.id) } : {}),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'de'));
     return {
@@ -190,6 +221,43 @@ export class PlanPublisher {
       dates: `${formatShortDate(period.from)} – ${formatShortDate(period.to)}`,
       color: config.themeColor,
       people,
+      ...(booking ? { booking } : {}),
+    };
+  }
+
+  /** Freie Zeiten und je Person, was davon passt, solange die Selbsteintragung über den Link läuft */
+  private bookingDraft(period: ReportPeriodEntry): { booking?: BookingDraft; bookingPeople: Map<string, PersonBookingDraft> } {
+    const settings = activeSelfBooking(period);
+    if (!settings) return { bookingPeople: new Map() };
+    const offer = this.planning.offer({ ...settings, periodId: period.id });
+    const booking: BookingDraft = {
+      from: settings.from,
+      to: settings.to,
+      max: settings.maxPerStudent,
+      teachers: offer.teachers.map(({ teacher, slots }) => ({
+        id: teacher.id,
+        name: teacher.name,
+        instrument: this.planning.instrumentOf(teacher),
+        slots: slots.map((slot) => ({ date: slot.date, time: slot.start, minutes: slot.durationMinutes })),
+      })),
+    };
+    return { booking, bookingPeople: new Map(offer.people.map((person) => [person.student.id, this.personBooking(person)])) };
+  }
+
+  private personBooking(person: PersonOffer): PersonBookingDraft {
+    return {
+      teacher: person.teacherId ?? '',
+      count: person.count,
+      own: person.own.map(({ date, appointment }) => ({
+        slot: appointment.id,
+        teacher: this.groupsStore.calendarTeacherOf(appointment).id,
+        date,
+        time: timeOf(startMinutes(appointment)),
+        minutes: appointment.durationMinutes,
+        removable: isOwnOneOff(appointment),
+      })),
+      skip: Object.fromEntries(person.skip),
+      clash: Object.fromEntries([...person.clash].map(([id, list]) => [id, list.map(({ index, group }) => ({ i: index, group }))])),
     };
   }
 
@@ -269,9 +337,10 @@ export class PlanPublisher {
         })),
         ics: toICalendar(`${draft.title}: ${person.label}`, person.events, new Date(), { refreshHours: REFRESH_HOURS }),
         pdf: await toBase64(pdfs[index]),
+        ...(person.booking ? { booking: person.booking } : {}),
       })),
     );
-    return JSON.stringify({ title: draft.title, dates: draft.dates, color: draft.color, people });
+    return JSON.stringify({ title: draft.title, dates: draft.dates, color: draft.color, people, ...(draft.booking ? { booking: draft.booking } : {}) });
   }
 }
 

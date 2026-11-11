@@ -27,7 +27,12 @@
       <span>Lehrkräfte</span>
       @for (candidate of candidates(); track candidate.id) {
         <label>
-          <input type="checkbox" [checked]="isIncluded(candidate)" (change)="toggleTeacher(candidate)" />
+          <input
+            type="checkbox"
+            [checked]="isIncluded(candidate)"
+            [disabled]="linked().has(candidate.id)"
+            (change)="toggleTeacher(candidate)"
+          />
           {{ candidate.name }}
         </label>
       }
@@ -36,6 +41,13 @@
       Auf dem Tablet erscheinen die Personen aller angehakten Lehrkräfte. Sind mehrere angehakt, wählt eine Person,
       die im Berichtszeitraum noch keinen Termin hat, zuerst ihre Lehrkraft; mit ihrem ersten Termin steht diese für
       den Zeitraum fest.
+    </p>
+  }
+
+  @if (linkedNames()) {
+    <p class="message small">
+      Für {{ linkedNames() }} läuft in diesem Zeitraum die Selbsteintragung über den Download-Link (Konfiguration →
+      beim Zeitraum). Am Tablet gibt es sie dafür nicht; beende sie dort, wenn du lieber am Tablet planen willst.
     </p>
   }
 

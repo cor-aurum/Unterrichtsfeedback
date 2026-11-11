@@ -30,12 +30,20 @@ export class PlanningSetupPanel {
 
   /** Die Lehrkräfte des Zeitraums (und der aktive Lehrer, falls er dort fehlt) */
   protected readonly candidates = computed(() => this.reportPeriod.teachersWith(this.teacher().id));
+  /** Für sie läuft im Zeitraum die Selbsteintragung über den Download-Link; am Tablet gibt es sie dann nicht. */
+  protected readonly linked = computed(() => this.planning.linkBookingTeacherIds(this.period().id));
+  protected readonly linkedNames = computed(() =>
+    this.candidates()
+      .filter((t) => this.linked().has(t.id))
+      .map((t) => t.name)
+      .join(', '),
+  );
   private readonly selectedIds = linkedSignal<string[]>(() => [this.teacher().id]);
   /** Die angehakten in der Reihenfolge des Zeitraums */
   protected readonly teacherIds = computed(() =>
     this.candidates()
       .map((t) => t.id)
-      .filter((id) => this.selectedIds().includes(id)),
+      .filter((id) => this.selectedIds().includes(id) && !this.linked().has(id)),
   );
 
   /** Ab morgen (oder ab Beginn des Zeitraums) bis zu seinem Ende */
@@ -56,7 +64,7 @@ export class PlanningSetupPanel {
   }
 
   protected isIncluded(teacher: Teacher): boolean {
-    return this.selectedIds().includes(teacher.id);
+    return this.selectedIds().includes(teacher.id) && !this.linked().has(teacher.id);
   }
 
   protected toggleTeacher(teacher: Teacher): void {

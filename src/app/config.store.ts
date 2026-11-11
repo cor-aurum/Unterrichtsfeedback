@@ -25,6 +25,7 @@ import {
   PdfLogo,
   Period,
   ReportPeriodEntry,
+  SelfBooking,
   schoolHalfYear,
   Section,
   SectionScope,
@@ -439,6 +440,16 @@ export class ConfigStore {
     });
   }
 
+  /** Startet, ändert (`booking`) oder beendet (`null`) die Selbsteintragung über den Download-Link. */
+  setSelfBooking(periodId: string, booking: SelfBooking | null): void {
+    this.mutate((config) => {
+      const period = config.reportPeriods.find((p) => p.id === periodId);
+      if (!period) return;
+      if (booking) period.selfBooking = { ...booking, teacherIds: [...booking.teacherIds] };
+      else delete period.selfBooking;
+    });
+  }
+
   /** Verschiebt einen aktiven Lehrer in der Reihenfolge des Zeitraums. */
   moveReportPeriodTeacher(periodId: string, teacherId: string, offset: -1 | 1): void {
     this.mutate((config) => {
@@ -768,8 +779,16 @@ function parseReportPeriods(data: unknown, allTeacherIds: string[]): ReportPerio
       teacherIds: Array.isArray(p.teacherIds) ? p.teacherIds.filter((id) => typeof id === 'string') : [...allTeacherIds],
       ...(Array.isArray(p.sharedWindows) ? { sharedWindows: parseTeachingWindows(p.sharedWindows) } : {}),
       ...(p.placeholder ? { placeholder: true } : {}),
+      ...parseSelfBooking(p.selfBooking),
     }));
   return periods.length > 0 ? periods : [{ ...schoolHalfYear(today()), teacherIds: [...allTeacherIds], placeholder: true }];
+}
+
+function parseSelfBooking(data: unknown): { selfBooking?: SelfBooking } {
+  const b = data as Partial<SelfBooking> | null | undefined;
+  if (!b || !isPeriod({ from: b.from, to: b.to }) || !Array.isArray(b.teacherIds) || typeof b.maxPerStudent !== 'number') return {};
+  const teacherIds = b.teacherIds.filter((id): id is string => typeof id === 'string');
+  return { selfBooking: { teacherIds, from: b.from!, to: b.to!, maxPerStudent: Math.max(0, Math.floor(b.maxPerStudent)) } };
 }
 
 export function isPeriod(data: Partial<Period> | null | undefined): data is Period {

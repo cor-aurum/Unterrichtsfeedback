@@ -238,16 +238,30 @@
       </label>
     </div>
   }
-  <button class="icon" (click)="moveWeek(-1)" title="Vorherige Woche" aria-label="Vorherige Woche">‹</button>
+  <button
+    class="icon prev"
+    (click)="step(-1)"
+    [title]="narrow() ? 'Vorheriger Tag' : 'Vorherige Woche'"
+    [attr.aria-label]="narrow() ? 'Vorheriger Tag' : 'Vorherige Woche'"
+  >
+    ‹
+  </button>
   <strong class="grow">{{ weekLabel() }}</strong>
-  <button class="secondary" (click)="showToday()">Heute</button>
+  <button class="secondary today-button" (click)="showToday()">Heute</button>
   <select class="period-jump" aria-label="Zum Beginn eines Berichtszeitraums" (change)="showPeriodStart($event)">
     <option value="" selected disabled>Zum Beginn …</option>
     @for (period of periodsByStart(); track period.id) {
       <option [value]="period.id">{{ period.name }}</option>
     }
   </select>
-  <button class="icon" (click)="moveWeek(1)" title="Nächste Woche" aria-label="Nächste Woche">›</button>
+  <button
+    class="icon next"
+    (click)="step(1)"
+    [title]="narrow() ? 'Nächster Tag' : 'Nächste Woche'"
+    [attr.aria-label]="narrow() ? 'Nächster Tag' : 'Nächste Woche'"
+  >
+    ›
+  </button>
 </div>
 <div class="legend" aria-label="Legende">
   @for (state of states; track state) {
@@ -259,9 +273,9 @@
 
 <!-- Zeitraster: Kopfzeile, Zeile für Ganztägiges und die Uhrzeiten als eigene Zeilen, damit alle Tage auf einer Höhe beginnen -->
 <div class="week-scroll">
-  <div class="week-grid">
+  <div class="week-grid" [class.one-day]="narrow()">
     <div class="corner"></div>
-    @for (day of week(); track day.date) {
+    @for (day of days(); track day.date) {
       <div class="day-head" [class.today]="day.date === today">
         <h3 class="grow">{{ day.label }}</h3>
         @if (day.inPeriod && (anyStudents() || !allGroupsEmpty())) {
@@ -271,7 +285,7 @@
     }
 
     <div class="corner all-day-label"></div>
-    @for (day of week(); track day.date) {
+    @for (day of days(); track day.date) {
       <div class="all-day" [class.today]="day.date === today">
         @if (!day.teaching) {
           <p class="muted small no-teaching">Kein Berichtszeitraum – kein Unterricht</p>
@@ -292,7 +306,7 @@
         <span class="hour" [style.top.px]="hour.top">{{ hour.label }}</span>
       }
     </div>
-    @for (day of week(); track day.date) {
+    @for (day of days(); track day.date) {
       <div
         class="day-body"
         [class.today]="day.date === today"

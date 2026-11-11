@@ -195,6 +195,14 @@ func (s *Server) renderPerson(w http.ResponseWriter, r *http.Request, plans plan
 		view.Withdraw = mine && req.Status == store.RequestOpen
 		data.History = append(data.History, view)
 	}
+	desk, booking, err := s.desk(r, plans, link, person)
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	if booking {
+		data.BookingSummary = desk.summary()
+	}
 	renderPage(w, http.StatusOK, personPage, data)
 }
 

@@ -35,7 +35,8 @@
         }
       </p>
       <p class="message warning small">
-        Wer den Link hat, sieht die Vornamen aller Personen im Zeitraum und kann jeden Plan öffnen. Gib ihn nur an die
+        Wer den Link hat, sieht die Vornamen aller Personen im Zeitraum, kann jeden Plan öffnen und für jede Person
+        tauschen, anfragen und (bei laufender Selbsteintragung) Termine ein- und austragen. Gib ihn nur an die
         Teilnehmenden weiter. Ist er in falsche Hände geraten, erzeuge einen neuen.
       </p>
       <div class="row actions">
@@ -43,6 +44,7 @@
         <button class="secondary" [disabled]="busy()" (click)="renew()">Neuen Link erzeugen</button>
         <button class="secondary" [disabled]="busy()" (click)="remove()">Link löschen</button>
       </div>
+      <app-self-booking-settings [period]="period()" (changed)="bookingChanged()" />
     } @else {
       <div class="row actions">
         <button [disabled]="busy()" (click)="create()">Link erzeugen</button>

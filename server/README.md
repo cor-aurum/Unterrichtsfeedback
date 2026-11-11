@@ -180,6 +180,20 @@ Die Namensliste zeigt offene Anfragen je Person; nach einer Anfrage bietet die S
 Person zum Teilen an. Das ist das einzige JavaScript der Seiten, erlaubt über seinen Hash in der
 Content-Security-Policy.
 
+### Selbst eintragen
+
+Läuft für den Zeitraum die Selbsteintragung (in der App beim Download-Link), schickt die App mit den Plänen je
+Lehrkraft ihre freien Zeiten und je Person, welche davon für sie passen, wie viele Termine sie schon hat und welche
+sie austragen darf. Auf `…/<Person>/termine` wählt die Person eine Zeit. Der Server vergibt sie in einer Transaktion
+gegen alle anderen Eintragungen: Wer zuerst kommt, bekommt sie; die Höchstzahl je Person und ein Termin am Tag gelten
+wie am Tablet. Die App einer Lehrkraft holt offene Eintragungen beim Abgleich ab
+(`GET /api/plans/{Zeitraum}/bookings`), meldet `applied` (409: inzwischen zurückgenommen oder schon von einem anderen
+Gerät übernommen) oder `failed` mit Grund (`POST …/bookings/{id}`) und schickt dann neue Pläne. Übernommene
+Eintragungen zählt der Server mit, bis die Pläne ihren Termin zeigen (höchstens eine Stunde); neuere Pläne eines
+Geräts, das noch nicht abgeglichen hat, geben die Zeit also nicht frei. Austragen läuft ebenso über die App. Die
+Pläne hält der Server zwischengespeichert, bis neue kommen. Je Zeitraum gibt es
+höchstens 5000 Eintragungen (auch zurückgenommene).
+
 ## Sicherung
 
 Alle Daten stehen in der SQLite-Datei. Eine konsistente Kopie im laufenden Betrieb:
@@ -213,13 +227,17 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `POST/DELETE /api/feed/address` | Neue Abo-Adresse (die alte gilt nicht mehr) bzw. Abo beenden     |
 | `GET /api/kalender/{Schlüssel}.ics` | Der Kalender für die Kalender-App, ohne Anmeldung            |
 | `GET /api/plans/{Zeitraum}` | Download-Link des Zeitraums (nur seine Lehrkräfte): `{url, updatedAt, expiresAt}`; `url` leer ohne Link |
-| `PUT /api/plans/{Zeitraum}` | Pläne senden: `{title, dates, color, people: [{id, label, days, ics, pdf}]}`; `404` ohne Link |
+| `PUT /api/plans/{Zeitraum}` | Pläne senden: `{title, dates, color, people: [{id, label, days, ics, pdf, booking?}], booking?}`; `404` ohne Link |
 | `POST /api/plans/{Zeitraum}/address` | Neuer Download-Link (der alte gilt nicht mehr)                 |
-| `DELETE /api/plans/{Zeitraum}` | Link, Pläne und Anfragen löschen                                  |
+| `DELETE /api/plans/{Zeitraum}` | Link, Pläne, Anfragen und Eintragungen löschen                    |
 | `GET /api/plans/{Zeitraum}/requests` | Angenommene Anfragen zum Übernehmen: `[{id, kind, from, to, fromSlot, toSlot}]` |
 | `POST /api/plans/{Zeitraum}/requests/{id}` | Übernommen melden: `{status: "applied"\|"failed", note}`      |
+| `GET /api/plans/{Zeitraum}/bookings` | Offene Eintragungen zum Übernehmen: `[{id, kind, person, teacher, date, time, minutes, slot}]` |
+| `POST /api/plans/{Zeitraum}/bookings/{id}` | Übernehmen melden: `{status: "applied"\|"failed", note}`; `409`, wenn nicht mehr offen |
 | `GET /api/plan/{Schlüssel}[/{Person}[.pdf\|.ics]]` | Namensliste, Seite, PDF oder Kalender einer Person, ohne Anmeldung |
 | `GET /api/plan/{Schlüssel}/{Person}/tauschen\|dazukommen` | Termine anderer zum Tauschen bzw. Dazukommen        |
 | `POST /api/plan/{Schlüssel}/{Person}/anfragen\|antworten` | Anfrage stellen bzw. annehmen, ablehnen, zurückziehen (Formulare) |
+| `GET /api/plan/{Schlüssel}/{Person}/termine` | Freie Zeiten zum Wählen, eigene Termine und Eintragungen |
+| `POST /api/plan/{Schlüssel}/{Person}/eintragen\|austragen` | Zeit wählen bzw. Eintragung zurücknehmen oder Termin austragen (Formulare) |
 
 Angemeldet wird mit `Authorization: Bearer <token>`. Fehler kommen als `{error: "…"}` mit einem Text für die App.

@@ -137,6 +137,27 @@ export interface ReportPeriodEntry extends Period {
    * (`Teacher.periodWindows`).
    */
   sharedWindows?: TeachingWindow[];
+  /** Selbsteintragung über den Download-Link; fehlt, wenn sie nicht läuft */
+  selfBooking?: SelfBooking;
+}
+
+/**
+ * Selbsteintragung über den Download-Link: Wie am Tablet tragen sich die Personen dieser Lehrkräfte selbst für
+ * Einzeltermine ein, jede auf ihrer eigenen Seite. Läuft sie für eine Lehrkraft, gibt es für sie keine
+ * Tablet-Planung im selben Zeitraum.
+ */
+export interface SelfBooking {
+  teacherIds: string[];
+  from: string;
+  to: string;
+  /** So viele Einzeltermine darf jede Person im Zeitraum höchstens haben (bereits eingetragene zählen mit). */
+  maxPerStudent: number;
+}
+
+/** Läuft die Selbsteintragung über den Link noch (bis einschließlich ihres letzten Tages)? */
+export function activeSelfBooking(period: ReportPeriodEntry | undefined): SelfBooking | null {
+  const booking = period?.selfBooking;
+  return booking && booking.teacherIds.length > 0 && booking.to >= today() ? booking : null;
 }
 
 /**

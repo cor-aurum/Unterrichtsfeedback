@@ -41,6 +41,8 @@ type planContent struct {
 	Dates  string       `json:"dates"`
 	Color  string       `json:"color"`
 	People []planPerson `json:"people"`
+	// Selbsteintragung über den Link; fehlt, wenn sie nicht läuft
+	Booking *planBooking `json:"booking,omitempty"`
 }
 
 type planPerson struct {
@@ -51,6 +53,8 @@ type planPerson struct {
 	ICS   string    `json:"ics"`
 	// PDF in Base64
 	PDF string `json:"pdf"`
+	// Was die Person bei der Selbsteintragung wählen kann; fehlt, wenn sie nicht dabei ist
+	Booking *personBooking `json:"booking,omitempty"`
 }
 
 type planDay struct {
@@ -217,7 +221,11 @@ func (s *Server) putPlan(w http.ResponseWriter, r *http.Request, account store.A
 		fail(w, http.StatusRequestEntityTooLarge, "Die Pläne sind zu groß.")
 		return
 	}
-	if _, err := parsePlans(content); err != nil {
+	plans, err := parsePlans(content)
+	if err == nil {
+		err = checkPDFs(plans)
+	}
+	if err != nil {
 		fail(w, http.StatusBadRequest, "Die Pläne sind ungültig: "+err.Error())
 		return
 	}
@@ -234,7 +242,8 @@ func (s *Server) putPlan(w http.ResponseWriter, r *http.Request, account store.A
 }
 
 // parsePlans liest die Pläne und prüft, was die öffentliche Seite braucht: eindeutige IDs, die in einer Adresse
-// stehen dürfen, Namen, Kalender und PDFs.
+// stehen dürfen, Namen und Kalender. Die PDFs prüft checkPDFs nur beim Hochladen, denn dazu muss jedes dekodiert
+// werden.
 func parsePlans(content []byte) (planContent, error) {
 	var plans planContent
 	if err := json.Unmarshal(content, &plans); err != nil {
@@ -249,8 +258,6 @@ func parsePlans(content []byte) (planContent, error) {
 			return plans, fmt.Errorf("Person %s ohne Namen", person.ID)
 		case !strings.HasPrefix(person.ICS, "BEGIN:VCALENDAR"):
 			return plans, fmt.Errorf("Kalender von %s fehlt", person.ID)
-		case !isPDF(person.PDF):
-			return plans, fmt.Errorf("PDF von %s fehlt", person.ID)
 		}
 		for _, day := range person.Days {
 			for _, entry := range day.Entries {
@@ -261,7 +268,19 @@ func parsePlans(content []byte) (planContent, error) {
 		}
 		seen[person.ID] = true
 	}
+	if err := checkBooking(plans); err != nil {
+		return plans, err
+	}
 	return plans, nil
+}
+
+func checkPDFs(plans planContent) error {
+	for _, person := range plans.People {
+		if !isPDF(person.PDF) {
+			return fmt.Errorf("PDF von %s fehlt", person.ID)
+		}
+	}
+	return nil
 }
 
 func isPDF(encoded string) bool {
@@ -322,10 +341,18 @@ func (s *Server) publicPlanFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // publishedPlans lädt die Pläne zum Token; unbekannte, abgelaufene oder leere Links bekommen eine Hinweisseite.
+// Die Pläne kommen aus dem Zwischenspeicher, solange sie sich nicht geändert haben.
 func (s *Server) publishedPlans(w http.ResponseWriter, r *http.Request) (planContent, store.PlanLink, bool) {
-	link, err := s.store.PlanByToken(r.Context(), r.PathValue("token"))
+	link, err := s.store.PlanStampByToken(r.Context(), r.PathValue("token"))
 	if err == nil {
 		err = s.checkPlanValid(r.Context(), link.PeriodID)
+	}
+	if err == nil && !link.UpdatedAt.IsZero() {
+		if plans, ok := s.planCache.get(link); ok {
+			return plans, link, true
+		}
+		// Seit eben können neuere Pläne angekommen sein; gespeichert wird die Fassung, die gelesen wurde.
+		link, err = s.store.PlanByToken(r.Context(), link.Token)
 	}
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -347,6 +374,8 @@ func (s *Server) publishedPlans(w http.ResponseWriter, r *http.Request) (planCon
 		internal(w, err)
 		return planContent{}, link, false
 	}
+	s.planCache.put(link, plans)
+	link.Content = nil
 	return plans, link, true
 }
 
@@ -402,6 +431,9 @@ type pageData struct {
 	Pending map[string]int
 	// Nach dem Anfragen: wem man Bescheid sagen sollte, mit Link zu dessen Seite
 	Tell *tellView
+	// Selbsteintragung: die Seite zum Wählen und der Hinweis darauf auf der Seite der Person
+	Booking        *bookingView
+	BookingSummary *bookingSummary
 }
 
 // Script ist das einzige Skript der Seiten: Teilen und Kopieren des Links nach einer Anfrage.
@@ -453,6 +485,7 @@ header { border-top: 6px solid var(--accent); background: #fff; border-radius: 1
 h1 { margin: 0 0 4px; font-size: 1.6rem; line-height: 1.2; }
 h2 { margin: 22px 0 8px; font-size: 1.05rem; color: #44505c; }
 .muted { color: #66727f; font-size: .95rem; margin: 0; }
+.muted a { color: inherit; }
 .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .names a { display: block; padding: 16px 12px; background: #fff; border: 1px solid #d5dbe1; border-radius: 10px; text-align: center; font-weight: 600; color: inherit; text-decoration: none; }
 .names a:hover, .names a:focus { border-color: var(--accent); outline: 2px solid var(--accent); }
@@ -474,6 +507,11 @@ button.button.secondary { border: 1px solid #c3ccd5; }
 .badge { display: block; margin-top: 4px; font-size: .8rem; font-weight: 600; color: #8a5a00; }
 .tell { background: #eef4fb; border-radius: 10px; padding: 4px 16px 12px; margin-bottom: 12px; }
 .tell input { width: 100%; padding: 10px; border: 1px solid #c3ccd5; border-radius: 8px; font: inherit; font-size: .9rem; }
+.slots { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
+.slot { min-width: 5.5em; padding: 10px 12px; border-radius: 10px; border: 1px solid #c3ccd5; background: #fff; font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.slot:hover:not(:disabled), .slot:focus { border-color: var(--accent); outline: 2px solid var(--accent); }
+.slot:disabled { color: #9aa5b1; cursor: default; }
+.slot .clash { display: block; font-size: .75rem; font-weight: 400; color: #8a5a00; }
 .option { display: flex; gap: 12px; align-items: center; justify-content: space-between; background: #fff; border: 1px solid #e3e8ec; border-radius: 10px; padding: 10px 16px; margin-bottom: 8px; }
 footer { margin-top: 28px; }
 </style>
@@ -528,6 +566,14 @@ var (
     <button class="button" name="antwort" value="ja">Annehmen</button>
     <button class="button secondary" name="antwort" value="nein">Ablehnen</button>
   </form>
+</section>
+{{end}}
+{{with .BookingSummary}}
+<section class="tell">
+  <h2>Termine selbst eintragen</h2>
+  <p>{{if .Remaining}}Du kannst noch <strong>{{.Remaining}}</strong> {{if eq .Remaining 1}}Termin{{else}}Termine{{end}} wählen.{{else}}Du hast alle Termine gewählt; austragen kannst du dort auch.{{end}}
+  {{if .Failed}}<br>{{if eq .Failed 1}}Eine Eintragung hat{{else}}{{.Failed}} Eintragungen haben{{end}} nicht geklappt.{{end}}</p>
+  <p><a class="button" href="{{$.Base}}/{{$.Person.ID}}/termine">Termine wählen</a></p>
 </section>
 {{end}}
 <div class="actions">
@@ -586,6 +632,69 @@ var (
 {{else}}
 <p>Gerade gibt es dafür keine passenden Termine.</p>
 {{end}}
+{{end}}`))
+
+	bookingPageTemplate = template.Must(template.Must(template.New("booking").Parse(pageLayout)).Parse(`
+{{define "title"}}{{.Person.Label}} – Termine wählen{{end}}
+{{define "content"}}
+<a class="back" href="{{.Base}}/{{.Person.ID}}">← Zurück zu deinen Terminen</a>
+{{with .Booking}}
+<header>
+  <h1>Termine wählen</h1>
+  <p class="muted">{{$.Person.Label}} · {{.Period}}</p>
+  {{if .Remaining}}<p>Du kannst noch <strong>{{.Remaining}}</strong> {{if eq .Remaining 1}}Termin{{else}}Termine{{end}} wählen{{with .Teacher}}{{if gt (len $.Plans.Booking.Teachers) 1}} bei {{.Name}}{{end}}{{end}}.</p>
+  {{else}}<p>Du hast alle Termine gewählt.</p>{{end}}
+</header>
+{{if $.Notice}}<p class="notice" role="status">{{$.Notice}}</p>{{end}}
+{{range .Entries}}
+<section class="request">
+  <p>{{.Text}}<br><span class="muted">{{.Status}}</span></p>
+  {{if .Withdraw}}<form method="post" action="{{$.Base}}/{{$.Person.ID}}/austragen">
+    <input type="hidden" name="eintragung" value="{{.ID}}">
+    <button class="button secondary">Zurücknehmen</button>
+  </form>{{end}}
+</section>
+{{end}}
+{{if .Own}}
+<h2>Deine Termine</h2>
+{{range .Own}}
+<div class="option">
+  <span>{{.Label}}{{if .Cancelling}}<br><span class="muted">Wird ausgetragen …</span>{{end}}</span>
+  {{if and .Removable (not .Cancelling)}}<form method="post" action="{{$.Base}}/{{$.Person.ID}}/austragen">
+    <input type="hidden" name="termin" value="{{.Slot}}">
+    <button class="button secondary">Austragen</button>
+  </form>{{end}}
+</div>
+{{end}}
+{{end}}
+{{if .Teacher}}
+  <h2>Freie Zeiten{{if gt (len $.Plans.Booking.Teachers) 1}} bei {{.Teacher.Name}}{{end}}</h2>
+  {{if .Choosing}}<p class="muted">Mit deinem ersten Termin ist {{.Teacher.Name}} in diesem Zeitraum deine Lehrkraft. <a href="termine">Andere Lehrkraft wählen</a></p>{{end}}
+  {{if .HasClash}}<p class="muted">⚠ heißt: Zu dieser Zeit hast du Gruppenunterricht.</p>{{end}}
+  <form method="post" action="{{$.Base}}/{{$.Person.ID}}/eintragen">
+  <input type="hidden" name="lehrkraft" value="{{.Teacher.ID}}">
+  {{range .Days}}
+  <section class="day">
+    <h3>{{.Label}}</h3>
+    <div class="slots">{{range .Slots}}<button class="slot" name="zeit" value="{{.Value}}"{{if not $.Booking.Remaining}} disabled{{end}}>{{.Time}}{{if .Clash}}<span class="clash">⚠ {{.Clash}}</span>{{end}}</button>{{end}}</div>
+  </section>
+  {{else}}
+  <p>Gerade ist keine Zeit frei, die zu dir passt. Sprich bitte deine Lehrkraft an.</p>
+  {{end}}
+  </form>
+{{else if .Teachers}}
+  <h2>Bei wem möchtest du Unterricht haben?</h2>
+  {{range .Teachers}}
+  <div class="option">
+    <span><strong>{{.Name}}</strong>{{if .Instrument}} · {{.Instrument}}{{end}}<br><span class="muted">{{.Free}} freie Zeiten</span></span>
+    <a class="button" href="termine?lehrkraft={{.ID}}">Zeiten ansehen</a>
+  </div>
+  {{end}}
+{{else}}
+  <p>{{.Closed}}</p>
+{{end}}
+{{end}}
+{{if .Updated}}<footer><p class="muted">Stand: {{.Updated}}</p></footer>{{end}}
 {{end}}`))
 
 	messagePage = template.Must(template.Must(template.New("message").Parse(pageLayout)).Parse(`

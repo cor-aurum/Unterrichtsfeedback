@@ -4,6 +4,12 @@
     Bitte sag einer Lehrkraft Bescheid.
   </p>
 }
+@if (planning.linkedTeachers().length > 0) {
+  <p class="sync-warning" role="status">
+    Für {{ linkedNames() }} läuft die Selbsteintragung jetzt über den Download-Link; hier gibt es sie dafür nicht
+    mehr. Bitte sag einer Lehrkraft Bescheid.
+  </p>
+}
 @if (session(); as s) {
   @if (student(); as current) {
     <header class="student-head">

@@ -218,6 +218,24 @@ export const serverApi = {
     await checked(await request(login.url, 'POST', path, { token: login.token, body }));
   },
 
+  /** Offene Eintragungen von der Download-Seite, die ältesten zuerst */
+  planBookings(login: ServerLogin, periodId: string): Promise<PlanBooking[]> {
+    return json(request(login.url, 'GET', `${planPath(periodId)}/bookings`, { token: login.token }));
+  },
+
+  /**
+   * Meldet, dass die App eine Eintragung übernimmt (`applied`) oder warum nicht (`failed`). `false`: Sie ist nicht
+   * mehr offen (zurückgenommen oder von einem anderen Gerät übernommen); dann nichts ändern.
+   */
+  async planBookingDone(login: ServerLogin, periodId: string, id: string, status: 'applied' | 'failed', note = ''): Promise<boolean> {
+    const body = JSON.stringify({ status, note });
+    const path = `${planPath(periodId)}/bookings/${encodeURIComponent(id)}`;
+    const response = await request(login.url, 'POST', path, { token: login.token, body });
+    if (response.status === 409) return false;
+    await checked(response);
+    return true;
+  },
+
   /** Wirft `ServerError` mit Status 404, wenn es für den Zeitraum keinen Link gibt. */
   async putPlan(login: ServerLogin, periodId: string, plans: string): Promise<void> {
     await checked(await request(login.url, 'PUT', planPath(periodId), { token: login.token, body: plans }));
@@ -236,6 +254,19 @@ export interface AcceptedPlanRequest {
   to: string;
   fromSlot: string;
   toSlot: string;
+}
+
+/** Eintragung über die Download-Seite: einen freien Termin wählen (`book`) oder einen eigenen austragen (`cancel`) */
+export interface PlanBooking {
+  id: string;
+  kind: 'book' | 'cancel';
+  person: string;
+  teacher: string;
+  date: string;
+  time: string;
+  minutes: number;
+  /** Beim Austragen der Termin */
+  slot: string;
 }
 
 export interface PlanLinkState {

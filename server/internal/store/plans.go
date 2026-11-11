@@ -48,17 +48,22 @@ func (s *Store) SetPlanToken(ctx context.Context, periodID, token string) error 
 	return err
 }
 
-// DeletePlan löscht Link, Pläne und Anfragen des Zeitraums.
+// DeletePlan löscht Link, Pläne, Anfragen und Eintragungen des Zeitraums.
 func (s *Store) DeletePlan(ctx context.Context, periodID string) error {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM plans WHERE period_id = ?`, periodID); err != nil {
 		return err
 	}
-	return s.deletePlanRequests(ctx, periodID)
+	if err := s.deletePlanRequests(ctx, periodID); err != nil {
+		return err
+	}
+	return s.deletePlanBookings(ctx, periodID)
 }
 
-// PutPlanContent speichert die Pläne; ErrNotFound, wenn es für den Zeitraum keinen Link gibt.
+// PutPlanContent speichert die Pläne; ErrNotFound, wenn es für den Zeitraum keinen Link gibt. Der Stand wird mit
+// jeder Fassung größer, auch bei mehreren in derselben Sekunde: Der Server erkennt daran, ob seine zwischengespeicherte
+// Fassung noch gilt.
 func (s *Store) PutPlanContent(ctx context.Context, periodID string, content []byte) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE plans SET content = ?, updated_at = ? WHERE period_id = ?`,
+	result, err := s.db.ExecContext(ctx, `UPDATE plans SET content = ?, updated_at = MAX(?, updated_at + 1) WHERE period_id = ?`,
 		content, time.Now().Unix(), periodID)
 	if err != nil {
 		return err
@@ -67,6 +72,20 @@ func (s *Store) PutPlanContent(ctx context.Context, periodID string, content []b
 		return errors.Join(ErrNotFound, err)
 	}
 	return nil
+}
+
+// PlanStampByToken liefert Zeitraum und Stand zu einem Token, ohne die Pläne zu lesen; ErrNotFound bei unbekanntem
+// oder ersetztem.
+func (s *Store) PlanStampByToken(ctx context.Context, token string) (PlanLink, error) {
+	var updated int64
+	link := PlanLink{Token: token}
+	err := s.db.QueryRowContext(ctx, `SELECT period_id, updated_at FROM plans WHERE token = ?`, token).
+		Scan(&link.PeriodID, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PlanLink{}, ErrNotFound
+	}
+	link.UpdatedAt = unixOrZero(updated)
+	return link, err
 }
 
 // PlanByToken liefert Link und Pläne zu einem Token; ErrNotFound bei unbekanntem oder ersetztem.

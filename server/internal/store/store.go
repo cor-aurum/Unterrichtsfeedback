@@ -101,7 +101,7 @@ func Open(path string) (*Store, error) {
 	}
 	// SQLite verträgt nur einen Schreiber gleichzeitig; eine Verbindung vermeidet „database is locked“.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + feedsSchema + plansSchema + planRequestsSchema); err != nil {
+	if _, err := db.Exec(schema + feedsSchema + plansSchema + planRequestsSchema + planBookingsSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("Datenbank %s: %w", path, err)
 	}

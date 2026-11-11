@@ -6,6 +6,8 @@ import { PlanLinkState, ServerLogin, serverApi } from '../sync/server-folder';
 import { ServerSync } from '../sync/server-sync';
 import { planServerId, realServerLogin } from './plan-access';
 import { PlanPublisher } from './plan-publisher';
+import { SelfBookingSettings } from './self-booking-settings';
+import { ConfigStore } from '../config.store';
 
 /**
  * Download-Link eines Berichtszeitraums in seinen Einstellungen: ein Link (mit QR-Code) für alle Personen darin.
@@ -16,10 +18,12 @@ import { PlanPublisher } from './plan-publisher';
   selector: 'app-plan-link-panel',
   templateUrl: './plan-link-panel.html',
   styleUrl: './plan-link-panel.scss',
+  imports: [SelfBookingSettings],
 })
 export class PlanLinkPanel {
   readonly period = input.required<ReportPeriodEntry>();
   private readonly publisher = inject(PlanPublisher);
+  private readonly config = inject(ConfigStore).config;
   /** Im Demomodus die echte Anmeldung: Der Demo-Link wird beim Verlassen der Demo gelöscht. */
   protected readonly login = demoMode ? signal(realServerLogin()).asReadonly() : inject(ServerSync).login;
   protected readonly demoMode = demoMode;
@@ -72,6 +76,16 @@ export class PlanLinkPanel {
       await this.publisher.publish(login, this.period(), true);
       this.show(await serverApi.plan(login, this.serverId(login)));
       this.message.set('Die Pläne sind auf dem neuesten Stand.');
+    });
+  }
+
+  /** Selbsteintragung gestartet, geändert oder beendet: Die Seiten zeigen es gleich, nicht erst nach dem Abgleich. */
+  protected async bookingChanged(): Promise<void> {
+    await this.action(async (login) => {
+      // Die Einstellung steht schon in der Konfiguration, der Eingang `period` erst nach dem nächsten Zeichnen.
+      const period = this.config().reportPeriods.find((p) => p.id === this.period().id) ?? this.period();
+      await this.publisher.publish(login, period);
+      this.show(await serverApi.plan(login, this.serverId(login)));
     });
   }
 

@@ -1,0 +1,52 @@
+:host {
+  display: block;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border, #d5dbe1);
+}
+
+h4 {
+  margin: 0 0 0.25rem;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.teachers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  margin-top: 0.5rem;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem 2rem;
+  margin: 0.75rem 0;
+
+  > label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  input[type='number'] {
+    width: 8rem;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

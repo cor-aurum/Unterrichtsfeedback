@@ -1,0 +1,66 @@
+<section class="self-booking">
+  <h4>Selbst eintragen über den Link</h4>
+  <p class="muted small">
+    Die Personen tragen sich auf ihrer Seite selbst für Einzeltermine ein – wie beim Tablet („Schüler:innen tragen
+    sich ein“), nur jede für sich, wann sie will. Wer zuerst kommt, bekommt die Zeit; die App einer Lehrkraft
+    übernimmt die Eintragungen beim Abgleich in den Kalender. Austragen geht bei einmaligen Terminen ohne erfasste
+    Stunde. Für die gewählten Lehrkräfte gibt es im Zeitraum dann keine Tablet-Planung.
+  </p>
+
+  @if (running(); as booking) {
+    @if (!editing()) {
+      <p class="message small" role="status">
+        Läuft für {{ names(booking.teacherIds) }}: {{ formatShortDate(booking.from) }} bis
+        {{ formatShortDate(booking.to) }}, höchstens {{ booking.maxPerStudent }}
+        {{ booking.maxPerStudent === 1 ? 'Termin' : 'Termine' }} je Person.
+      </p>
+      <div class="row actions">
+        <button class="secondary" (click)="editing.set(true)">Ändern</button>
+        <button class="secondary" (click)="stop()">Beenden</button>
+      </div>
+    }
+  }
+
+  @if (!running() || editing()) {
+    @if (candidates().length > 1) {
+      <div class="teachers">
+        <span>Lehrkräfte</span>
+        @for (candidate of candidates(); track candidate.id) {
+          <label>
+            <input type="checkbox" [checked]="isIncluded(candidate)" (change)="toggleTeacher(candidate)" />
+            {{ candidate.name }}
+          </label>
+        }
+      </div>
+      <p class="muted small">
+        Sind mehrere angehakt, wählt eine Person, die im Zeitraum noch keinen Termin hat, zuerst ihre Lehrkraft; mit
+        dem ersten Termin steht diese fest.
+      </p>
+    }
+    <div class="options">
+      <label>
+        Von
+        <input type="date" [value]="from()" [min]="period().from" [max]="period().to" (change)="from.set(valueOf($event))" />
+      </label>
+      <label>
+        Bis
+        <input type="date" [value]="to()" [min]="period().from" [max]="period().to" (change)="to.set(valueOf($event))" />
+      </label>
+      <label>
+        Höchstens je Person
+        <input type="number" min="1" [value]="effectiveMax()" (change)="setMax($event)" />
+      </label>
+    </div>
+    <p class="muted small">
+      {{ fair().slots }} Termine an {{ fair().days }} Tagen (frei und schon vergeben) für {{ fair().students }}
+      {{ fair().students === 1 ? 'Person' : 'Personen' }} – vorgeschlagen sind {{ fair().share }} je Person. Schon
+      eingetragene Termine zählen mit.
+    </p>
+    <div class="row actions">
+      @if (editing()) {
+        <button class="secondary" (click)="editing.set(false)">Abbrechen</button>
+      }
+      <button [disabled]="!valid()" (click)="save()">{{ running() ? 'Speichern' : 'Selbsteintragung starten' }}</button>
+    </div>
+  }
+</section>

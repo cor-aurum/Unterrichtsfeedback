@@ -35,6 +35,7 @@ export class StudentPlanningPage {
   protected readonly session = this.planning.session;
   protected readonly teachers = this.planning.teachers;
   protected readonly teacherNames = computed(() => this.teachers().map((t) => t.name).join(', '));
+  protected readonly linkedNames = computed(() => this.planning.linkedTeachers().map((t) => t.name).join(', '));
 
   protected readonly studentId = signal<string | null>(null);
   protected readonly student = computed(() => this.planning.students().find((s) => s.id === this.studentId()) ?? null);

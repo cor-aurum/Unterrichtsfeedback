@@ -69,12 +69,15 @@ export class CalendarStore {
 
   /**
    * Liefert die ID des neuen Termins. Termine von Personen gehören zum gewählten Berichtszeitraum, wenn nichts
-   * anderes angegeben ist (z. B. der einer Planung).
+   * anderes angegeben ist (z. B. der einer Planung). Eine feste `id` (z. B. für Eintragungen über den Download-Link,
+   * die mehrere Geräte übernehmen könnten) ersetzt einen Termin mit derselben ID, statt ihn zu verdoppeln.
    */
-  add(appointment: Omit<Appointment, 'id'>): string {
-    const id = newId();
+  add(appointment: Omit<Appointment, 'id'>, id = newId()): string {
     const periodId = appointment.studentId ? (appointment.periodId ?? this.reportPeriod.period().id) : undefined;
-    this.appointments.update((list) => [...list, { ...appointment, id, ...(periodId ? { periodId } : {}) }]);
+    this.appointments.update((list) => [
+      ...list.filter((a) => a.id !== id),
+      { ...appointment, id, ...(periodId ? { periodId } : {}) },
+    ]);
     return id;
   }
 

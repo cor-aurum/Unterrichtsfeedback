@@ -41,12 +41,13 @@ type Server struct {
 	publicURL string
 	origin    string
 	limiter   *limiter
+	planCache *planCache
 }
 
 // New erzeugt den Server. publicURL ist die Adresse, unter der die App ihn erreicht (sie steht in den Codes);
 // origin ist der erlaubte Ursprung für CORS, z. B. die Adresse der Web-App, oder „*“.
 func New(st *store.Store, publicURL, origin string) *Server {
-	return &Server{store: st, publicURL: strings.TrimRight(publicURL, "/"), origin: origin, limiter: newLimiter()}
+	return &Server{store: st, publicURL: strings.TrimRight(publicURL, "/"), origin: origin, limiter: newLimiter(), planCache: newPlanCache()}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -83,6 +84,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/plan/{token}/{person}/antworten", s.answerRequest)
 	mux.HandleFunc("GET /api/plans/{period}/requests", s.authed(s.acceptedRequests))
 	mux.HandleFunc("POST /api/plans/{period}/requests/{id}", s.authed(s.requestDone))
+	mux.HandleFunc("GET /api/plan/{token}/{person}/termine", s.bookingPage)
+	mux.HandleFunc("POST /api/plan/{token}/{person}/eintragen", s.book)
+	mux.HandleFunc("POST /api/plan/{token}/{person}/austragen", s.unbook)
+	mux.HandleFunc("GET /api/plans/{period}/bookings", s.authed(s.openBookings))
+	mux.HandleFunc("POST /api/plans/{period}/bookings/{id}", s.authed(s.bookingDone))
 	return s.cors(mux)
 }
 
