@@ -164,8 +164,8 @@ export class StudentPlanning {
   }
 
   /**
-   * Freie Slots und schon eingetragene Einzeltermine geteilt durch die Zahl der Personen, aufgerundet: So lassen
-   * sich alle Stunden der Lehrkraft vergeben, auch wenn dann nicht jede Person gleich viele bekommt. Höchstens so
+   * Freie Slots und schon eingetragene Einzeltermine geteilt durch die Zahl der Personen, abgerundet: So
+   * reichen die Termine für alle, auch wenn jede Person ihre ganze Zahl wählt; übrige Stunden bleiben frei. Höchstens so
    * viele, wie es Unterrichtstage gibt, denn mehr als einen Termin am Tag bietet die Planung nicht an.
    */
   fairShare(
@@ -187,7 +187,7 @@ export class StudentPlanning {
     const free = teachers.flatMap((teacher) => this.freeSlotsOf(teacher, from, to, periodId));
     const slots = free.length + booked.length;
     const days = new Set([...free, ...booked].map(({ date }) => date)).size;
-    return { slots, days, students: students.length, share: Math.min(days, Math.ceil(slots / students.length)) };
+    return { slots, days, students: students.length, share: Math.min(days, Math.floor(slots / students.length)) };
   }
 
   /** Wie viele Termine die Person noch wählen darf */
