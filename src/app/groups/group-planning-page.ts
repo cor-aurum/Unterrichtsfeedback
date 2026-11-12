@@ -61,9 +61,6 @@ export class GroupPlanningPage {
       .filter((group) => this.teacherFilter.shows(groupTeacherOf(group, this.config()).id))
       .sort((a, b) => this.label(a).localeCompare(this.label(b), 'de')),
   );
-  protected readonly unassigned = computed(() =>
-    this.students().filter((student) => this.groupsStore.groupsOf(student.id).length === 0),
-  );
   protected readonly showTeachers = computed(() => this.reportPeriod.teachers().length > 1);
 
   /** Lehrer neuer Gruppen: der gefilterte, sonst der aktive, wenn er im Zeitraum unterrichtet */
@@ -74,9 +71,11 @@ export class GroupPlanningPage {
   });
 
   // --- Zuordnen ---
-  /** Links nur Personen ohne Gruppe oder alle des Zeitraums */
-  protected readonly listKind = signal<'unassigned' | 'all'>('unassigned');
-  protected readonly listed = computed(() => (this.listKind() === 'all' ? this.students() : this.unassigned()));
+  /**
+   * Links alle Personen des Zeitraums. „Ohne Gruppe“ gibt es nicht mehr: Jede Person ist mindestens in der
+   * automatischen Gruppe ihrer Lehrkraft.
+   */
+  protected readonly listed = this.students;
   protected readonly selected = signal(new Set<string>());
   /** ID der Zielgruppe oder `new` */
   protected readonly target = signal('new');
@@ -116,45 +115,12 @@ export class GroupPlanningPage {
     this.newGroupName.set('');
   }
 
-  protected showList(kind: 'unassigned' | 'all'): void {
-    this.listKind.set(kind);
-    this.selected.set(new Set());
-  }
-
   /** z. B. „A, Band“; leer ohne Gruppe */
   protected groupsText(student: Student): string {
     return this.groupsStore
       .groupsOf(student.id)
       .map((group) => this.label(group))
       .join(', ');
-  }
-
-  // --- Gruppe mit allen Schülern eines Lehrers ---
-  protected readonly wholeTeacherId = linkedSignal(() => this.defaultTeacherId());
-
-  /** Alle Personen des Lehrers im Zeitraum in eine neue Gruppe; sie heißt wie der Lehrer und steht in seinem Kalender. */
-  protected createTeacherGroup(): void {
-    const teacher = this.reportPeriod.teachers().find((t) => t.id === this.wholeTeacherId()) ?? this.activeTeacher.teacher();
-    const memberIds = this.studentsStore
-      .students()
-      .filter((s) => this.studentsStore.teacherOf(s).id === teacher.id)
-      .map((s) => s.id);
-    if (memberIds.length === 0) {
-      this.message.set(`${teacher.name} hat in „${this.reportPeriod.period().name}“ keine Personen.`);
-      return;
-    }
-    const name = this.uniqueName(teacher.name);
-    this.groupsStore.createGroups([{ name, teacherId: teacher.id, memberIds }]);
-    const count = memberIds.length === 1 ? '1 Person' : `${memberIds.length} Personen`;
-    this.message.set(`Gruppe „${name}“ mit ${count} angelegt.`);
-  }
-
-  /** Der Name oder, wenn es ihn im Zeitraum schon gibt, „Name (2)“, „Name (3)“ … */
-  private uniqueName(name: string): string {
-    const used = new Set(this.groupsStore.groups().map((g) => g.name.trim().toLowerCase()));
-    let candidate = name;
-    for (let i = 2; used.has(candidate.toLowerCase()); i++) candidate = `${name} (${i})`;
-    return candidate;
   }
 
   // --- Gruppen ---
@@ -168,6 +134,10 @@ export class GroupPlanningPage {
 
   protected teacherId(group: Group): string {
     return groupTeacherOf(group, this.config()).id;
+  }
+
+  protected teacherName(group: Group): string {
+    return groupTeacherOf(group, this.config()).name;
   }
 
   /** Lehrer des Zeitraums; der bisherige der Gruppe bleibt wählbar, auch wenn er dort nicht unterrichtet. */
@@ -261,8 +231,8 @@ export class GroupPlanningPage {
   );
 
   // --- Automatisch einteilen ---
-  protected readonly poolKind = signal<'unassigned' | 'all'>('unassigned');
-  protected readonly pool = computed(() => (this.poolKind() === 'all' ? this.students() : this.unassigned()));
+  /** Eingeteilt werden alle Personen des Zeitraums (siehe `listed`). */
+  protected readonly pool = this.students;
   protected readonly poolWithoutBirthDate = computed(() => this.pool().filter((s) => !s.birthDate).length);
   protected readonly groupCount = signal(2);
   protected readonly mode = signal<PlanMode>('mixed');

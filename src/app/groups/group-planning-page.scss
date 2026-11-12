@@ -70,49 +70,6 @@ h3 {
   cursor: pointer;
 }
 
-/* Umschalter „Ohne Gruppe“ / „Alle“ */
-.list-switch {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0.2rem;
-  border-radius: 8px;
-  background: var(--bg);
-
-  button {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.5rem;
-    border: none;
-    background: none;
-    color: var(--muted);
-    font-weight: 600;
-
-    &.active {
-      background: var(--card);
-      color: var(--text);
-      box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
-    }
-  }
-}
-
-.groups-line {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--muted);
-
-  &.none {
-    color: var(--primary-text);
-    font-weight: 600;
-  }
-}
-
-.teacher-group {
-  margin-top: -0.5rem;
-}
-
 .select-all {
   font-size: 0.9rem;
   color: var(--muted);

@@ -207,8 +207,9 @@ export class GroupsStore {
     return created.map((group) => group.id);
   }
 
-  /** Nimmt Personen in die Gruppe auf; wer schon Mitglied ist, bleibt es. */
+  /** Nimmt Personen in die Gruppe auf; wer schon Mitglied ist, bleibt es. Nicht bei automatischen Gruppen. */
   addMembers(groupId: string, studentIds: string[]): void {
+    if (this.allGroups().find((g) => g.id === groupId)?.auto) return;
     this.mutate(groupId, (group) => (group.memberIds = [...new Set([...group.memberIds, ...studentIds])]));
   }
 

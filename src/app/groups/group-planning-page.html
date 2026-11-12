@@ -22,35 +22,9 @@
 
 <div class="planning">
   <section class="card unassigned">
-    <div class="list-switch" role="radiogroup" aria-label="Personen anzeigen">
-      <button
-        type="button"
-        role="radio"
-        [attr.aria-checked]="listKind() === 'unassigned'"
-        [class.active]="listKind() === 'unassigned'"
-        (click)="showList('unassigned')"
-      >
-        Ohne Gruppe
-        <span class="badge" [class.done]="unassigned().length === 0">{{ unassigned().length }}</span>
-      </button>
-      <button
-        type="button"
-        role="radio"
-        [attr.aria-checked]="listKind() === 'all'"
-        [class.active]="listKind() === 'all'"
-        (click)="showList('all')"
-      >
-        Alle <span class="badge">{{ students().length }}</span>
-      </button>
-    </div>
+    <h2>Personen <span class="badge">{{ students().length }}</span></h2>
     @if (listed().length === 0) {
-      <p class="muted">
-        @if (students().length === 0) {
-          Noch keine Personen in diesem Zeitraum. <a routerLink="/personen">Personen anlegen</a>
-        } @else {
-          Alle {{ students().length }} Personen sind in einer Gruppe.
-        }
-      </p>
+      <p class="muted">Noch keine Personen in diesem Zeitraum. <a routerLink="/personen">Personen anlegen</a></p>
     } @else {
       <label class="check select-all">
         <input type="checkbox" [checked]="allSelected()" (change)="selectAll($any($event.target).checked)" />
@@ -63,12 +37,8 @@
               <input type="checkbox" [checked]="selected().has(student.id)" (change)="toggle(student.id)" />
               <span class="grow">
                 {{ student | studentLabel }}
-                @if (listKind() === 'all') {
-                  @if (groupsText(student); as text) {
-                    <span class="groups-line">{{ text }}</span>
-                  } @else {
-                    <span class="groups-line none">ohne Gruppe</span>
-                  }
+                @if (groupsText(student); as text) {
+                  <span class="groups-line">{{ text }}</span>
                 }
               </span>
               <span class="muted small">{{ ageText(student) }}</span>
@@ -80,7 +50,9 @@
         <select aria-label="Zielgruppe" (change)="target.set(valueOf($event))">
           <option value="new" [selected]="target() === 'new'">Neue Gruppe …</option>
           @for (group of groups(); track group.id) {
-            <option [value]="group.id" [selected]="target() === group.id">{{ label(group) }}</option>
+            @if (!group.auto) {
+              <option [value]="group.id" [selected]="target() === group.id">{{ label(group) }}</option>
+            }
           }
         </select>
         @if (target() === 'new') {
@@ -105,18 +77,6 @@
       <input #newName type="text" placeholder="Name der Gruppe" aria-label="Name der neuen Gruppe" (keydown.enter)="addEmptyGroup(newName)" />
       <button class="secondary" (click)="addEmptyGroup(newName)">+ Gruppe</button>
     </div>
-    <div class="row teacher-group">
-      @if (showTeachers()) {
-        <select aria-label="Lehrkraft" (change)="wholeTeacherId.set(valueOf($event))">
-          @for (teacher of reportPeriod.teachers(); track teacher.id) {
-            <option [value]="teacher.id" [selected]="teacher.id === wholeTeacherId()">{{ teacher.name }}</option>
-          }
-        </select>
-      }
-      <button class="secondary" (click)="createTeacherGroup()">
-        {{ showTeachers() ? 'Gruppe mit allen Schüler:innen dieser Lehrkraft' : 'Gruppe mit allen Personen' }}
-      </button>
-    </div>
     <div class="group-grid">
       @for (group of groups(); track group.id) {
         <div class="card group-card">
@@ -129,13 +89,18 @@
               aria-label="Name der Gruppe"
               (change)="rename(group, $event)"
             />
-            <button class="icon" (click)="deleteGroup(group)" title="Gruppe löschen" aria-label="Gruppe löschen">✕</button>
+            @if (!group.auto) {
+              <button class="icon" (click)="deleteGroup(group)" title="Gruppe löschen" aria-label="Gruppe löschen">✕</button>
+            }
           </div>
+          @if (group.auto) {
+            <p class="muted small stats">Automatisch: alle Personen von {{ teacherName(group) }}</p>
+          }
           <p class="muted small stats">{{ statsText(members(group)) }}</p>
           @if (members(group).length > 0) {
             <p class="muted small stats">{{ instrumentText(members(group)) }}</p>
           }
-          @if (showTeachers()) {
+          @if (showTeachers() && !group.auto) {
             <label class="group-teacher">
               <span class="muted small">Termine im Kalender von</span>
               <select [attr.aria-label]="'Lehrkraft von ' + label(group)" (change)="setTeacher(group, $event)">
@@ -146,7 +111,7 @@
             </label>
           }
           @if (bulkOptions(group); as options) {
-            @if (options.length > 0) {
+            @if (options.length > 0 && !group.auto) {
               <select class="add-all" [attr.aria-label]="'Alle hinzufügen zu ' + label(group)" (change)="addAll(group, $event)">
                 <option value="" selected>+ Alle hinzufügen …</option>
                 @for (option of options; track option.key) {
@@ -160,12 +125,14 @@
               <li>
                 <span class="grow">{{ member | studentLabel }}</span>
                 <span class="muted small">{{ ageText(member) }}</span>
-                <button
-                  class="icon remove"
-                  (click)="removeMember(group, member)"
-                  title="Aus der Gruppe nehmen"
-                  [attr.aria-label]="member.name + ' aus der Gruppe nehmen'"
-                >✕</button>
+                @if (!group.auto) {
+                  <button
+                    class="icon remove"
+                    (click)="removeMember(group, member)"
+                    title="Aus der Gruppe nehmen"
+                    [attr.aria-label]="member.name + ' aus der Gruppe nehmen'"
+                  >✕</button>
+                }
               </li>
             } @empty {
               <li class="muted small">Noch keine Mitglieder</li>
@@ -202,13 +169,6 @@
     </label>
   </div>
   <div class="row options">
-    <label>
-      Personen
-      <select (change)="poolKind.set($any(valueOf($event)))">
-        <option value="unassigned" [selected]="poolKind() === 'unassigned'">Ohne Gruppe ({{ unassigned().length }})</option>
-        <option value="all" [selected]="poolKind() === 'all'">Alle im Zeitraum ({{ students().length }})</option>
-      </select>
-    </label>
     <label>
       Anzahl Gruppen
       <select (change)="groupCount.set(+valueOf($event))">
@@ -253,9 +213,9 @@
       Das Geburtsdatum trägst du unter <a routerLink="/personen">Personen</a> ein.
     </p>
   }
-  @if (poolKind() === 'all') {
-    <p class="muted small">Personen, die schon in einer Gruppe sind, kommen zusätzlich in eine der neuen Gruppen.</p>
-  }
+  <p class="muted small">
+    Eingeteilt werden alle {{ students().length }} Personen des Zeitraums; ihre bisherigen Gruppen behalten sie.
+  </p>
   @if (planMessage(); as text) {
     <p class="message">{{ text }}</p>
   }

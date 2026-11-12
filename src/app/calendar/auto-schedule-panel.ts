@@ -74,9 +74,13 @@ export class AutoSchedulePanel {
   protected readonly appointmentCount = appointmentCount;
   protected readonly maxPeriodDays = MAX_PERIOD_DAYS;
 
-  /** Modus und Gruppenoption gelten nur auf diesem Gerät. */
-  protected readonly mode = storedSignal<Mode>('feedback.autoScheduleMode', () => 'weekly', (data) =>
-    data === 'period' ? 'period' : 'weekly',
+  /**
+   * Modus und Gruppenoption gelten nur auf diesem Gerät. Vorgewählt sind einmalige Termine in einem Zeitraum; der
+   * neue Schlüssel sorgt dafür, dass das auch auf Geräten gilt, die bisher „wöchentlich“ als Standard gespeichert
+   * hatten.
+   */
+  protected readonly mode = storedSignal<Mode>('feedback.autoSchedulePlanMode', () => 'period', (data) =>
+    data === 'weekly' ? 'weekly' : 'period',
   );
   /** Im Zeitraum höchstens einen Termin je Person; übrige Slots bleiben frei. Gilt nur auf diesem Gerät. */
   protected readonly onePerPerson = storedSignal<boolean>('feedback.autoScheduleOnce', () => false, (data) => data === true);
