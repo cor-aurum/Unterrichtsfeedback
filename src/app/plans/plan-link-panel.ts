@@ -144,6 +144,14 @@ export class PlanLinkPanel {
     await saveFile(`QR-Code_${safeFileName(period.name)}.pdf`, doc.output('blob'));
   }
 
+  /** Auf Handy und Tablet: Link über den Teilen-Dialog verschicken (Messenger, Mail …) */
+  protected readonly canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+  protected shareLink(url: string): void {
+    const period = this.period();
+    navigator.share({ title: period.name, text: `Deine Termine für „${period.name}“:`, url }).catch(() => undefined);
+  }
+
   protected copy(text: string): void {
     navigator.clipboard?.writeText(text).catch(() => undefined);
     this.message.set('Link kopiert.');

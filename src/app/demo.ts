@@ -1,6 +1,6 @@
 import { addDays, Appointment, daysFrom } from './calendar/appointments';
 import { SharedAppointment } from './calendar/shared-appointments';
-import { defaultConfig } from './config.store';
+import { defaultConfig, parseConfig } from './config.store';
 import { autoGroupId, autoGroupMembers, autoGroupName } from './groups/auto-groups';
 import { FeedbackConfig, Group, Instrument, ReportPeriodEntry, Student, Teacher, TeachingWindow, today } from './model';
 import { DEMO_FLAG, DEMO_PREFIX } from './stored-signal';
@@ -8,6 +8,8 @@ import { deleteDemoPlanLink } from './plans/plan-access';
 
 /** Wer die Demo startet, ist darin selbst eine der Lehrkräfte. */
 export interface DemoSelf {
+  /** ID der eigenen Lehrkraft: Eigene Abschnitte, Inhalte und Varianten gelten so auch in der Demo. */
+  teacherId?: string;
   name: string;
   instrument: string;
 }
@@ -44,7 +46,8 @@ const FIRST_NAMES = [
 const LAST_NAMES = ['Becker', 'Hartmann', 'Keller', 'Lorenz', 'Möller', 'Neumann', 'Schubert', 'Vogel'];
 
 /**
- * Startet den Demomodus mit frischen Beispieldaten: ein einwöchiger Lehrgang ab heute in einer Woche, fünf
+ * Startet den Demomodus mit frischen Beispieldaten und der eigenen Konfiguration (Abschnitte, Inhalte, Texte,
+ * PDF-Layout, Farben, Kalender-Einstellungen): ein einwöchiger Lehrgang ab heute in einer Woche, fünf
  * Lehrkräfte (darunter man selbst), 40 Personen ohne Einzeltermine bei zwei von ihnen, die Mahlzeiten als allgemeine
  * Termine und je Lehrkraft ihre automatische Gruppe mit einem täglichen Termin nach dem Frühstück. Die echten Daten bleiben unberührt; die App lädt neu.
  */
@@ -108,12 +111,27 @@ function clearDemoData(): void {
   }
 }
 
+/**
+ * Die eigene Konfiguration (ohne Demo-Präfix gespeichert). Lehrkräfte, Instrumente und Berichtszeiträume ersetzt die
+ * Demo; Abschnitte, Inhalte, Texte, Layout, Farben und Kalender-Einstellungen bleiben. Änderungen in der Demo landen
+ * nur in ihren eigenen Daten, nie in der echten Konfiguration.
+ */
+function ownConfig(): FeedbackConfig {
+  try {
+    const stored = localStorage.getItem('feedback.config');
+    return stored ? parseConfig(JSON.parse(stored)) : defaultConfig();
+  } catch {
+    return defaultConfig();
+  }
+}
+
 /** Die gespeicherten Werte der Demo, je Schlüssel wie in `storedSignal` */
 function demoData(self: DemoSelf): Record<string, unknown> {
-  const config = defaultConfig();
+  const config = ownConfig();
   const from = addDays(today(), 7);
-  const instruments = instrumentsFor([self.instrument, ...OTHER_TEACHERS.map(([, instrument]) => instrument)]);
-  const instrumentId = (name: string) => instruments.find((i) => i.name === name)!.id;
+  const instruments = instrumentsFor(config.instruments, [self.instrument, ...OTHER_TEACHERS.map(([, instrument]) => instrument)]);
+  const instrumentId = (name: string) => instruments.find((i) => sameName(i.name, name))!.id;
+  const ownTeacher = config.teachers.find((t) => t.id === self.teacherId);
   const teacher = (id: string, name: string, instrument: string): Teacher => ({
     id,
     name,
@@ -123,7 +141,11 @@ function demoData(self: DemoSelf): Record<string, unknown> {
     periodWindows: {},
     periodLocations: {},
   });
-  const me = teacher('demo-ich', self.name, self.instrument);
+  // Man selbst behält ID und Farbe, damit eigene Abschnitte, Inhalte und Varianten gelten.
+  const me: Teacher = {
+    ...teacher(ownTeacher?.id ?? 'demo-ich', self.name, self.instrument),
+    ...(ownTeacher?.themeColor ? { themeColor: ownTeacher.themeColor } : {}),
+  };
   const teachers = [me, ...OTHER_TEACHERS.map(([name, instrument], i) => teacher(`demo-lehrkraft-${i + 1}`, name, instrument))];
   const period: ReportPeriodEntry = {
     id: PERIOD_ID,
@@ -189,8 +211,14 @@ function demoData(self: DemoSelf): Record<string, unknown> {
   };
 }
 
-function instrumentsFor(names: string[]): Instrument[] {
-  return [...new Set(names)].map((name, i) => ({ id: `demo-instrument-${i + 1}`, name }));
+/** Die eigenen Instrumente (Varianten von Inhalten hängen an ihnen) und dazu die übrigen der Demo */
+function instrumentsFor(own: Instrument[], names: string[]): Instrument[] {
+  const missing = [...new Set(names)].filter((name) => !own.some((i) => sameName(i.name, name)));
+  return [...own, ...missing.map((name, i) => ({ id: `demo-instrument-${i + 1}`, name }))];
+}
+
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
 /** Namen, Geburtsdaten (8 bis 17 Jahre) und Instrumente reihum, damit jede Demo gleich aussieht */

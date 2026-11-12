@@ -5,7 +5,7 @@
   </div>
   <ul class="list">
     @for (group of groups(); track group.id) {
-      <li [class.selected]="group.id === store.selectedGroupId()" (click)="store.select(group.id)">
+      <li [class.selected]="group.id === store.selectedGroupId()" (click)="choose(group)">
         <span class="grow">
           {{ label(group) }}
           <span class="sub">

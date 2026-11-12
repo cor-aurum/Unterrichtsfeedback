@@ -11,7 +11,14 @@ export const DEMO_PREFIX = 'demo:';
  */
 export const demoMode = (() => {
   try {
-    return localStorage.getItem(DEMO_FLAG) === '1';
+    const demo = localStorage.getItem(DEMO_FLAG) === '1';
+    // Reste einer beendeten Demo: Beim Beenden können Seiten ihre Werte noch einmal schreiben, bevor neu geladen ist.
+    if (!demo) {
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith(DEMO_PREFIX))
+        .forEach((key) => localStorage.removeItem(key));
+    }
+    return demo;
   } catch {
     return false;
   }

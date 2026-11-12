@@ -4,19 +4,20 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { ActiveTeacher } from './active-teacher';
 import { appVersion, AppUpdate } from './app-update';
 import { ConfigStore } from './config.store';
-import { byPeriodOrder, formatLongDate, today } from './model';
+import { byPeriodOrder, formatLongDate, homeLinkOf, today } from './model';
 import { DEMO_PERIOD_ID, endDemo, startDemoPeriodToday } from './demo';
 import { demoMode } from './stored-signal';
 import { ReportPeriod } from './report-period';
 import { ServerSync } from './sync/server-sync';
 import { isNativeApp } from './save-file';
 import { WelcomeDialog } from './welcome/welcome-dialog';
+import { ShareSheet } from './share-sheet';
 import { StudentPlanning } from './planning/student-planning';
 import { StudentPlanningPage } from './planning/student-planning-page';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, WelcomeDialog, StudentPlanningPage],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, WelcomeDialog, StudentPlanningPage, ShareSheet],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -31,6 +32,8 @@ export class App {
   /** Erster Start: Die Begrüßung legt den eigenen Lehrer an oder spielt eine Sicherung ein. */
   protected readonly setupPending = this.configStore.setupPending;
   protected readonly activeTeacher = inject(ActiveTeacher);
+  /** Jede Lehrkraft legt unter Konfiguration → Allgemein fest, wohin das Logo führt. */
+  protected readonly homeLink = computed(() => homeLinkOf(this.activeTeacher.teacher()));
   protected readonly reportPeriod = inject(ReportPeriod);
   /** Nach Beginn sortiert */
   protected readonly periods = computed(() =>

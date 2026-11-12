@@ -23,6 +23,7 @@ import {
   newId,
   PdfLayout,
   PdfLogo,
+  HOME_PAGES,
   Period,
   ReportPeriodEntry,
   SelfBooking,
@@ -91,6 +92,12 @@ export class ConfigStore {
           grayscale: config.pdfLayout.grayscale,
         }),
     );
+  }
+
+  /** Wohin das Logo für die Lehrkraft führt; die anderen behalten ihr Ziel. */
+  setTeacherHomePage(teacherId: string, path: string): void {
+    if (!HOME_PAGES.some((page) => page.path === path)) return;
+    this.mutateTeacher(teacherId, (teacher) => (teacher.homePage = path));
   }
 
   /** Persönliche Farbe einer Lehrkraft; die anderen behalten ihre. */
@@ -841,6 +848,7 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       periodWindows: parsePeriodWindows(t.periodWindows),
       periodLocations: parsePeriodLocations(t.periodLocations),
       ...(isHexColor(t.themeColor) ? { themeColor: t.themeColor.toLowerCase() } : {}),
+      ...(HOME_PAGES.some((page) => page.path === t.homePage) ? { homePage: t.homePage } : {}),
     }));
   }
   const legacyWindows = (config.calendar as { teachingWindows?: unknown } | undefined)?.teachingWindows;

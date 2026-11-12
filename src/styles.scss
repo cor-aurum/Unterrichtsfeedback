@@ -169,3 +169,145 @@ button {
     color: var(--muted);
   }
 }
+
+/*
+ * Handy: Formulare wie Termin, Blocker und allgemeiner Termin füllen den Bildschirm; „Speichern“ und „Abbrechen“
+ * bleiben unten stehen, die Seite dahinter scrollt nicht mit.
+ */
+@media (max-width: 700px) {
+  .card.form {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    margin: 0;
+    padding: 1rem 1rem 0;
+    border: 0;
+    border-radius: 0;
+
+    /* unten am Bildschirm, auch wenn das Formular kürzer ist */
+    > .actions {
+      position: sticky;
+      bottom: 0;
+      z-index: 1;
+      margin: auto -1rem 0;
+      padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--border);
+      background: var(--card);
+    }
+  }
+
+  body:has(.card.form) {
+    overflow: hidden;
+  }
+}
+
+/*
+ * Mit dem Finger: Knöpfe und Eingabefelder mindestens 44 px hoch, Häkchen größer. Termine im Kalenderraster
+ * behalten ihre Höhe, denn die zeigt ihre Dauer.
+ */
+@media (pointer: coarse) {
+  button:not(.entry):not(.link-button),
+  select,
+  input[type='text'],
+  input[type='search'],
+  input[type='url'],
+  input[type='password'],
+  input[type='date'],
+  input[type='number'],
+  input[type='time'] {
+    min-height: 44px;
+  }
+
+  button.icon {
+    min-width: 44px;
+  }
+
+  details.menu summary {
+    min-height: 44px;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}
+
+/* Aufklappmenü aus <details>, z. B. „+ Neu“ und „…“ im Kalender auf dem Handy */
+details.menu {
+  position: relative;
+
+  summary {
+    display: flex;
+    align-items: center;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    background: var(--primary);
+    color: var(--on-primary);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &.secondary {
+      background: white;
+      border-color: var(--primary-text);
+      color: var(--primary-text);
+    }
+  }
+
+  .menu-items {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 14rem;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
+
+    &.right {
+      right: 0;
+      left: auto;
+    }
+
+    button {
+      width: 100%;
+      text-align: left;
+    }
+  }
+}
+
+/* Aktuelle Uhrzeit im heutigen Tag des Kalenders (global, damit die Stile des Kalenders klein bleiben) */
+.now-line {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  height: 2px;
+  background: var(--danger);
+  pointer-events: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+  }
+}

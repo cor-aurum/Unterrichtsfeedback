@@ -1,5 +1,6 @@
+@if (!oneColumn() || !store.selectedLesson()) {
 <section class="card">
-  <h2>Gruppe</h2>
+  <h2>{{ oneColumn() ? label() : 'Gruppe' }}</h2>
   <button class="full" (click)="startLesson()">+ Neue Gruppenstunde</button>
   <ul class="list">
     @for (lesson of lessons(); track lesson.id) {
@@ -70,6 +71,7 @@
     }
   </div>
 </section>
+}
 
 @if (store.selectedLesson(); as lesson) {
   <section class="card editor">
@@ -91,14 +93,18 @@
     </p>
 
     @for (section of sections(); track section.id) {
-      <fieldset>
-        <legend>
+      <fieldset [class.collapsed]="collapsed().has(section.id)">
+        <legend (click)="toggleSection(section.id)">
+          @if (oneColumn()) {
+            <span class="fold" aria-hidden="true">{{ collapsed().has(section.id) ? '▸' : '▾' }}</span>
+          }
           {{ section.title }}
           @if (section.scope === 'general') {
             <span class="scope-badge" title="Erscheint einmal im allgemeinen Teil des Gruppen-PDFs">allgemein</span>
           }
         </legend>
-        @if (section.type === 'checklist') {
+        @if (collapsed().has(section.id)) {
+        } @else if (section.type === 'checklist') {
           @for (item of section.items; track item.id) {
             <label class="check">
               <input
@@ -146,7 +152,7 @@
       </p>
     }
   </section>
-} @else {
+} @else if (!oneColumn()) {
   <section class="card editor placeholder muted">
     Gruppenstunde auswählen oder mit „+ Neue Gruppenstunde“ anlegen.
   </section>

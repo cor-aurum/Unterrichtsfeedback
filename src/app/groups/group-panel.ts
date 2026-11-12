@@ -1,4 +1,5 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input, signal } from '@angular/core';
+import { oneColumn } from '../viewport';
 import { ActiveTeacher } from '../active-teacher';
 import { StudentLabelPipe } from '../student-label.pipe';
 import { RouterLink } from '@angular/router';
@@ -38,6 +39,19 @@ import { sortedLessons, StudentsStore } from '../students.store';
 })
 export class GroupPanel {
   readonly group = input.required<Group>();
+  /** Handy: Gruppe mit ihren Stunden oder eine Gruppenstunde, nicht beides untereinander */
+  protected readonly oneColumn = oneColumn();
+  /** Abschnitte der Gruppenstunde, die auf dem Handy zugeklappt sind */
+  protected readonly collapsed = signal<ReadonlySet<string>>(new Set());
+
+  protected toggleSection(sectionId: string): void {
+    if (!this.oneColumn()) return;
+    this.collapsed.update((ids) => {
+      const next = new Set(ids);
+      if (!next.delete(sectionId)) next.add(sectionId);
+      return next;
+    });
+  }
 
   protected readonly store = inject(GroupsStore);
   private readonly studentsStore = inject(StudentsStore);

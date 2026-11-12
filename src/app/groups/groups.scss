@@ -185,3 +185,23 @@ textarea {
     font-size: 0.9rem;
   }
 }
+
+/* Eine Spalte: Name über Datum und Uhrzeit, nicht daneben gequetscht */
+@media (max-width: 900px) {
+  .editor-head h2 {
+    flex-basis: 100%;
+  }
+}
+
+/* Handy: Abschnitte lassen sich zuklappen. */
+.fold {
+  display: inline-block;
+  width: 1rem;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  legend {
+    cursor: pointer;
+  }
+}

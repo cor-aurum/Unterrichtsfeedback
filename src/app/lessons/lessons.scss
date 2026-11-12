@@ -322,3 +322,99 @@ fieldset {
 .person-link {
   margin: 1rem 0 0;
 }
+
+/* Handy: Zurück zur vorigen Ebene */
+.back-bar {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--primary-text);
+  text-align: left;
+  font-weight: 600;
+}
+
+/* Handy: „Fertig“ und „Weiter“ bleiben unten stehen. */
+.next-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+
+  .grow {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Handy: Abschnitte lassen sich zuklappen. */
+.fold {
+  display: inline-block;
+  width: 1rem;
+  color: var(--muted);
+}
+
+fieldset.collapsed {
+  padding-bottom: 0.2rem;
+}
+
+@media (max-width: 900px) {
+  legend {
+    cursor: pointer;
+  }
+}
+
+/* Mit dem Finger: größere Tippflächen in Listen und bei den Textbausteinen */
+@media (pointer: coarse) {
+  .list li {
+    padding: 0.75rem 0.6rem;
+  }
+
+  .check {
+    padding: 0.6rem 0.4rem;
+
+    input {
+      width: 1.4rem;
+      height: 1.4rem;
+      margin-top: 0;
+    }
+  }
+}
+
+/* Das Suchfeld bleibt beim Scrollen durch lange Listen oben stehen (in der Seite oder in der Spalte links). */
+.person-filter {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 -1rem;
+  padding: 0.5rem 1rem;
+  background: var(--card);
+}
+
+/* Eine Spalte: Name über Datum und Uhrzeit, nicht daneben gequetscht */
+@media (max-width: 900px) {
+  .editor-head h2 {
+    flex-basis: 100%;
+  }
+}
+
+/*
+ * Nebeneinander: Die Listen links scrollen für sich und bleiben stehen. So ist die Stunde rechts gleich zu sehen,
+ * auch wenn man weit unten in der Liste eine Person wählt.
+ */
+@media (min-width: 901px) {
+  .column {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

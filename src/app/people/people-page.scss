@@ -79,3 +79,15 @@
     flex: 1 1 12rem;
   }
 }
+
+/* Nebeneinander: Die Liste links scrollt für sich (wie unter „Stunden erfassen“), die Person rechts bleibt sichtbar. */
+@media (min-width: 761px) {
+  .people-layout > .column {
+    position: sticky;
+    top: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

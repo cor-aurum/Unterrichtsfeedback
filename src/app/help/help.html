@@ -43,8 +43,10 @@
       Der Demomodus zeigt die App mit Beispieldaten: einen Lehrgang über eine Woche, der heute in einer Woche beginnt,
       mit fünf Lehrkräften (darunter du), 40 Personen ohne Einzeltermine bei zwei davon, Frühstück, Mittag- und
       Abendessen als allgemeinen Terminen, je Lehrkraft ihrer automatischen Gruppe mit einem täglichen Termin direkt
-      nach dem Frühstück und Unterrichtszeiten vormittags, nachmittags und abends. Deine echten Daten bleiben
-      unverändert und werden auch nicht mit einem Server abgeglichen; anmelden oder mit einem Server verbinden geht
+      nach dem Frühstück und Unterrichtszeiten vormittags, nachmittags und abends. Abschnitte, Inhalte, Texte,
+      PDF-Layout, Farben und Kalender-Einstellungen übernimmt die Demo aus deiner Konfiguration; was du in der Demo
+      daran änderst, gilt nur dort. Deine echten Daten bleiben unverändert und werden auch nicht mit einem Server
+      abgeglichen; anmelden oder mit einem Server verbinden geht
       in der Demo nicht. Bist du schon verbunden, kannst du den Download-Link mit den Demodaten trotzdem ausprobieren
       (siehe <em>Pläne zum Herunterladen</em>). Mit <kbd>Jetzt beginnen lassen</kbd> startet der
       Lehrgang sofort; alles schon Geplante wandert mit. Oben in der Leiste beendest du die Demo wieder;
@@ -620,6 +622,11 @@
       die PDFs, die sie erstellt; andere Lehrkräfte behalten ihre eigene.
     </li>
     <li>
+      <strong>Logo:</strong> Ebenfalls unter <em>Allgemein</em> legst du mit <em>Das Logo oben links führt zu</em>
+      fest, welche Seite ein Klick auf das Logo öffnet, z. B. <em>Stunden erfassen</em> statt des Kalenders. Auch das
+      gilt nur für die aktive Lehrkraft.
+    </li>
+    <li>
       <strong>PDFs in Schwarzweiß</strong> (ebenfalls unter <em>Allgemein</em>) spart Tinte: Alle PDFs, auch die
       Kalender-PDFs, kommen dann in Grautönen, farbige Flächen werden schmale Linien und Bilder werden grau. Die App
       selbst bleibt farbig.
@@ -836,6 +843,34 @@
       (<code>{{ origin }}</code>)
     }; für die Android-App ist das nicht nötig. Wie man den Server betreibt, steht in <code>server/README.md</code>.
   </p>
+
+  <h3>Auf dem Handy</h3>
+  <ul>
+    <li>
+      <strong>Kalender:</strong> ein Tag statt der Woche; Wischen nach links oder rechts (oder ‹ ›) blättert tageweise,
+      die Zeile mit dem Datum bleibt oben stehen. Heute zeigt eine rote Linie die aktuelle Uhrzeit. Neues legst du
+      über <kbd>+ Neu</kbd> an, Seltenes (Importieren, Automatisch einplanen, Schüler:innen tragen sich ein) steht
+      unter <kbd>…</kbd>; die Legende klappst du bei Bedarf auf.
+    </li>
+    <li>
+      <strong>Stunden erfassen:</strong> erst die Liste, dann die Stunden der Person oder Gruppe, dann die Stunde –
+      mit <em>← Zurück</em> darüber. Abschnitte klappst du mit einem Tipp auf ihre Überschrift zu. Unten führt
+      <kbd>Weiter</kbd> zum nächsten Termin von heute, <kbd>Fertig</kbd> eine Ebene zurück.
+    </li>
+    <li>
+      <strong>Personen:</strong> Die gewählte Person öffnet sich statt der Liste; <em>← Alle Personen</em> führt
+      zurück. Das Suchfeld bleibt beim Scrollen oben.
+    </li>
+    <li>
+      <strong>Formulare</strong> (Termin, Blocker, allgemeiner Termin) füllen den Bildschirm, Speichern und Abbrechen
+      stehen unten.
+    </li>
+    <li>
+      <strong>Dateien</strong> wie PDFs und Tabellen öffnen den Teilen-Dialog (Mail, Messenger, Dateien …), wenn der
+      Browser das kann. Dauert das Erzeugen länger, erscheint unten <kbd>Teilen …</kbd> zum Antippen. Den
+      Download-Link der Pläne teilst du mit <kbd>Teilen …</kbd> neben dem Link.
+    </li>
+  </ul>
 
   <h3>Wichtig auf iPhone und iPad</h3>
   <p>

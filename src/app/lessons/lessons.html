@@ -1,7 +1,14 @@
-<app-quick-start />
+@if (shows('list')) {
+  <app-quick-start />
+}
+
+@if (oneColumn() && level() !== 'list') {
+  <button class="back-bar" (click)="back()">← {{ backLabel() }}</button>
+}
 
 <div class="layout">
-  <div class="column">
+  @if (shows('list')) {
+  <div class="column" appFitViewport>
   <section class="card">
     <div class="row list-head">
       <h2 class="grow">Personen</h2>
@@ -28,7 +35,7 @@
       @for (student of visibleStudents(); track student.id) {
         <li
           [class.selected]="student.id === store.selectedStudentId()"
-          (click)="store.selectStudent(student.id)"
+          (click)="choose(student)"
         >
           <span class="grow">
             {{ student | studentLabel }}
@@ -58,12 +65,14 @@
   </section>
   <app-group-list />
   </div>
+  }
 
   @if (groups.selectedGroup(); as group) {
     <app-group-panel [group]="group" />
   } @else if (store.selectedStudent(); as student) {
+    @if (shows('lessons')) {
     <section class="card">
-      <h2>Stunden</h2>
+      <h2>Stunden{{ oneColumn() ? ' von ' + student.name : '' }}</h2>
       @if (!isActive(student)) {
         <div class="message inactive-note">
           {{ student.name }} ist nicht im Berichtszeitraum „{{ reportPeriod.period().name }}“.
@@ -101,8 +110,10 @@
         <a routerLink="/personen">Name, Instrument, Lehrer:in und Termine unter „Personen“</a>
       </p>
     </section>
+    }
 
     @if (store.selectedLesson(); as lesson) {
+      @if (shows('lesson')) {
       <section class="card editor">
         <div class="row editor-head">
           <h2 class="grow">{{ student.name }}</h2>
@@ -130,14 +141,18 @@
         }
 
         @for (section of sectionsFor(student); track section.id) {
-          <fieldset>
-            <legend>
+          <fieldset [class.collapsed]="collapsed().has(section.id)">
+            <legend (click)="toggleSection(section.id)">
+              @if (oneColumn()) {
+                <span class="fold" aria-hidden="true">{{ collapsed().has(section.id) ? '▸' : '▾' }}</span>
+              }
               {{ section.title }}
               @if (section.scope === 'general') {
                 <span class="scope-badge" title="Erscheint einmal im allgemeinen Teil des PDFs">allgemein</span>
               }
             </legend>
-            @if (section.type === 'checklist' && section.scope === 'general') {
+            @if (collapsed().has(section.id)) {
+            } @else if (section.type === 'checklist' && section.scope === 'general') {
               <p class="muted field-hint period-hint">
                 @if (reportPeriod.contains(lesson.date)) {
                   Gilt für alle Stunden im Zeitraum {{ reportPeriod.label() }}. Entfernen nimmt den Haken aus all
@@ -205,7 +220,7 @@
                 }
               }
             }
-            @if (section.type === 'checklist') {
+            @if (section.type === 'checklist' && !collapsed().has(section.id)) {
               <div class="row add-item">
                 <input
                   #newItem
@@ -232,7 +247,8 @@
           </p>
         }
       </section>
-    } @else {
+      }
+    } @else if (!oneColumn()) {
       <section class="card editor placeholder muted">
         Stunde auswählen oder mit „+ Neue Stunde“ anlegen.
       </section>
@@ -243,3 +259,13 @@
     </section>
   }
 </div>
+
+<!-- Handy: nach der Stunde gleich zur nächsten von heute -->
+@if (oneColumn() && (level() === 'lesson' || (level() === 'group' && groups.selectedLesson()))) {
+  <div class="next-bar">
+    <button class="secondary" (click)="back()">Fertig</button>
+    @if (nextUp(); as next) {
+      <button class="grow" (click)="goNext()">Weiter: {{ next.label }} →</button>
+    }
+  </div>
+}

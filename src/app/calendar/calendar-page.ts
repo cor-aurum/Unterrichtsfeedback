@@ -1,4 +1,5 @@
-import { Component, computed, DestroyRef, effect, inject, linkedSignal, signal, untracked } from '@angular/core';
+import { afterNextRender, Component, computed, effect, ElementRef, inject, linkedSignal, signal, untracked } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
@@ -30,6 +31,7 @@ import { isNativeApp } from '../save-file';
 import { storedSignal } from '../stored-signal';
 import { StudentsStore } from '../students.store';
 import { StudentLabelPipe } from '../student-label.pipe';
+import { phoneScreen } from '../viewport';
 import {
   addDays,
   Appointment,
@@ -80,12 +82,10 @@ interface BlockerDraft {
 
 /** Längster Zeitraum für die PDF-Liste, damit niemand versehentlich Jahrzehnte exportiert. */
 const MAX_PDF_DAYS = 366;
-/** Bis zu dieser Breite zeigt der Kalender einen Tag statt der Woche (wie die schmale Ansicht der App). */
-const NARROW_MAX_PX = 700;
 
 @Component({
   selector: 'app-calendar-page',
-  imports: [PlanningSetupPanel, 
+  imports: [PlanningSetupPanel, NgTemplateOutlet,
     RouterLink,
     AutoSchedulePanel,
     LessonLoadPanel,
@@ -98,6 +98,7 @@ const NARROW_MAX_PX = 700;
   ],
   templateUrl: './calendar-page.html',
   styleUrl: './calendar-page.scss',
+  host: { '(document:click)': 'closeMenus($event)' },
 })
 export class CalendarPage {
   private readonly calendar = inject(CalendarStore);
@@ -149,22 +150,55 @@ export class CalendarPage {
   protected readonly weekStart = signal(this.weekStartOf(this.defaultDate()));
   /** Über ein `computed`: Der Zeitraum ist nach jeder Änderung der Konfiguration ein neues Objekt, die ID bleibt. */
   private readonly periodId = computed(() => this.reportPeriod.period().id);
-  /** Schmaler Bildschirm (Handy): Der Kalender zeigt einen Tag statt der Woche und blättert tageweise. */
-  protected readonly narrow = signal(false);
+  /** Handy: Der Kalender zeigt einen Tag statt der Woche, blättert tageweise und fasst die Knöpfe in Menüs. */
+  protected readonly narrow = phoneScreen();
   /** Zuletzt gewählter Tag; liegt er nicht in der gezeigten Woche, gilt `shownDay` */
   private readonly chosenDay = signal<string | null>(null);
+  private readonly host = inject(ElementRef<HTMLElement>);
   constructor() {
     this.followPeriod();
-    this.watchWidth();
+    // Auf dem Handy beginnt der heutige Tag bei der aktuellen Uhrzeit, nicht beim frühen Morgen.
+    afterNextRender(() => {
+      if (this.narrow()) this.host.nativeElement.querySelector('.now-line')?.scrollIntoView({ block: 'center' });
+    });
   }
 
-  private watchWidth(): void {
-    if (typeof matchMedia !== 'function') return;
-    const query = matchMedia(`(max-width: ${NARROW_MAX_PX}px)`);
-    const update = () => this.narrow.set(query.matches);
-    update();
-    query.addEventListener('change', update);
-    inject(DestroyRef).onDestroy(() => query.removeEventListener('change', update));
+  /** Ein Klick daneben schließt offene Menüs („+ Neu“, „…“). */
+  protected closeMenus(event: MouseEvent): void {
+    for (const menu of this.host.nativeElement.querySelectorAll('details.menu[open]')) {
+      if (!menu.contains(event.target as Node)) (menu as HTMLDetailsElement).open = false;
+    }
+  }
+
+  /** Lage der Linie für „jetzt“ im Raster; `null`, wenn heute nicht zu sehen ist oder die Uhrzeit außerhalb liegt */
+  protected readonly nowTop = computed(() => {
+    if (!this.days().some((day) => day.date === this.today)) return null;
+    const now = this.clock.now();
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    const { first, last } = this.gridHours();
+    if (minutes < first * 60 || minutes > last * 60) return null;
+    return (minutes - first * 60) * PX_PER_MINUTE;
+  });
+
+  // --- Wischen auf dem Handy ---
+
+  private swipe: { x: number; y: number; time: number } | null = null;
+
+  protected swipeStart(event: TouchEvent): void {
+    const touch = event.touches[0];
+    this.swipe = event.touches.length === 1 && this.narrow() ? { x: touch.clientX, y: touch.clientY, time: Date.now() } : null;
+  }
+
+  /** Waagerecht gewischt (und kein Termin gezogen): einen Tag weiter oder zurück */
+  protected swipeEnd(event: TouchEvent): void {
+    const start = this.swipe;
+    this.swipe = null;
+    if (!start || this.drag?.active) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < 2 * Math.abs(dy) || Date.now() - start.time > SWIPE_MAX_MS) return;
+    this.step(dx < 0 ? 1 : -1);
   }
 
   /**
@@ -1160,6 +1194,10 @@ export function formatPeriod(from: string, to: string): string {
 
 /** Höhe einer Minute im Wochenraster in Pixeln (eine Stunde = 72 px) */
 const PX_PER_MINUTE = 1.2;
+/** So weit muss man mindestens waagerecht wischen, um zu blättern … */
+const SWIPE_MIN_PX = 60;
+/** … und zwar zügig; langsames Ziehen ist Scrollen. */
+const SWIPE_MAX_MS = 700;
 
 /** Was sich in der Woche ziehen lässt: Einzel- und Gruppentermine und allgemeine Termine */
 type DragTarget = { kind: 'appointment'; occurrence: Occurrence } | { kind: 'shared'; shared: SharedAppointment };

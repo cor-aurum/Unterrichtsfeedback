@@ -25,6 +25,8 @@ import {
   Teacher,
   teacherInstrument,
   TimeWindow,
+  HOME_PAGES,
+  homeLinkOf,
 } from '../model';
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
@@ -319,6 +321,14 @@ export class ConfigEditor {
     if (confirm(`Berichtszeitraum „${period.name}“ löschen? Varianten der festen Inhalte gelten danach nicht mehr für ihn.`)) {
       this.store.removeReportPeriod(period.id);
     }
+  }
+
+  protected readonly homePages = HOME_PAGES;
+  protected readonly homeLink = computed(() => homeLinkOf(this.activeTeacher.teacher()));
+
+  /** Das Ziel des Logos gehört der aktiven Lehrkraft; andere behalten ihres. */
+  protected setHomePage(path: string): void {
+    this.store.setTeacherHomePage(this.activeTeacher.teacher().id, path);
   }
 
   /** Die Farbe gehört der aktiven Lehrkraft; andere behalten ihre. */

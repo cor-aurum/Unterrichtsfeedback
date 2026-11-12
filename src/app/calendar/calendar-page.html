@@ -1,32 +1,52 @@
 <div class="row head">
   <h1 class="grow">Kalender <span class="teacher-name">{{ teacher().name }}</span></h1>
-  <button class="secondary" (click)="newBlocker()" title="Zeit blockieren, ohne jemanden einzutragen">+ Blocker</button>
-  <button class="secondary" (click)="newShared()" title="Termin für mehrere Lehrer:innen, z. B. eine Konferenz">
-    + Allgemeiner Termin
-  </button>
-  <button class="secondary" (click)="openSharedImport()" title="Allgemeine Termine aus einer Excel- oder CSV-Datei">
-    Termine importieren …
-  </button>
-  <button class="secondary" [disabled]="students().length === 0" (click)="openAutoSchedule()">
-    Automatisch einplanen
-  </button>
-  <button
-    class="secondary"
-    [disabled]="students().length === 0"
-    (click)="openPlanningSetup()"
-    title="Schüler:innen tragen sich am Tablet selbst in freie Zeiten ein"
-  >
-    Schüler:innen tragen sich ein …
-  </button>
-  <button
-    class="secondary"
-    [disabled]="allGroupsEmpty()"
-    (click)="newGroupAppointment()"
-    [title]="allGroupsEmpty() ? 'Gruppen legst du unter „Stunden erfassen“ an' : 'Termin für eine Gruppe'"
-  >
-    + Gruppentermin
-  </button>
-  <button [disabled]="!anyStudents() && allGroupsEmpty()" (click)="newAppointment()">+ Termin</button>
+  @if (!narrow()) {
+    <button class="secondary" (click)="openSharedImport()" title="Allgemeine Termine aus einer Excel- oder CSV-Datei">
+      Termine importieren …
+    </button>
+    <button class="secondary" [disabled]="students().length === 0" (click)="openAutoSchedule()">
+      Automatisch einplanen
+    </button>
+    <button
+      class="secondary"
+      [disabled]="students().length === 0"
+      (click)="openPlanningSetup()"
+      title="Schüler:innen tragen sich am Tablet selbst in freie Zeiten ein"
+    >
+      Schüler:innen tragen sich ein …
+    </button>
+  }
+  <!-- Neues in einem Menü; auf dem Handy steht Seltenes in einem zweiten, damit der Tag gleich zu sehen ist -->
+  <details class="menu" #newMenu>
+    <summary class="button">+ Neu</summary>
+    <div class="menu-items right" (click)="newMenu.open = false">
+      <button [disabled]="!anyStudents() && allGroupsEmpty()" (click)="newAppointment()">Termin</button>
+      <button
+        class="secondary"
+        [disabled]="allGroupsEmpty()"
+        (click)="newGroupAppointment()"
+        [title]="allGroupsEmpty() ? 'Gruppen legst du unter „Stunden erfassen“ an' : 'Termin für eine Gruppe'"
+      >
+        Gruppentermin
+      </button>
+      <button class="secondary" (click)="newShared()" title="Termin für mehrere Lehrer:innen, z. B. eine Konferenz">
+        Allgemeiner Termin
+      </button>
+      <button class="secondary" (click)="newBlocker()" title="Zeit blockieren, ohne jemanden einzutragen">Blocker</button>
+    </div>
+  </details>
+  @if (narrow()) {
+    <details class="menu" #moreMenu>
+      <summary class="button secondary" aria-label="Weitere Aktionen">…</summary>
+      <div class="menu-items right" (click)="moreMenu.open = false">
+        <button class="secondary" (click)="openSharedImport()">Termine importieren …</button>
+        <button class="secondary" [disabled]="students().length === 0" (click)="openAutoSchedule()">Automatisch einplanen</button>
+        <button class="secondary" [disabled]="students().length === 0" (click)="openPlanningSetup()">
+          Schüler:innen tragen sich ein …
+        </button>
+      </div>
+    </details>
+  }
 </div>
 
 @if (sharedImportOpen()) {
@@ -225,7 +245,7 @@
   </section>
 }
 
-<div class="row week-nav">
+<div class="row week-nav" [class.sticky]="narrow()">
   @if (teachers().length > 1) {
     <div class="view-switch" role="radiogroup" aria-label="Woche von">
       <label>
@@ -263,16 +283,24 @@
     ›
   </button>
 </div>
-<div class="legend" aria-label="Legende">
+<ng-template #legendItems>
   @for (state of states; track state) {
     <span><i class="swatch" [attr.data-state]="state"></i>{{ stateLabels[state] }}</span>
   }
   <span><i class="swatch group"></i>Gruppe</span>
   <span><i class="swatch shared"></i>Allgemeiner Termin</span>
-</div>
+</ng-template>
+@if (narrow()) {
+  <details class="legend-toggle">
+    <summary>Legende</summary>
+    <div class="legend" aria-label="Legende"><ng-container [ngTemplateOutlet]="legendItems" /></div>
+  </details>
+} @else {
+  <div class="legend" aria-label="Legende"><ng-container [ngTemplateOutlet]="legendItems" /></div>
+}
 
 <!-- Zeitraster: Kopfzeile, Zeile für Ganztägiges und die Uhrzeiten als eigene Zeilen, damit alle Tage auf einer Höhe beginnen -->
-<div class="week-scroll">
+<div class="week-scroll" (touchstart)="swipeStart($event)" (touchend)="swipeEnd($event)">
   <div class="week-grid" [class.one-day]="narrow()">
     <div class="corner"></div>
     @for (day of days(); track day.date) {
@@ -315,6 +343,9 @@
         [title]="day.inPeriod ? 'Klicken: neuer allgemeiner Termin zu dieser Uhrzeit, ziehen: Termin verschieben' : ''"
         (click)="day.inPeriod && newAt(day.date, $event)"
       >
+        @if (day.date === today && nowTop() !== null) {
+          <div class="now-line" [style.top.px]="nowTop()" aria-hidden="true"></div>
+        }
         @for (window of day.windows; track $index) {
           <div class="window-band" [style.top.px]="windowBox(window).top" [style.height.px]="windowBox(window).height"></div>
         }

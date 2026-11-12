@@ -1,9 +1,12 @@
 import { Routes } from '@angular/router';
-import { Lessons } from './lessons/lessons';
 
-// „Stunden erfassen“ ist die Startseite; die übrigen Seiten werden erst beim ersten Aufruf geladen.
+// Alle Seiten werden erst beim ersten Aufruf geladen; wohin das Logo führt, legt jede Lehrkraft selbst fest.
 export const routes: Routes = [
-  { path: 'stunden', component: Lessons, title: 'Stunden erfassen' },
+  {
+    path: 'stunden',
+    loadComponent: () => import('./lessons/lessons').then((m) => m.Lessons),
+    title: 'Stunden erfassen',
+  },
   {
     path: 'personen',
     loadComponent: () => import('./people/people-page').then((m) => m.PeoplePage),

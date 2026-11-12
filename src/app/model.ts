@@ -368,6 +368,8 @@ export interface Teacher {
    * (`FeedbackConfig.themeColor`). Andere Lehrkräfte beeinflusst sie nicht.
    */
   themeColor?: string;
+  /** Wohin das Logo oben links führt (Pfad einer Seite aus `HOME_PAGES`); fehlt es, zum Kalender */
+  homePage?: string;
   /** Standard-Unterrichtszeiten für Berichtszeiträume ohne eigene (`periodWindows`) */
   teachingWindows: TeachingWindow[];
   /** Eigene Unterrichtszeiten je Berichtszeitraum (Schlüssel: ID des Zeitraums) */
@@ -448,6 +450,22 @@ export function teacherOf(student: Student, config: FeedbackConfig, periodId: st
 /** In Zeiträumen, in denen sie nicht eingetragen ist, ist die Person inaktiv. */
 export function isActiveIn(student: Student, periodId: string): boolean {
   return Object.hasOwn(student.periods, periodId);
+}
+
+/** Seiten, zu denen das Logo oben links führen kann, in der Reihenfolge der Auswahl */
+export const HOME_PAGES = [
+  { path: 'kalender', label: 'Kalender' },
+  { path: 'stunden', label: 'Stunden erfassen' },
+  { path: 'personen', label: 'Personen' },
+  { path: 'gruppen', label: 'Gruppenplanung' },
+  { path: 'konfiguration', label: 'Konfiguration' },
+  { path: 'export', label: 'Export & Sicherung' },
+  { path: 'hilfe', label: 'Hilfe' },
+] as const;
+
+/** Ziel des Logos für die Lehrkraft, z. B. „/kalender“ */
+export function homeLinkOf(teacher: Teacher): string {
+  return '/' + (HOME_PAGES.find((page) => page.path === teacher.homePage)?.path ?? 'kalender');
 }
 
 export interface FeedbackConfig {

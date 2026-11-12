@@ -29,6 +29,8 @@ import { ReportPeriod } from '../report-period';
 import { safeFileName, saveFile } from '../save-file';
 import { sortedLessons, StudentsStore } from '../students.store';
 import { TeacherFilter } from '../teacher-filter';
+import { oneColumn } from '../viewport';
+import { FitViewport } from '../fit-viewport';
 
 /** Statusfilter der Personenliste; leer zeigt alle. */
 type StatusFilter = '' | 'today' | 'noWeekly' | 'noLessonInPeriod';
@@ -40,7 +42,7 @@ type StatusFilter = '' | 'today' | 'noWeekly' | 'noLessonInPeriod';
  */
 @Component({
   selector: 'app-people-page',
-  imports: [RouterLink, StudentImportPanel, InstrumentSelect],
+  imports: [RouterLink, StudentImportPanel, InstrumentSelect, FitViewport],
   templateUrl: './people-page.html',
   styleUrls: ['../lessons/lessons.scss', './people-page.scss'],
 })
@@ -209,6 +211,22 @@ export class PeoplePage {
   }
 
   /** Zur Erfassung der Stunden dieser Person */
+  /**
+   * Schmale Bildschirme: Liste oder Bearbeiten, nicht beides untereinander – sonst steht die gewählte Person
+   * unter der ganzen Liste, und man sieht nicht, dass sich etwas getan hat.
+   */
+  protected readonly oneColumn = oneColumn(PEOPLE_ONE_COLUMN_PX);
+
+  protected choose(student: Student): void {
+    this.store.selectStudent(student.id);
+    if (this.oneColumn()) window.scrollTo({ top: 0 });
+  }
+
+  protected backToList(): void {
+    this.store.selectStudent(null);
+    window.scrollTo({ top: 0 });
+  }
+
   protected openLessons(student: Student): void {
     this.store.selectStudent(student.id);
     this.router.navigate(['/stunden']);
@@ -367,3 +385,6 @@ export class PeoplePage {
     return (student) => withAppointment.has(student.id);
   }
 }
+
+/** Wie in people-page.scss: Bis zu dieser Breite stehen Liste und Bearbeiten untereinander. */
+const PEOPLE_ONE_COLUMN_PX = 760;

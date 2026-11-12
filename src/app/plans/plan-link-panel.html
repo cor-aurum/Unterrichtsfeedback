@@ -16,6 +16,9 @@
     @if (link.url) {
       <div class="row link">
         <input type="text" readonly [value]="link.url" (focus)="selectAll($event)" aria-label="Download-Link" />
+        @if (canShare) {
+          <button class="secondary" (click)="shareLink(link.url)">Teilen …</button>
+        }
         <button class="secondary" (click)="copy(link.url)">Kopieren</button>
         <a [href]="link.url" target="_blank" rel="noopener noreferrer">Seite öffnen</a>
       </div>

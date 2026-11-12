@@ -60,6 +60,16 @@
             </button>
           </div>
 
+          <label class="home-page" for="config-home-page">
+            <strong>Das Logo oben links führt zu</strong>
+            <span class="muted small">(nur für {{ activeTeacher.teacher().name }})</span>
+          </label>
+          <select id="config-home-page" (change)="setHomePage(valueOf($event))">
+            @for (page of homePages; track page.path) {
+              <option [value]="page.path" [selected]="'/' + page.path === homeLink()">{{ page.label }}</option>
+            }
+          </select>
+
           <label class="show-title">
             <input
               type="checkbox"

@@ -4,6 +4,10 @@ import { StudentLabelPipe } from '../student-label.pipe';
 import { RouterLink } from '@angular/router';
 import { CalendarStore } from '../calendar/calendar.store';
 import { lessonStartAt } from '../calendar/lesson-start';
+import { LessonOpener } from '../calendar/lesson-opener';
+import { minutesOf, startMinutes } from '../calendar/appointments';
+import { oneColumn } from '../viewport';
+import { FitViewport } from '../fit-viewport';
 import { Clock } from '../calendar/clock';
 import { QuickStart } from '../calendar/quick-start';
 import { GroupList } from '../groups/group-list';
@@ -35,7 +39,7 @@ import { sortedLessons, StudentsStore } from '../students.store';
 
 @Component({
   selector: 'app-lessons',
-  imports: [RouterLink, QuickStart, GroupList, GroupPanel, StudentLabelPipe],
+  imports: [RouterLink, QuickStart, GroupList, GroupPanel, StudentLabelPipe, FitViewport],
   templateUrl: './lessons.html',
   styleUrl: './lessons.scss',
 })
@@ -69,7 +73,91 @@ export class Lessons {
     return student ? sortedLessons(student).reverse() : [];
   });
 
-  protected readonly teachers = inject(ActiveTeacher).visibleTeachers;
+  private readonly activeTeacher = inject(ActiveTeacher);
+  protected readonly teachers = this.activeTeacher.visibleTeachers;
+  private readonly opener = inject(LessonOpener);
+
+  /**
+   * Handy und schmale Fenster: Statt Liste, Stunden und Stunde untereinander zeigt die Seite eine Ebene nach der
+   * anderen, mit „Zurück“ darüber.
+   */
+  protected readonly oneColumn = oneColumn();
+  protected readonly level = computed<'list' | 'group' | 'lessons' | 'lesson'>(() => {
+    if (this.groups.selectedGroup()) return 'group';
+    if (this.store.selectedStudent()) return this.store.selectedLesson() ? 'lesson' : 'lessons';
+    return 'list';
+  });
+  /** Abschnitte der Stunde, die auf dem Handy zugeklappt sind */
+  protected readonly collapsed = signal<ReadonlySet<string>>(new Set());
+
+  protected shows(part: 'list' | 'lessons' | 'lesson'): boolean {
+    return !this.oneColumn() || this.level() === part;
+  }
+
+  protected readonly backLabel = computed(() => {
+    const level = this.level();
+    if (level === 'lesson') return `Stunden von ${this.store.selectedStudent()?.name ?? ''}`;
+    if (level === 'group' && this.groups.selectedLesson()) return 'Gruppenstunden';
+    return 'Alle Personen und Gruppen';
+  });
+
+  /** Person antippen: auf dem Handy erst ihre Stunden, nicht gleich die neueste Stunde */
+  protected choose(student: Student): void {
+    this.store.selectStudent(student.id);
+    if (this.oneColumn()) {
+      this.store.selectedLessonId.set(null);
+      scrollToTop();
+    }
+  }
+
+  /** Eine Ebene zurück: von der Stunde zu den Stunden, von dort zur Liste */
+  protected back(): void {
+    const level = this.level();
+    if (level === 'lesson') {
+      this.store.selectedLessonId.set(null);
+    } else if (level === 'group' && this.groups.selectedLesson()) {
+      this.groups.selectedLessonId.set(null);
+    } else {
+      this.groups.select(null);
+      this.store.selectStudent(null);
+    }
+    scrollToTop();
+  }
+
+  protected toggleSection(sectionId: string): void {
+    if (!this.oneColumn()) return;
+    this.collapsed.update((ids) => {
+      const next = new Set(ids);
+      if (!next.delete(sectionId)) next.add(sectionId);
+      return next;
+    });
+  }
+
+  /**
+   * Der nächste heutige Termin im Kalender der aktiven Lehrkraft nach der offenen Stunde (oder nach jetzt), außer
+   * dem derselben Person oder Gruppe – für „Weiter“ auf dem Handy.
+   */
+  protected readonly nextUp = computed(() => {
+    const date = today();
+    const lesson = this.groups.selectedLesson() ?? this.store.selectedLesson();
+    if (!lesson || !this.reportPeriod.contains(date)) return null;
+    const ownerId = this.groups.selectedGroupId() ?? this.store.selectedStudentId();
+    const now = this.clock.now();
+    const after = lesson.date === date && lesson.start ? minutesOf(lesson.start) : now.getHours() * 60 + now.getMinutes();
+    const inCalendar = this.groups.calendarFilter(this.activeTeacher.teacher());
+    const next = this.calendar
+      .occurrences(date, date, inCalendar)
+      .filter(({ appointment }) => (appointment.groupId ?? appointment.studentId) !== ownerId && startMinutes(appointment) > after)
+      .sort((a, b) => startMinutes(a.appointment) - startMinutes(b.appointment))[0];
+    if (!next) return null;
+    const owner = next.appointment.groupId ?? next.appointment.studentId ?? '';
+    return { appointment: next.appointment, label: `${next.appointment.start} ${this.groups.ownerNames().get(owner) ?? ''}` };
+  });
+
+  protected goNext(): void {
+    const next = this.nextUp();
+    if (next && this.opener.open(next.appointment, today())) scrollToTop();
+  }
 
   constructor() {
     // Der Hinweis gehört zur Person, bei der er entstanden ist.
@@ -241,4 +329,8 @@ export class Lessons {
     const texts = Object.values(lesson.texts).filter((text) => text.trim()).length;
     return checked + texts;
   }
+}
+
+function scrollToTop(): void {
+  window.scrollTo({ top: 0 });
 }

@@ -1,4 +1,8 @@
+@if (oneColumn() && store.selectedStudent()) {
+  <button class="back-bar" (click)="backToList()">← Alle Personen</button>
+} @else {
 <h1>Personen</h1>
+}
 
 @if (importOpen()) {
   <app-student-import-panel (closed)="closeImport($event)" />
@@ -7,7 +11,7 @@
   <p class="message import-message">{{ text }}</p>
 }
 
-@if (merger.duplicates().length > 0) {
+@if (merger.duplicates().length > 0 && !(oneColumn() && store.selectedStudent())) {
   <section class="card duplicates">
     <h2>Mögliche doppelte Personen</h2>
     <p class="muted small">
@@ -31,7 +35,8 @@
 }
 
 <div class="people-layout">
-  <div class="column">
+  @if (!oneColumn() || !store.selectedStudent()) {
+  <div class="column" appFitViewport>
     <section class="card">
       <div class="person-filter">
         <input
@@ -97,7 +102,7 @@
       </div>
       <ul class="list">
         @for (student of visibleStudents(); track student.id) {
-          <li [class.selected]="student.id === store.selectedStudentId()" (click)="store.selectStudent(student.id)">
+          <li [class.selected]="student.id === store.selectedStudentId()" (click)="choose(student)">
             <span class="grow">
               {{ student.name }}
               <span class="instrument">
@@ -161,6 +166,7 @@
       </div>
     </section>
   </div>
+  }
 
   @if (store.selectedStudent(); as student) {
     <section class="card person-detail">
@@ -267,7 +273,7 @@
         <button class="danger" (click)="removeStudent(student)">Person löschen</button>
       </div>
     </section>
-  } @else {
+  } @else if (!oneColumn()) {
     <section class="card placeholder muted">Person auswählen oder neu anlegen.</section>
   }
 </div>

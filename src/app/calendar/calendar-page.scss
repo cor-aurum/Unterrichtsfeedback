@@ -343,10 +343,10 @@
       order: 1;
     }
 
-    /* füllt die Zeile neben ‹ und ›, damit „Heute“ und der Sprung darunter stehen */
+    /* füllt die Zeile neben ‹ und › (je 44 px breit), damit „Heute“ und der Sprung darunter stehen */
     strong.grow {
       order: 2;
-      flex: 1 1 calc(100% - 6rem);
+      flex: 1 1 calc(100% - 7.5rem);
       min-width: 0;
       text-align: center;
     }
@@ -516,5 +516,36 @@
   .detail {
     font-size: 0.7rem;
     color: var(--muted);
+  }
+}
+
+/* Handy: ‹ Tag › bleibt beim Scrollen oben stehen. */
+.week-nav.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 0.4rem 0;
+  background: var(--bg);
+}
+
+.legend-toggle {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+
+  summary {
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .legend {
+    margin-top: 0.4rem;
+  }
+}
+
+/* Handy: Überschrift und die beiden Menüs in einer Zeile; ein langer Name bricht um. */
+@media (max-width: 700px) {
+  .head h1 {
+    flex: 1 1 0;
+    overflow-wrap: anywhere;
   }
 }

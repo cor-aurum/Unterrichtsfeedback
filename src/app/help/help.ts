@@ -22,7 +22,7 @@ export class Help {
   protected startDemo(): void {
     const teacher = this.activeTeacher.teacher();
     const name = teacher.name.trim() && teacher.name !== 'Lehrkraft' ? teacher.name : 'Du';
-    void startDemo({ name, instrument: teacherInstrument(teacher, this.config()).name });
+    void startDemo({ teacherId: teacher.id, name, instrument: teacherInstrument(teacher, this.config()).name });
   }
 
   protected endDemo(): void {

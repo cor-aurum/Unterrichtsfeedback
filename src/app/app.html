@@ -3,7 +3,7 @@
   <app-student-planning-page />
 } @else {
 <header class="topbar" (keydown.escape)="menuOpen.set(false)">
-  <a class="brand" routerLink="/kalender">
+  <a class="brand" [routerLink]="homeLink()" title="Startseite (einstellbar unter Konfiguration → Allgemein)">
     <img class="logo" src="logo.png" alt="" />
     Unterrichtsfeedback
   </a>
@@ -121,3 +121,5 @@
   }
 </footer>
 }
+
+<app-share-sheet />

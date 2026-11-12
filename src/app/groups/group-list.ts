@@ -5,6 +5,7 @@ import { GroupsStore } from '../groups.store';
 import { Group, groupLabel, groupMembers, groupTeacherOf } from '../model';
 import { StudentsStore } from '../students.store';
 import { TeacherFilter } from '../teacher-filter';
+import { oneColumn } from '../viewport';
 
 /** Liste der Gruppen unter den Personen; neue Gruppen gehören zum aktiven Lehrer. */
 @Component({
@@ -14,6 +15,7 @@ import { TeacherFilter } from '../teacher-filter';
 })
 export class GroupList {
   protected readonly store = inject(GroupsStore);
+  private readonly oneColumn = oneColumn();
   private readonly students = inject(StudentsStore).students;
   private readonly config = inject(ConfigStore).config;
   private readonly activeTeacher = inject(ActiveTeacher);
@@ -38,6 +40,15 @@ export class GroupList {
 
   protected teacherName(group: Group): string {
     return groupTeacherOf(group, this.config()).name;
+  }
+
+  /** Auf dem Handy erst die Gruppe mit ihren Stunden, nicht gleich die neueste Stunde */
+  protected choose(group: Group): void {
+    this.store.select(group.id);
+    if (this.oneColumn()) {
+      this.store.selectedLessonId.set(null);
+      window.scrollTo({ top: 0 });
+    }
   }
 
   protected add(): void {
