@@ -263,8 +263,10 @@
     gap: 0.4rem;
   }
 
-    .period-windows {
+  /* min-width: 0, sonst macht die längste Option der Auswahl den Bereich breiter als den Zeitraum */
+  .period-windows {
     flex: 1 1 100%;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
@@ -277,10 +279,19 @@
       align-items: center;
       gap: 0.5rem;
     }
+
+    select {
+      max-width: 100%;
+    }
+
+    .shared-windows {
+      display: block;
+    }
   }
 
-.period-teachers {
+  .period-teachers {
     flex: 1 1 100%;
+    min-width: 0;
     padding-left: 1.6rem;
     font-size: 0.9rem;
 
@@ -315,6 +326,13 @@
 
     p {
       margin: 0.25rem 0 0;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .period-windows,
+    .period-teachers {
+      padding-left: 0;
     }
   }
 }
