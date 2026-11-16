@@ -43,6 +43,8 @@ type planContent struct {
 	People []planPerson `json:"people"`
 	// Selbsteintragung über den Link; fehlt, wenn sie nicht läuft
 	Booking *planBooking `json:"booking,omitempty"`
+	// Gruppenwahl über den Link; fehlt, wenn sie nicht läuft
+	GroupChoice *planGroupChoice `json:"groupChoice,omitempty"`
 }
 
 type planPerson struct {
@@ -55,6 +57,8 @@ type planPerson struct {
 	PDF string `json:"pdf"`
 	// Was die Person bei der Selbsteintragung wählen kann; fehlt, wenn sie nicht dabei ist
 	Booking *personBooking `json:"booking,omitempty"`
+	// Bei der Gruppenwahl: die Gruppe, in der die Person ist; leer, solange sie keine gewählt hat
+	Group string `json:"group,omitempty"`
 }
 
 type planDay struct {
@@ -271,6 +275,9 @@ func parsePlans(content []byte) (planContent, error) {
 	if err := checkBooking(plans); err != nil {
 		return plans, err
 	}
+	if err := checkGroupChoice(plans); err != nil {
+		return plans, err
+	}
 	return plans, nil
 }
 
@@ -434,6 +441,8 @@ type pageData struct {
 	// Selbsteintragung: die Seite zum Wählen und der Hinweis darauf auf der Seite der Person
 	Booking        *bookingView
 	BookingSummary *bookingSummary
+	// Gruppenwahl: auf der Seite der Person und auf der Seite zum Wählen
+	Choice *choiceView
 }
 
 // Script ist das einzige Skript der Seiten: Teilen und Kopieren des Links nach einer Anfrage.
@@ -566,6 +575,13 @@ var (
     <button class="button" name="antwort" value="ja">Annehmen</button>
     <button class="button secondary" name="antwort" value="nein">Ablehnen</button>
   </form>
+</section>
+{{end}}
+{{with .Choice}}
+<section class="tell">
+  <h2>Gruppe wählen</h2>
+  <p>{{with .CurrentName}}Deine Gruppe: <strong>{{.}}</strong>{{if $.Choice.Pending}} <span class="muted">(kommt gleich in deinen Plan)</span>{{end}}{{else}}Du hast noch keine Gruppe gewählt.{{end}}</p>
+  <p><a class="button" href="{{$.Base}}/{{$.Person.ID}}/gruppe">{{if .CurrentName}}Gruppe wechseln{{else}}Gruppe wählen{{end}}</a></p>
 </section>
 {{end}}
 {{with .BookingSummary}}

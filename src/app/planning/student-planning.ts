@@ -28,6 +28,8 @@ export interface PlanningScope {
   to: string;
   /** So viele Einzeltermine darf jede Person im Zeitraum höchstens haben (bereits eingetragene zählen mit). */
   maxPerStudent: number;
+  /** Zeiten mit eigenem Gruppenunterricht mit ⚠ markieren (wählbar bleiben sie so oder so); fehlt es, ja */
+  markGroupClashes?: boolean;
 }
 
 /** Eine laufende Schüler-Planung auf diesem Gerät; solange sie läuft, zeigt die App nur die Planung. */
@@ -216,8 +218,9 @@ export class StudentPlanning {
     const individual = this.otherIndividualLessonsOf(student, teacher, scope.from, scope.to);
     const groups = this.groupLessonsOf(student, scope.from, scope.to);
     const names = this.groupsStore.ownerNames();
+    const marks = scope.markGroupClashes !== false;
     const groupClash = (slot: FreeSlot) => {
-      const clash = clashOf(slot, groups, names);
+      const clash = marks ? clashOf(slot, groups, names) : undefined;
       return clash ? { groupClash: clash } : {};
     };
     const free = freeSlots.filter((slot) => fits(slot, ownDays, individual));
@@ -332,7 +335,7 @@ export class StudentPlanning {
             skipped.push(index);
             return;
           }
-          const group = clashOf(slot, inGroups, names);
+          const group = scope.markGroupClashes !== false ? clashOf(slot, inGroups, names) : undefined;
           if (group) clashes.push({ index, group });
         });
         if (skipped.length) skip.set(teacher.id, skipped);
@@ -526,5 +529,6 @@ function parseSession(data: unknown): PlanningSession | null {
     typeof s.maxPerStudent === 'number';
   if (!valid) return null;
   const { periodId, from, to, maxPerStudent } = s as PlanningSession;
-  return { teacherIds, periodId, from, to, maxPerStudent, pin: typeof s!.pin === 'string' ? s!.pin : '' };
+  const marks = s!.markGroupClashes === false ? { markGroupClashes: false } : {};
+  return { teacherIds, periodId, from, to, maxPerStudent, ...marks, pin: typeof s!.pin === 'string' ? s!.pin : '' };
 }

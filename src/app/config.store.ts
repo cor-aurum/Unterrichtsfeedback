@@ -26,6 +26,7 @@ import {
   HOME_PAGES,
   Period,
   ReportPeriodEntry,
+  GroupChoiceSettings,
   SelfBooking,
   schoolHalfYear,
   Section,
@@ -176,19 +177,29 @@ export class ConfigStore {
    * Entfernt auch seine eigenen Abschnitte, Inhalte und Varianten. Personen dieses Lehrers gehören danach zum ersten
    * Lehrer. Der letzte Lehrer bleibt immer erhalten.
    */
-  removeTeacher(teacherId: string): void {
+  /**
+   * Deaktiviert die Lehrkraft, statt sie zu löschen: Sie verschwindet aus allen Auswahllisten und aus
+   * Berichtszeiträumen, die noch nicht begonnen haben. In laufenden und vergangenen bleibt sie mit ihren Stunden,
+   * Personen und Inhalten. Die letzte aktive Lehrkraft bleibt aktiv.
+   */
+  deactivateTeacher(teacherId: string): boolean {
+    const active = this.config().teachers.filter((t) => !t.inactiveSince);
+    if (active.length <= 1 || !active.some((t) => t.id === teacherId)) return false;
+    const day = today();
     this.mutate((config) => {
-      if (config.teachers.length <= 1) return;
-      config.teachers = config.teachers.filter((t) => t.id !== teacherId);
-      config.reportPeriods.forEach((period) => (period.teacherIds = period.teacherIds.filter((id) => id !== teacherId)));
-      // Seine eigenen Abschnitte und Inhalte sieht sonst niemand.
-      const notHis = <T extends { ownerId?: string }>(list: T[]) => list.filter((entry) => entry.ownerId !== teacherId);
-      config.sections = notHis(config.sections);
-      config.groupSections = notHis(config.groupSections);
-      config.blocks = notHis(config.blocks);
-      config.groupBlocks = notHis(config.groupBlocks);
-      [...config.blocks, ...config.groupBlocks].forEach((block) => (block.variants = notHis(block.variants)));
+      const teacher = config.teachers.find((t) => t.id === teacherId);
+      if (!teacher) return;
+      teacher.inactiveSince = day;
+      config.reportPeriods
+        .filter((period) => period.from > day)
+        .forEach((period) => (period.teacherIds = period.teacherIds.filter((id) => id !== teacherId)));
     });
+    return true;
+  }
+
+  /** Wieder aktiv; in künftige Berichtszeiträume trägt man sie bei Bedarf unter „Allgemein“ wieder ein. */
+  reactivateTeacher(teacherId: string): void {
+    this.mutateTeacher(teacherId, (teacher) => delete teacher.inactiveSince);
   }
 
   /**
@@ -444,6 +455,16 @@ export class ConfigStore {
     this.mutate((config) => {
       const period = config.reportPeriods.find((p) => p.id === periodId);
       if (period) Object.assign(period, change);
+    });
+  }
+
+  /** Startet, ändert (`settings`) oder beendet (`null`) die Gruppenwahl durch die Personen selbst. */
+  setGroupChoice(periodId: string, settings: GroupChoiceSettings | null): void {
+    this.mutate((config) => {
+      const period = config.reportPeriods.find((p) => p.id === periodId);
+      if (!period) return;
+      if (settings) period.groupChoice = { groupIds: [...settings.groupIds] };
+      else delete period.groupChoice;
     });
   }
 
@@ -787,15 +808,23 @@ function parseReportPeriods(data: unknown, allTeacherIds: string[]): ReportPerio
       ...(Array.isArray(p.sharedWindows) ? { sharedWindows: parseTeachingWindows(p.sharedWindows) } : {}),
       ...(p.placeholder ? { placeholder: true } : {}),
       ...parseSelfBooking(p.selfBooking),
+      ...parseGroupChoice(p.groupChoice),
     }));
   return periods.length > 0 ? periods : [{ ...schoolHalfYear(today()), teacherIds: [...allTeacherIds], placeholder: true }];
+}
+
+function parseGroupChoice(data: unknown): { groupChoice?: GroupChoiceSettings } {
+  const ids = (data as Partial<GroupChoiceSettings> | null)?.groupIds;
+  if (!Array.isArray(ids)) return {};
+  return { groupChoice: { groupIds: ids.filter((id): id is string => typeof id === 'string') } };
 }
 
 function parseSelfBooking(data: unknown): { selfBooking?: SelfBooking } {
   const b = data as Partial<SelfBooking> | null | undefined;
   if (!b || !isPeriod({ from: b.from, to: b.to }) || !Array.isArray(b.teacherIds) || typeof b.maxPerStudent !== 'number') return {};
   const teacherIds = b.teacherIds.filter((id): id is string => typeof id === 'string');
-  return { selfBooking: { teacherIds, from: b.from!, to: b.to!, maxPerStudent: Math.max(0, Math.floor(b.maxPerStudent)) } };
+  const marks = b.markGroupClashes === false ? { markGroupClashes: false } : {};
+  return { selfBooking: { teacherIds, from: b.from!, to: b.to!, maxPerStudent: Math.max(0, Math.floor(b.maxPerStudent)), ...marks } };
 }
 
 export function isPeriod(data: Partial<Period> | null | undefined): data is Period {
@@ -849,6 +878,7 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       periodLocations: parsePeriodLocations(t.periodLocations),
       ...(isHexColor(t.themeColor) ? { themeColor: t.themeColor.toLowerCase() } : {}),
       ...(HOME_PAGES.some((page) => page.path === t.homePage) ? { homePage: t.homePage } : {}),
+      ...(typeof t.inactiveSince === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.inactiveSince) ? { inactiveSince: t.inactiveSince } : {}),
     }));
   }
   const legacyWindows = (config.calendar as { teachingWindows?: unknown } | undefined)?.teachingWindows;

@@ -146,8 +146,21 @@ export const serverApi = {
     return json(request(login.url, 'POST', '/api/invites', { token: login.token, body: JSON.stringify({ teacherId }) }));
   },
 
-  accounts(login: ServerLogin): Promise<{ teacherId: string; username: string }[]> {
+  accounts(login: ServerLogin): Promise<{ teacherId: string; username: string; disabled?: boolean }[]> {
     return json(request(login.url, 'GET', '/api/accounts', { token: login.token }));
+  },
+
+  /** Eigenes Passwort ändern; andere Geräte des Kontos werden abgemeldet, dieses nicht. */
+  async changePassword(login: ServerLogin, current: string, password: string): Promise<void> {
+    const body = JSON.stringify({ current, password });
+    await checked(await request(login.url, 'POST', '/api/password', { token: login.token, body }));
+  },
+
+  /** Konto einer deaktivierten Lehrkraft sperren oder wieder freigeben; 404, wenn sie keins hat. */
+  async setAccountDisabled(login: ServerLogin, teacherId: string, disabled: boolean): Promise<void> {
+    const body = JSON.stringify({ disabled });
+    const path = `/api/accounts/${encodeURIComponent(teacherId)}/disabled`;
+    await checked(await request(login.url, 'POST', path, { token: login.token, body }));
   },
 
   merges(login: ServerLogin): Promise<{ from: string; into: string }[]> {
@@ -236,6 +249,19 @@ export const serverApi = {
     return true;
   },
 
+  /** Offene Gruppenwahlen von der Download-Seite, die ältesten zuerst */
+  planGroupChoices(login: ServerLogin, periodId: string): Promise<PlanGroupChoice[]> {
+    return json(request(login.url, 'GET', `${planPath(periodId)}/group-choices`, { token: login.token }));
+  },
+
+  /** Meldet eine übernommene (`applied`) oder unmögliche (`failed`) Gruppenwahl; eine ersetzte (409) ist kein Fehler. */
+  async planGroupChoiceDone(login: ServerLogin, periodId: string, id: string, status: 'applied' | 'failed', note = ''): Promise<void> {
+    const body = JSON.stringify({ status, note });
+    const path = `${planPath(periodId)}/group-choices/${encodeURIComponent(id)}`;
+    const response = await request(login.url, 'POST', path, { token: login.token, body });
+    if (response.status !== 409) await checked(response);
+  },
+
   /** Wirft `ServerError` mit Status 404, wenn es für den Zeitraum keinen Link gibt. */
   async putPlan(login: ServerLogin, periodId: string, plans: string): Promise<void> {
     await checked(await request(login.url, 'PUT', planPath(periodId), { token: login.token, body: plans }));
@@ -267,6 +293,13 @@ export interface PlanBooking {
   minutes: number;
   /** Beim Austragen der Termin */
   slot: string;
+}
+
+/** Gruppenwahl auf der Download-Seite: Die Person will in diese Gruppe. */
+export interface PlanGroupChoice {
+  id: string;
+  person: string;
+  group: string;
 }
 
 export interface PlanLinkState {

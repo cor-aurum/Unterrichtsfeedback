@@ -1,6 +1,9 @@
 @if (planning.active()) {
   <!-- Planung durch Schüler:innen am Tablet: nur die Planung, ohne Menü und übrige App -->
   <app-student-planning-page />
+} @else if (groupChoice.tabletActive()) {
+  <!-- Gruppenwahl am Tablet: ebenso ohne Menü -->
+  <app-group-choice-page />
 } @else {
 <header class="topbar" (keydown.escape)="menuOpen.set(false)">
   <a class="brand" [routerLink]="homeLink()" title="Startseite (einstellbar unter Konfiguration → Allgemein)">

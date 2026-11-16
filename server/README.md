@@ -194,6 +194,23 @@ Geräts, das noch nicht abgeglichen hat, geben die Zeit also nicht frei. Austrag
 Pläne hält der Server zwischengespeichert, bis neue kommen. Je Zeitraum gibt es
 höchstens 5000 Eintragungen (auch zurückgenommene).
 
+### Gruppe wählen
+
+Läuft für den Zeitraum die Gruppenwahl (in der App unter Gruppenplanung), schickt die App mit den Plänen die Gruppen
+zur Wahl und je Person ihre Gruppe. Auf `…/<Person>/gruppe` wählt die Person genau eine; eine neue Wahl ersetzt eine
+noch offene ältere. Die App einer Lehrkraft holt offene Wahlen beim Abgleich ab (`GET /api/plans/{Zeitraum}/group-choices`),
+trägt die Person in die Gruppe ein (und aus den übrigen zur Wahl aus) und meldet `applied` oder `failed` mit Grund
+(`POST …/group-choices/{id}`; 409, wenn die Wahl inzwischen ersetzt ist). Bis die Pläne die Wahl zeigen, zeigt die
+Seite sie trotzdem (höchstens eine Stunde). Je Zeitraum gibt es höchstens 5000 Wahlen.
+
+## Konten
+
+Jede Lehrkraft ändert ihr Passwort in der App mit dem bisherigen (`POST /api/password`); andere Geräte des Kontos
+werden dabei abgemeldet. Wird eine Lehrkraft in der App deaktiviert, sperrt die App ihr Konto
+(`POST /api/accounts/{Lehrer-ID}/disabled`): Sie kann sich nicht mehr anmelden, ihre Geräte sind abgemeldet, ihre
+Daten bleiben. Sperren und freigeben darf, wer mit ihr in einem Berichtszeitraum ist oder war, nicht aber das eigene
+Konto. Ältere Datenbanken bekommen die Spalte für die Sperre beim Start von selbst.
+
 ## Sicherung
 
 Alle Daten stehen in der SQLite-Datei. Eine konsistente Kopie im laufenden Betrieb:
@@ -215,8 +232,10 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `POST /api/reset`         | Neues Passwort mit Reset-Code: `{code, password}` → wie oben           |
 | `POST /api/logout`        | Abmelden                                                               |
 | `GET /api/me`             | Eigenes Konto, Zahl der Berichtszeiträume, in denen man nicht eingetragen ist (`foreignPeriods`), und `conditionalWrites: true` (der Server kennt If-Match) |
-| `GET /api/accounts`       | Welche Lehrer schon ein Konto haben                                   |
+| `GET /api/accounts`       | Welche Lehrer schon ein Konto haben: `[{teacherId, username, disabled?}]` |
 | `POST /api/invites`       | Einladungscode für einen Lehrer ohne Konto: `{teacherId}` → `{code, expiresAt}` |
+| `POST /api/password`      | Eigenes Passwort ändern: `{current, password}`; andere Geräte werden abgemeldet |
+| `POST /api/accounts/{Lehrer-ID}/disabled` | Konto einer deaktivierten Lehrkraft sperren bzw. freigeben: `{disabled}`; `403` ohne gemeinsamen Zeitraum oder für sich selbst, `404` ohne Konto |
 | `GET /api/docs`           | Dokumente, die man sehen darf: `[{name, version}]`                     |
 | `GET/PUT/DELETE /api/docs/{name}` | Dokument lesen, schreiben, löschen. `PUT` mit `If-Match: <version>` (`0` für ein neues Dokument) schreibt nur, wenn das Dokument noch diese Version hat, sonst `412`; so überschreiben Tablets in der Schüler-Planung nicht gegenseitig ihre Eintragungen |
 | `GET /api/merges`         | Zusammengeführte Personen: `[{from, into}]`                            |
@@ -227,17 +246,20 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `POST/DELETE /api/feed/address` | Neue Abo-Adresse (die alte gilt nicht mehr) bzw. Abo beenden     |
 | `GET /api/kalender/{Schlüssel}.ics` | Der Kalender für die Kalender-App, ohne Anmeldung            |
 | `GET /api/plans/{Zeitraum}` | Download-Link des Zeitraums (nur seine Lehrkräfte): `{url, updatedAt, expiresAt}`; `url` leer ohne Link |
-| `PUT /api/plans/{Zeitraum}` | Pläne senden: `{title, dates, color, people: [{id, label, days, ics, pdf, booking?}], booking?}`; `404` ohne Link |
+| `PUT /api/plans/{Zeitraum}` | Pläne senden: `{title, dates, color, people: [{id, label, days, ics, pdf, booking?, group?}], booking?, groupChoice?}`; `404` ohne Link |
 | `POST /api/plans/{Zeitraum}/address` | Neuer Download-Link (der alte gilt nicht mehr)                 |
-| `DELETE /api/plans/{Zeitraum}` | Link, Pläne, Anfragen und Eintragungen löschen                    |
+| `DELETE /api/plans/{Zeitraum}` | Link, Pläne, Anfragen, Eintragungen und Gruppenwahlen löschen     |
 | `GET /api/plans/{Zeitraum}/requests` | Angenommene Anfragen zum Übernehmen: `[{id, kind, from, to, fromSlot, toSlot}]` |
 | `POST /api/plans/{Zeitraum}/requests/{id}` | Übernommen melden: `{status: "applied"\|"failed", note}`      |
 | `GET /api/plans/{Zeitraum}/bookings` | Offene Eintragungen zum Übernehmen: `[{id, kind, person, teacher, date, time, minutes, slot}]` |
 | `POST /api/plans/{Zeitraum}/bookings/{id}` | Übernehmen melden: `{status: "applied"\|"failed", note}`; `409`, wenn nicht mehr offen |
+| `GET /api/plans/{Zeitraum}/group-choices` | Offene Gruppenwahlen zum Übernehmen: `[{id, person, group}]` |
+| `POST /api/plans/{Zeitraum}/group-choices/{id}` | Übernommen melden: `{status: "applied"\|"failed", note}`; `409`, wenn ersetzt |
 | `GET /api/plan/{Schlüssel}[/{Person}[.pdf\|.ics]]` | Namensliste, Seite, PDF oder Kalender einer Person, ohne Anmeldung |
 | `GET /api/plan/{Schlüssel}/{Person}/tauschen\|dazukommen` | Termine anderer zum Tauschen bzw. Dazukommen        |
 | `POST /api/plan/{Schlüssel}/{Person}/anfragen\|antworten` | Anfrage stellen bzw. annehmen, ablehnen, zurückziehen (Formulare) |
 | `GET /api/plan/{Schlüssel}/{Person}/termine` | Freie Zeiten zum Wählen, eigene Termine und Eintragungen |
 | `POST /api/plan/{Schlüssel}/{Person}/eintragen\|austragen` | Zeit wählen bzw. Eintragung zurücknehmen oder Termin austragen (Formulare) |
+| `GET/POST /api/plan/{Schlüssel}/{Person}/gruppe` | Gruppen zur Wahl bzw. eine wählen (Formular)           |
 
 Angemeldet wird mit `Authorization: Bearer <token>`. Fehler kommen als `{error: "…"}` mit einem Text für die App.

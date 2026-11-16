@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 import { ActiveTeacher } from '../active-teacher';
 import { BackupService } from '../backup';
 import { Connected, ServerLoginPanel } from '../sync/server-login-panel';
+import { PasswordChange } from '../sync/password-change';
+import { TeacherHoursPanel } from '../reports/teacher-hours-panel';
 import { ServerSync } from '../sync/server-sync';
 import { GENERAL_FILE, SHARED_FILE } from '../sync/sync-files';
 import { ConfigStore } from '../config.store';
@@ -20,7 +22,7 @@ type Scope = 'all' | 'single';
 
 @Component({
   selector: 'app-export-page',
-  imports: [RouterLink, StudentLabelPipe, ServerLoginPanel],
+  imports: [RouterLink, StudentLabelPipe, ServerLoginPanel, PasswordChange, TeacherHoursPanel],
   templateUrl: './export-page.html',
   styleUrl: './export-page.scss',
 })

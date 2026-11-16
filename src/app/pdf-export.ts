@@ -15,6 +15,7 @@ import {
   groupLabel,
   ImageAlign,
   instrumentOf,
+  isAutoLesson,
   Lesson,
   locationIn,
   logoSize,
@@ -150,12 +151,25 @@ export class PdfExport {
    * Terminliste ohne Einzelunterricht: Gruppentermine und allgemeine Termine aller Lehrer, Tag für Tag. Jeder
    * Eintrag nennt seinen Raum (siehe `ScheduleEntry.name`).
    */
-  async exportAppointmentList(config: FeedbackConfig, days: ScheduleDay[], range: SchedulePeriod, action: 'open' | 'share'): Promise<void> {
+  /**
+   * Gruppen- und allgemeine Termine ohne Einzelunterricht. Mit `periodName` steht der Name des Berichtszeitraums als
+   * Überschrift darüber und die konfigurierte Überschrift der Liste vor den Daten.
+   */
+  async exportAppointmentList(
+    config: FeedbackConfig,
+    days: ScheduleDay[],
+    range: SchedulePeriod,
+    action: 'open' | 'share',
+    periodName?: string,
+  ): Promise<void> {
     config = this.personal(config);
-    const list = await listDocument(config, config.calendarPdf.eventListTitle, range);
+    const listTitle = config.calendarPdf.eventListTitle;
+    const title = periodName?.trim() || listTitle;
+    const label = title === listTitle ? range.label : [listTitle, range.label].filter((part) => part.trim()).join(' · ');
+    const list = await listDocument(config, title, { ...range, label });
     writeScheduleDays(list, days, true, () => undefined);
     list.writer.addFooters();
-    await deliver(`Termine_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
+    await deliver(`Termine_${safeFileName(title)}_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
   }
 
   /**
@@ -524,7 +538,10 @@ function writeStudent(writer: PdfWriter, recipient: Recipient): void {
     writeParagraphs(writer, paragraphsOf(recipient, lessons[0]), { indent: 0, rail: false });
     writer.gap(8, false);
   } else {
-    lessons.forEach((lesson) => writeTimelineEntry(writer, recipient, lesson));
+    // Von selbst begonnene Stunden ohne Notizen zählen mit (Kopfzeile), erscheinen aber nicht als leere Einträge.
+    lessons
+      .filter((lesson) => !isAutoLesson(lesson.id) || paragraphsOf(recipient, lesson).length > 0)
+      .forEach((lesson) => writeTimelineEntry(writer, recipient, lesson));
   }
 
   writeFixedBlocks(writer, recipient, 'end');

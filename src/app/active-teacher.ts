@@ -1,6 +1,6 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { ConfigStore } from './config.store';
-import { Student, Teacher } from './model';
+import { isActiveTeacher, Student, Teacher } from './model';
 import { storedSignal } from './stored-signal';
 import { StudentsStore } from './students.store';
 import { ServerSync } from './sync/server-sync';
@@ -24,10 +24,11 @@ export class ActiveTeacher {
    */
   readonly visibleTeachers = computed<Teacher[]>(() => {
     const config = this.config();
+    const active = config.teachers.filter(isActiveTeacher);
     const me = this.login()?.teacherId;
-    if (!me) return config.teachers;
+    if (!me) return active;
     const shared = new Set([me, ...config.reportPeriods.filter((p) => p.teacherIds.includes(me)).flatMap((p) => p.teacherIds)]);
-    return config.teachers.filter((teacher) => shared.has(teacher.id));
+    return active.filter((teacher) => shared.has(teacher.id));
   });
 
   /** Farbe der aktiven Lehrkraft, sonst die allgemeine */
@@ -48,7 +49,10 @@ export class ActiveTeacher {
    */
   readonly teacher = computed<Teacher>(() => {
     const id = this.login()?.teacherId ?? this.selectedId();
-    return this.config().teachers.find((t) => t.id === id) ?? this.config().teachers[0];
+    const teachers = this.config().teachers;
+    // Ohne Server gilt eine deaktivierte Lehrkraft nicht mehr als gewählt.
+    const chosen = teachers.find((t) => t.id === id && (this.login() || isActiveTeacher(t)));
+    return chosen ?? teachers.find(isActiveTeacher) ?? teachers[0];
   });
 
   /** Mit Server ohne Wirkung; nach dem Abmelden gilt wieder die eigene Wahl. */

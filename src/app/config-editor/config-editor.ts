@@ -27,6 +27,8 @@ import {
   TimeWindow,
   HOME_PAGES,
   homeLinkOf,
+  isActiveTeacher,
+  formatShortDate,
 } from '../model';
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
@@ -36,7 +38,7 @@ import { PlanLinkPanel } from '../plans/plan-link-panel';
 import { realServerLogin } from '../plans/plan-access';
 import { labelOf, ReportPeriod } from '../report-period';
 import { demoMode, storedSignal } from '../stored-signal';
-import { serverApi } from '../sync/server-folder';
+import { ServerError, serverApi } from '../sync/server-folder';
 import { ServerSync } from '../sync/server-sync';
 import { DEFAULT_THEME_COLOR, isHexColor } from '../theme';
 
@@ -255,9 +257,60 @@ export class ConfigEditor {
     }
   }
 
-  protected removeTeacher(teacher: Teacher): void {
-    if (confirm(`Lehrkraft „${teacher.name}“ löschen? Ihre Personen und deren Termine gehören danach zur ersten Lehrkraft.`)) {
-      this.store.removeTeacher(teacher.id);
+  /** Die aktiven Lehrkräfte des oben gewählten Berichtszeitraums, in seiner Reihenfolge */
+  protected readonly periodTeacherList = computed(() => {
+    const period = this.store.config().reportPeriods.find((p) => p.id === this.windowsPeriodId());
+    const teachers = this.activeTeacher.visibleTeachers().filter((t) => period?.teacherIds.includes(t.id));
+    return period ? byPeriodOrder(teachers, period.teacherIds) : teachers;
+  });
+  /** Sichtbare aktive Lehrkräfte, die nicht im gewählten Zeitraum sind */
+  protected readonly otherTeacherCount = computed(
+    () => this.activeTeacher.visibleTeachers().length - this.periodTeacherList().length,
+  );
+  protected readonly inactiveTeachers = computed(() => this.store.config().teachers.filter((t) => !isActiveTeacher(t)));
+  protected readonly formatShortDate = formatShortDate;
+
+  /** Nicht die letzte aktive Lehrkraft und mit Server nicht man selbst */
+  protected canDeactivate(teacher: Teacher): boolean {
+    const active = this.store.config().teachers.filter(isActiveTeacher).length;
+    return active > 1 && teacher.id !== this.sync.login()?.teacherId;
+  }
+
+  protected deactivateTitle(teacher: Teacher): string {
+    if (teacher.id === this.sync.login()?.teacherId) return 'Dich selbst kannst du nicht deaktivieren';
+    return this.canDeactivate(teacher) ? 'Lehrkraft deaktivieren (statt löschen)' : 'Mindestens eine Lehrkraft wird gebraucht';
+  }
+
+  /**
+   * Deaktivieren statt löschen: Stunden, Personen und Termine bleiben ihr zugeordnet, damit nachvollziehbar bleibt,
+   * wer wann unterrichtet hat. Mit Server wird zuerst ihr Konto gesperrt.
+   */
+  protected async deactivateTeacher(teacher: Teacher): Promise<void> {
+    const text =
+      `Lehrkraft „${teacher.name}“ deaktivieren? Sie steht danach in keiner Auswahl mehr und wird aus Berichtszeiträumen ` +
+      'genommen, die noch nicht begonnen haben; in laufenden und vergangenen bleibt sie mit ihren Stunden. Ihre ' +
+      'Personen behalten sie als Lehrkraft, bis du sie unter „Personen“ einer anderen zuordnest.' +
+      (this.accounts().has(teacher.id) ? ' Ihr Konto auf dem Server wird gesperrt.' : '');
+    if (!confirm(text)) return;
+    if (await this.setAccountDisabled(teacher, true)) this.store.deactivateTeacher(teacher.id);
+  }
+
+  protected async reactivateTeacher(teacher: Teacher): Promise<void> {
+    if (await this.setAccountDisabled(teacher, false)) this.store.reactivateTeacher(teacher.id);
+  }
+
+  /** Sperrt das Konto auf dem Server oder gibt es frei; ohne Konto oder ohne Server gibt es nichts zu tun. */
+  private async setAccountDisabled(teacher: Teacher, disabled: boolean): Promise<boolean> {
+    const login = this.sync.login();
+    if (!login) return true;
+    try {
+      await serverApi.setAccountDisabled(login, teacher.id, disabled);
+      void this.loadAccounts();
+      return true;
+    } catch (e) {
+      if (e instanceof ServerError && e.status === 404) return true;
+      this.showError(`Das Konto von ${teacher.name} ließ sich nicht ${disabled ? 'sperren' : 'freigeben'}: ${e instanceof Error ? e.message : e}`);
+      return false;
     }
   }
 

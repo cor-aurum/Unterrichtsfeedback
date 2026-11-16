@@ -9,6 +9,7 @@ import { StudentLabelPipe } from '../student-label.pipe';
 import { StudentsStore } from '../students.store';
 import { TeacherFilter } from '../teacher-filter';
 import { AgeChart, ChartGroup } from './age-chart';
+import { GroupChoiceSettings } from './group-choice-settings';
 import { ageOn, ageStats, formatAge, instrumentCounts, planAgeGroups, planByAge } from './age-groups';
 
 /** Mögliche Anzahl Gruppen bei der automatischen Einteilung */
@@ -35,7 +36,7 @@ interface BulkOption {
  */
 @Component({
   selector: 'app-group-planning-page',
-  imports: [RouterLink, AgeChart, StudentLabelPipe],
+  imports: [RouterLink, AgeChart, StudentLabelPipe, GroupChoiceSettings],
   templateUrl: './group-planning-page.html',
   styleUrl: './group-planning-page.scss',
 })

@@ -33,6 +33,11 @@ const MEALS: [string, string, number][] = [
 ];
 /** Gruppenunterricht jeder Lehrkraft mit allen ihren Personen, jeden Tag direkt nach dem Frühstück */
 const GROUP_LESSON: [string, number] = ['08:30', 60];
+/** Die drei Leistungsgruppen proben jeden Vormittag, jede bei ihrer Lehrkraft. */
+const LEVEL_LESSON: [string, number] = ['10:00', 90];
+const LEVEL_NAMES = ['Leistungsgruppe 1', 'Leistungsgruppe 2', 'Leistungsgruppe 3'];
+/** Plenumsprobe mit allen nach dem Abendessen; die drei Lehrkräfte der Leistungsgruppen leiten sie reihum. */
+const PLENUM_LESSON: [string, number] = ['19:00', 90];
 const OTHER_TEACHERS: [string, string][] = [
   ['Clara Brandt', 'Klavier'],
   ['Jonas Feld', 'Gitarre'],
@@ -49,7 +54,8 @@ const LAST_NAMES = ['Becker', 'Hartmann', 'Keller', 'Lorenz', 'Möller', 'Neuman
  * Startet den Demomodus mit frischen Beispieldaten und der eigenen Konfiguration (Abschnitte, Inhalte, Texte,
  * PDF-Layout, Farben, Kalender-Einstellungen): ein einwöchiger Lehrgang ab heute in einer Woche, fünf
  * Lehrkräfte (darunter man selbst), 40 Personen ohne Einzeltermine bei zwei von ihnen, die Mahlzeiten als allgemeine
- * Termine und je Lehrkraft ihre automatische Gruppe mit einem täglichen Termin nach dem Frühstück. Die echten Daten bleiben unberührt; die App lädt neu.
+ * Termine, je Lehrkraft ihre automatische Gruppe mit einem täglichen Termin nach dem Frühstück, drei Leistungsgruppen
+ * am Vormittag und abends ein Plenum mit allen, das die drei Lehrkräfte der Leistungsgruppen reihum leiten. Die echten Daten bleiben unberührt; die App lädt neu.
  */
 export async function startDemo(self: DemoSelf): Promise<void> {
   // Ein Demo-Link von einer früheren Demo, die nicht über „Demo beenden“ verlassen wurde
@@ -198,12 +204,15 @@ function demoData(self: DemoSelf): Record<string, unknown> {
     durationMinutes: groupMinutes,
     repeat: { everyDays: 1, count: 7 },
   }));
+  // Man selbst und zwei der anderen leiten tagsüber je eine Leistungsgruppe und abends reihum das Plenum.
+  const leaders = [me, teachers[2], teachers[3]];
+  const ensemble = ensembleData(students, leaders, from);
   return {
     'feedback.config': demoConfig,
     'feedback.setupPending': false,
     'feedback.students': students,
-    'feedback.groups': groups,
-    'feedback.appointments': appointments,
+    'feedback.groups': [...groups, ...ensemble.groups],
+    'feedback.appointments': [...appointments, ...ensemble.appointments],
     'feedback.blockers': [],
     'feedback.sharedAppointments': sharedAppointments,
     'feedback.activeTeacher': me.id,
@@ -212,6 +221,50 @@ function demoData(self: DemoSelf): Record<string, unknown> {
 }
 
 /** Die eigenen Instrumente (Varianten von Inhalten hängen an ihnen) und dazu die übrigen der Demo */
+/**
+ * Drei Leistungsgruppen, jede bei einer der Lehrkräfte, mit täglicher Probe am Vormittag, und ein Plenum mit allen
+ * Personen, das jeden Abend nach dem Abendessen probt. Das Plenum leiten die drei reihum: Jeder Abend ist ein eigener
+ * Termin im Kalender der Lehrkraft, die an der Reihe ist. Mangels Leistungsdaten teilt die Demo nach Alter ein, die
+ * jüngsten in Gruppe 1.
+ */
+function ensembleData(students: Student[], leaders: Teacher[], from: string): { groups: Group[]; appointments: Appointment[] } {
+  const byAge = [...students].sort((a, b) => (b.birthDate ?? '').localeCompare(a.birthDate ?? ''));
+  const size = Math.ceil(byAge.length / LEVEL_NAMES.length);
+  const group = (id: string, name: string, teacher: Teacher, memberIds: string[]): Group => ({
+    id,
+    name,
+    memberIds,
+    teacherId: teacher.id,
+    periodId: PERIOD_ID,
+    lessons: [],
+    generalTexts: {},
+  });
+  const levels = LEVEL_NAMES.map((name, i) =>
+    group(`demo-leistungsgruppe-${i + 1}`, name, leaders[i], byAge.slice(i * size, (i + 1) * size).map((s) => s.id)),
+  );
+  const plenum = group('demo-plenum', 'Plenum', leaders[0], students.map((s) => s.id));
+  const [levelStart, levelMinutes] = LEVEL_LESSON;
+  const [plenumStart, plenumMinutes] = PLENUM_LESSON;
+  const levelAppointments: Appointment[] = levels.map((level, i) => ({
+    id: `demo-leistungsprobe-${i + 1}`,
+    groupId: level.id,
+    date: from,
+    start: levelStart,
+    durationMinutes: levelMinutes,
+    repeat: { everyDays: 1, count: 7 },
+  }));
+  const plenumAppointments: Appointment[] = Array.from({ length: 7 }, (_, day) => ({
+    id: `demo-plenumsprobe-${day + 1}`,
+    groupId: plenum.id,
+    date: addDays(from, day),
+    start: plenumStart,
+    durationMinutes: plenumMinutes,
+    // Ausnahme: steht im Kalender der Lehrkraft, die an diesem Abend dran ist
+    teacherId: leaders[day % leaders.length].id,
+  }));
+  return { groups: [...levels, plenum], appointments: [...levelAppointments, ...plenumAppointments] };
+}
+
 function instrumentsFor(own: Instrument[], names: string[]): Instrument[] {
   const missing = [...new Set(names)].filter((name) => !own.some((i) => sameName(i.name, name)));
   return [...own, ...missing.map((name, i) => ({ id: `demo-instrument-${i + 1}`, name }))];

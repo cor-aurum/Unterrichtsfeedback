@@ -203,6 +203,10 @@ func (s *Server) renderPerson(w http.ResponseWriter, r *http.Request, plans plan
 	if booking {
 		data.BookingSummary = desk.summary()
 	}
+	if data.Choice, err = s.choiceFor(r, plans, link, person); err != nil {
+		internal(w, err)
+		return
+	}
 	renderPage(w, http.StatusOK, personPage, data)
 }
 

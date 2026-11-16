@@ -43,7 +43,9 @@
       Der Demomodus zeigt die App mit Beispieldaten: einen Lehrgang über eine Woche, der heute in einer Woche beginnt,
       mit fünf Lehrkräften (darunter du), 40 Personen ohne Einzeltermine bei zwei davon, Frühstück, Mittag- und
       Abendessen als allgemeinen Terminen, je Lehrkraft ihrer automatischen Gruppe mit einem täglichen Termin direkt
-      nach dem Frühstück und Unterrichtszeiten vormittags, nachmittags und abends. Abschnitte, Inhalte, Texte,
+      nach dem Frühstück, drei Leistungsgruppen, die du und zwei Kolleg:innen jeden Vormittag leiten (eingeteilt nach
+      Alter), einer Plenumsprobe mit allen jeden Abend nach dem Abendessen, die ihr drei reihum leitet, und
+      Unterrichtszeiten vormittags, nachmittags und abends. Abschnitte, Inhalte, Texte,
       PDF-Layout, Farben und Kalender-Einstellungen übernimmt die Demo aus deiner Konfiguration; was du in der Demo
       daran änderst, gilt nur dort. Deine echten Daten bleiben unverändert und werden auch nicht mit einem Server
       abgeglichen; anmelden oder mit einem Server verbinden geht
@@ -78,6 +80,14 @@
       Beginn –, öffnet sich genau diese; das gilt auch für „Heute geplant“ und den Kalender. Eine Stunde
       mit Uhrzeit steht automatisch im Kalender – mit der Standardlänge, falls dort noch kein Termin für sie
       steht. Änderst du Datum oder Uhrzeit, wandert der Termin mit; ohne Uhrzeit verschwindet er wieder.
+    </li>
+    <li>
+      <strong>Geplante Stunden beginnen von selbst:</strong> Zu jedem Einzel- und Gruppentermin legt die App zu seiner
+      Startzeit die Stunde an – auch rückwirkend für alle vergangenen Termine des Berichtszeitraums. Wer nur plant und
+      nichts einträgt, hat so trotzdem alle gehaltenen Stunden, z. B. für die Auswertung unter
+      <a routerLink="/export">Export &amp; Sicherung</a>. Ist eine Stunde ausgefallen, löschst du sie; sie entsteht dann
+      nicht neu. Leere, von selbst begonnene Stunden zählen im PDF mit, erscheinen dort aber nicht als eigene Einträge.
+      Jede neue Stunde merkt sich die Lehrkraft, die sie gegeben hat.
     </li>
     <li><strong>Feedback geben:</strong> Passende Textbausteine anhaken und bei Bedarf etwas in die Freitextfelder schreiben.</li>
     <li>
@@ -232,6 +242,15 @@
       benennen und speicherst sie mit <kbd>Als … neue Gruppen speichern</kbd>; <kbd>Verwerfen</kbd> ändert nichts.
       Bei mehreren Lehrkräften wählst du vorher, in wessen Kalender die Gruppentermine stehen.
     </li>
+    <li>
+      <strong>Gruppe selbst wählen:</strong> Hake die Gruppen an, zwischen denen die Personen wählen sollen (mindestens
+      zwei; automatische Gruppen nicht), und starte die Gruppenwahl. Jede Person des Zeitraums wählt dann genau eine
+      davon und kommt aus den übrigen heraus; bis zum Beenden kann sie wechseln. Gewählt wird am Tablet
+      (<kbd>Am Tablet wählen lassen</kbd>, optional mit PIN zum Beenden: Name antippen, Gruppe antippen) oder auf der
+      eigenen Seite des Download-Links (<em>Gruppe wählen</em>; dafür braucht der Zeitraum einen Download-Link). Wahlen
+      über den Link übernimmt die App einer Lehrkraft beim nächsten Abgleich. Darunter steht, wer noch keine der Gruppen
+      gewählt hat; <kbd>Namen kopieren</kbd> gibt die Liste z. B. für eine Nachricht weiter.
+    </li>
   </ul>
 </section>
 
@@ -375,7 +394,9 @@
       Zahl der Personen, abgerundet, damit jede Person so viele bekommen kann (höchstens einer am Tag). Nach <kbd>Planung starten</kbd> zeigt das Gerät
       nur noch die Namen: antippen, freie Zeiten antippen (nochmal tippen gibt sie frei), <kbd>Fertig</kbd>. Zeiten, in
       denen die Person Gruppenunterricht hat, sind mit ⚠ und dem Namen der Gruppe markiert, aber wählbar – sonst fänden
-      Lehrkräfte, deren Schüler:innen fast alle in Gruppen sind, kaum Einzelschüler:innen. Einzelunterricht bei anderen Lehrkräften
+      Lehrkräfte, deren Schüler:innen fast alle in Gruppen sind, kaum Einzelschüler:innen. Die Markierung schaltest du beim
+      Start mit <em>Zeiten mit eigenem Gruppenunterricht mit ⚠ markieren</em> aus, z. B. wenn alle in einem Plenum sind
+      und sonst fast jede Zeit ⚠ trüge. Einzelunterricht bei anderen Lehrkräften
       und ein zweiter Termin am selben Tag sind ausgeschlossen; belegte Zeiten und fremde Namen sind nicht zu sehen. In der Namensliste
       steht der Vorname mit dem ersten Buchstaben des Nachnamens; wäre das nicht eindeutig, der volle Name, bei
       Gleichnamigen mit „sen.“/„jun.“ oder dem Geburtsjahr. Nach 90 Sekunden ohne Berührung springt die Ansicht zurück zu den Namen. <em>Planung beenden</em> (unten,
@@ -436,12 +457,12 @@
       siehst du auch die Personen der anderen Lehrkräfte.
     </li>
     <li>
-      <strong>Termine als PDF:</strong> Unten wählst du einen Zeitraum (anfangs die angezeigte Woche) und die
+      <strong>Termine als PDF:</strong> Unten wählst du einen Zeitraum (anfangs der gewählte Berichtszeitraum) und die
       Darstellung. Die <em>Liste</em> zeigt für jede Lehrkraft mit Name und Raum ihre Termine, Tag für Tag. Die
       <em>Liste nur mit Einzelunterricht</em> enthält alle Lehrkräfte, aber nur Einzelunterricht; jede Lehrkraft beginnt
       auf einer neuen Seite, ihre Tage folgen fortlaufend. Die <em>Liste ohne Einzelunterricht</em> zeigt nur Gruppentermine und allgemeine Termine aller Lehrkräfte, Tag für Tag,
       jeweils mit Raum: bei Gruppen der Raum der Lehrkraft, bei allgemeinen Terminen ihr Ort; die Lehrkraft steht nur
-      dabei, wenn es genau eine ist. Blocker stehen nicht darin. In der <em>Liste</em> und der <em>Liste ohne
+      dabei, wenn es genau eine ist; als Überschrift steht der Name des Berichtszeitraums darüber, die eingestellte Überschrift der Liste vor den Daten. Blocker stehen nicht darin. In der <em>Liste</em> und der <em>Liste ohne
       Einzelunterricht</em> beginnt jeder Tag auf einer neuen Seite; alle Seiten tragen dieselbe große Überschrift; in der <em>Liste</em> steht die Lehrkraft mit Raum auf jeder Seite darüber.
       Die Überschriften, die Fußzeile, den Hinweis „keine Termine“ und die Bezeichnung der Blocker legst du unter
       <a routerLink="/konfiguration">Konfiguration</a> → Kalender bei <em>Texte der Kalender-PDFs</em> fest. Der
@@ -594,7 +615,7 @@
       Standard eingetragen ist, aber keinen Einzelunterricht gibt), wählt zuerst eine von ihnen und hat sie mit dem
       ersten Termin als Lehrkraft. Auf ihrer Seite
       tippt die Person auf <em>Termine wählen</em> und dann auf eine freie Zeit ihrer Lehrkraft; es gelten dieselben
-      Regeln wie am Tablet (⚠ bei eigenem Gruppenunterricht, kein Einzelunterricht bei anderen und nur ein Termin am
+      Regeln wie am Tablet (⚠ bei eigenem Gruppenunterricht, beim Start abschaltbar; kein Einzelunterricht bei anderen und nur ein Termin am
       Tag; wer im Zeitraum noch keinen Termin hat, wählt bei mehreren Lehrkräften zuerst die eigene). Wer zuerst kommt,
       bekommt die Zeit. Die App einer Lehrkraft des Zeitraums übernimmt die Eintragungen beim nächsten Abgleich in den
       Kalender – geht eine nicht mehr, weil du die Zeit inzwischen anders verplant hast, sieht die Person das mit
@@ -702,7 +723,16 @@
       <a routerLink="/personen">Personen</a>. <kbd>⧉</kbd> dupliziert eine
       Lehrkraft: Die Kopie steht direkt darunter, heißt „… (Kopie)“ und hat dasselbe Instrument, denselben Ort,
       dieselben Unterrichtszeiten und dieselben Berichtszeiträume; Personen, Termine und Textvarianten bleiben beim
-      Original.
+      Original. Der Tab zeigt nur die Lehrkräfte des oben gewählten Berichtszeitraums; wer wo unterrichtet, legst du
+      unter <em>Allgemein</em> beim Zeitraum fest.
+    </li>
+    <li>
+      <strong>Deaktivieren statt löschen:</strong> <kbd>Deaktivieren</kbd> nimmt eine Lehrkraft aus allen Auswahllisten und
+      aus Berichtszeiträumen, die noch nicht begonnen haben. In laufenden und vergangenen bleibt sie mit ihren Stunden,
+      damit nachvollziehbar bleibt, wer wann unterrichtet hat; ihre Personen behalten sie als Lehrkraft, bis du sie unter
+      <a routerLink="/personen">Personen</a> einer anderen zuordnest. Mit Server wird ihr Konto gesperrt; das darf, wer
+      mit ihr in einem Berichtszeitraum ist oder war, aber nicht für sich selbst. Unter <em>Deaktivierte Lehrkräfte</em>
+      ganz unten im Tab holst du sie mit <kbd>Wieder aktivieren</kbd> zurück.
     </li>
     <li>
       <strong>Standardunterrichtszeiten:</strong> Im Tab „Kalender“ legst du eine Vorlage für einen Unterrichtstag
@@ -747,6 +777,12 @@
     <li>
       <strong>PDF erstellen:</strong> Wähle <em>Alle Personen</em> oder <em>Nur eine Person</em> und klicke auf <kbd>PDF erstellen</kbd>. Jede Person
       beginnt auf einer neuen Seite.
+    </li>
+    <li>
+      <strong>Auswertung: Unterricht je Lehrkraft</strong> zeigt für einen Berichtszeitraum, wie viele Stunden jede
+      Lehrkraft gegeben hat und wie lange – getrennt nach Einzel- und Gruppenunterricht, auch für deaktivierte
+      Lehrkräfte. Gezählt wird bei der Lehrkraft, die die Stunde gegeben hat; Stunden ohne Länge zählen mit der
+      Standardlänge. <kbd>Als Tabelle (Excel/CSV) herunterladen</kbd> gibt die Zahlen für Excel aus.
     </li>
     <li>
       Gibt es Gruppen, erstellst du darunter das <strong>Gruppen-PDF</strong> für alle Gruppen mit Gruppenstunden im
@@ -817,6 +853,11 @@
     </li>
     <li>
       <strong>Weitere Geräte:</strong> Auf demselben Weg mit <em>Anmelden</em>, Benutzername und Passwort.
+    </li>
+    <li>
+      <strong>Passwort ändern:</strong> Unter <a routerLink="/export">Export &amp; Sicherung</a> → <em>Server</em> →
+      <em>Passwort ändern …</em> mit dem bisherigen Passwort. Dieses Gerät bleibt angemeldet; auf anderen Geräten
+      meldest du dich mit dem neuen Passwort wieder an.
     </li>
     <li>
       <strong>Wer sieht was?</strong> Die gemeinsame Konfiguration und allgemeine Termine außerhalb der

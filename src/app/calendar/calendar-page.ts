@@ -487,9 +487,9 @@ export class CalendarPage {
   /** Erfolgsmeldung, z. B. nach dem automatischen Einplanen */
   protected readonly notice = signal<string | null>(null);
 
-  /** Zeitraum der PDF-Liste; folgt der angezeigten Woche, bis man ihn selbst ändert. */
-  protected readonly pdfFrom = linkedSignal(() => this.weekStart());
-  protected readonly pdfTo = linkedSignal(() => addDays(this.weekStart(), 6));
+  /** Zeitraum der PDF-Liste: der gewählte Berichtszeitraum, bis man ihn selbst ändert. */
+  protected readonly pdfFrom = linkedSignal(() => this.reportPeriod.period().from);
+  protected readonly pdfTo = linkedSignal(() => this.reportPeriod.period().to);
   /** Liste oder Wochenplan als Tabelle; gilt nur auf diesem Gerät. */
   protected readonly pdfFormat = storedSignal<'list' | 'individual' | 'events' | 'grid' | 'day'>(
     'feedback.scheduleFormat',
@@ -1023,7 +1023,9 @@ export class CalendarPage {
       return;
     }
     if (this.pdfFormat() === 'events') {
-      this.pdf.exportAppointmentList(this.config(), this.eventDays(from, to), period, action);
+      // Überschrift ist der Name des Berichtszeitraums, in dem die Liste beginnt.
+      const periodName = (this.periodAt(from) ?? this.reportPeriod.period()).name;
+      this.pdf.exportAppointmentList(this.config(), this.eventDays(from, to), period, action, periodName);
       return;
     }
     const teachers = teachersInOrderOn(this.config(), from).filter((t) => this.activeTeacher.isVisible(t.id)).map((teacher) => ({

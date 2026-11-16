@@ -139,6 +139,16 @@ export interface ReportPeriodEntry extends Period {
   sharedWindows?: TeachingWindow[];
   /** Selbsteintragung über den Download-Link; fehlt, wenn sie nicht läuft */
   selfBooking?: SelfBooking;
+  /** Gruppenwahl: Jede Person wählt selbst genau eine dieser Gruppen; fehlt, wenn sie nicht läuft */
+  groupChoice?: GroupChoiceSettings;
+}
+
+/**
+ * Gruppenwahl durch die Personen selbst, am Tablet oder auf ihrer Seite des Download-Links: Jede Person des
+ * Zeitraums ist in genau einer dieser Gruppen; bis zum Beenden kann sie wechseln.
+ */
+export interface GroupChoiceSettings {
+  groupIds: string[];
 }
 
 /**
@@ -152,6 +162,8 @@ export interface SelfBooking {
   to: string;
   /** So viele Einzeltermine darf jede Person im Zeitraum höchstens haben (bereits eingetragene zählen mit). */
   maxPerStudent: number;
+  /** Zeiten mit eigenem Gruppenunterricht mit ⚠ markieren; fehlt es, ja */
+  markGroupClashes?: boolean;
 }
 
 /** Läuft die Selbsteintragung über den Link noch (bis einschließlich ihres letzten Tages)? */
@@ -370,6 +382,11 @@ export interface Teacher {
   themeColor?: string;
   /** Wohin das Logo oben links führt (Pfad einer Seite aus `HOME_PAGES`); fehlt es, zum Kalender */
   homePage?: string;
+  /**
+   * Deaktiviert seit diesem Tag (JJJJ-MM-TT): Die Lehrkraft steht in keiner Auswahl mehr, bleibt aber mit ihren
+   * Stunden in laufenden und vergangenen Berichtszeiträumen, damit nachvollziehbar bleibt, wer wann unterrichtet hat.
+   */
+  inactiveSince?: string;
   /** Standard-Unterrichtszeiten für Berichtszeiträume ohne eigene (`periodWindows`) */
   teachingWindows: TeachingWindow[];
   /** Eigene Unterrichtszeiten je Berichtszeitraum (Schlüssel: ID des Zeitraums) */
@@ -462,6 +479,11 @@ export const HOME_PAGES = [
   { path: 'export', label: 'Export & Sicherung' },
   { path: 'hilfe', label: 'Hilfe' },
 ] as const;
+
+/** Nicht deaktiviert (siehe `Teacher.inactiveSince`) */
+export function isActiveTeacher(teacher: Teacher): boolean {
+  return !teacher.inactiveSince;
+}
 
 /** Ziel des Logos für die Lehrkraft, z. B. „/kalender“ */
 export function homeLinkOf(teacher: Teacher): string {
@@ -608,6 +630,8 @@ export interface Group {
   lessons: Lesson[];
   /** Freitexte der allgemeinen Gruppen-Abschnitte (Abschnitts-ID → Text) */
   generalTexts: Record<string, string>;
+  /** Gelöschte automatische Gruppenstunden (IDs, siehe `autoLessonId`); sie entstehen nicht neu. */
+  skippedLessons?: string[];
   /**
    * Automatische Gruppe der Lehrkraft (`teacherId`) im Zeitraum: Mitglieder sind immer alle Personen, die sie dort
    * haben (siehe `withAutoGroups`); von Hand ändern lassen sie sich nicht.
@@ -662,6 +686,11 @@ export interface Lesson {
    * er (nicht das Datum), in welchem Bericht sie steht. Ältere Stunden: siehe `lessonPeriodId`.
    */
   periodId?: string;
+  /**
+   * Lehrkraft, die die Stunde gegeben hat; gesetzt bei neuen Stunden. So bleibt die Auswertung richtig, auch wenn die
+   * Person später eine andere Lehrkraft bekommt. Ältere Stunden: die Lehrkraft der Person bzw. Gruppe.
+   */
+  teacherId?: string;
   /** Angehakte Textbausteine je Abschnitt (Abschnitts-ID → Item-IDs) */
   checked: Record<string, string[]>;
   /** Freitext je Abschnitt (Abschnitts-ID → Text) */
@@ -705,8 +734,26 @@ export interface Student {
   /** Freitext der allgemeinen Abschnitte, gilt für alle Stunden (Abschnitts-ID → Text) */
   generalTexts: Record<string, string>;
   lessons: Lesson[];
+  /** Gelöschte automatische Stunden (IDs, siehe `autoLessonId`); sie entstehen nicht neu. */
+  skippedLessons?: string[];
   /** Lehrer aus Daten vor den Zeiträumen je Person; nur bis zur Umstellung (siehe `withPeriodMembership`) */
   legacyTeacherId?: string | null;
+}
+
+/** Feste ID der Stunde, die zu einem Termin an einem Tag von selbst entsteht (siehe `AutoLessons`) */
+export function autoLessonId(appointmentId: string, date: string): string {
+  return `auto-${appointmentId}-${date}`;
+}
+
+export function isAutoLesson(lessonId: string): boolean {
+  return lessonId.startsWith('auto-');
+}
+
+/** Gelöschte automatische Stunden merken, damit sie nicht neu entstehen */
+export function withSkippedLesson<T extends { skippedLessons?: string[] }>(owner: T, lessonId: string): void {
+  if (isAutoLesson(lessonId) && !owner.skippedLessons?.includes(lessonId)) {
+    owner.skippedLessons = [...(owner.skippedLessons ?? []), lessonId];
+  }
 }
 
 export function newId(): string {

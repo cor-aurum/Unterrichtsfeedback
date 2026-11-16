@@ -26,3 +26,26 @@
   align-items: center;
   gap: 0.3rem;
 }
+
+/* Handy: Wochentag über den Zeiten, Von und Bis teilen sich die Breite, nichts ragt rechts heraus */
+@media (max-width: 600px) {
+  .weekday-row {
+    .weekday {
+      flex-basis: 100%;
+      width: auto;
+    }
+
+    .windows {
+      flex-basis: 100%;
+    }
+  }
+
+  .window {
+    width: 100%;
+
+    input[type='time'] {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
+}

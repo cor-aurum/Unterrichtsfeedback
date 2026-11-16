@@ -32,6 +32,8 @@ type Account struct {
 	TeacherID    string
 	PasswordHash string
 	CreatedAt    time.Time
+	// Gesperrt, weil die Lehrkraft deaktiviert ist: keine Anmeldung, keine Anfragen
+	Disabled bool
 }
 
 // CodeKind unterscheidet Einladungen (neues Konto) und Codes zum Zurücksetzen des Passworts.
@@ -101,11 +103,39 @@ func Open(path string) (*Store, error) {
 	}
 	// SQLite verträgt nur einen Schreiber gleichzeitig; eine Verbindung vermeidet „database is locked“.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + feedsSchema + plansSchema + planRequestsSchema + planBookingsSchema); err != nil {
+	if _, err := db.Exec(schema + feedsSchema + plansSchema + planRequestsSchema + planBookingsSchema + planGroupChoicesSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("Datenbank %s: %w", path, err)
+	}
+	if err := addColumn(db, "accounts", "disabled_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("Datenbank %s: %w", path, err)
 	}
 	return &Store{db: db}, nil
+}
+
+// addColumn ergänzt ältere Datenbanken um eine Spalte, die es in ihnen noch nicht gibt.
+func addColumn(db *sql.DB, table, column, definition string) error {
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	_, err = db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + definition)
+	return err
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -137,19 +167,20 @@ func (s *Store) AccountByTeacher(ctx context.Context, teacherID string) (Account
 
 func (s *Store) account(ctx context.Context, where string, arg any) (Account, error) {
 	var a Account
-	var created int64
+	var created, disabled int64
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, teacher_id, password_hash, created_at FROM accounts WHERE `+where, arg).
-		Scan(&a.ID, &a.Username, &a.TeacherID, &a.PasswordHash, &created)
+		`SELECT id, username, teacher_id, password_hash, created_at, disabled_at FROM accounts WHERE `+where, arg).
+		Scan(&a.ID, &a.Username, &a.TeacherID, &a.PasswordHash, &created, &disabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, ErrNotFound
 	}
 	a.CreatedAt = time.Unix(created, 0)
+	a.Disabled = disabled != 0
 	return a, err
 }
 
 func (s *Store) Accounts(ctx context.Context) ([]Account, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, username, teacher_id, created_at FROM accounts ORDER BY username`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, username, teacher_id, created_at, disabled_at FROM accounts ORDER BY username`)
 	if err != nil {
 		return nil, err
 	}
@@ -157,11 +188,12 @@ func (s *Store) Accounts(ctx context.Context) ([]Account, error) {
 	var accounts []Account
 	for rows.Next() {
 		var a Account
-		var created int64
-		if err := rows.Scan(&a.ID, &a.Username, &a.TeacherID, &created); err != nil {
+		var created, disabled int64
+		if err := rows.Scan(&a.ID, &a.Username, &a.TeacherID, &created, &disabled); err != nil {
 			return nil, err
 		}
 		a.CreatedAt = time.Unix(created, 0)
+		a.Disabled = disabled != 0
 		accounts = append(accounts, a)
 	}
 	return accounts, rows.Err()
@@ -179,6 +211,50 @@ func (s *Store) SetPassword(ctx context.Context, accountID int64, passwordHash s
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE account_id = ?`, accountID); err != nil {
 		return err
+	}
+	return tx.Commit()
+}
+
+// ChangePassword setzt ein neues Passwort; andere Geräte des Kontos werden abgemeldet, dieses (keepTokenHash) nicht.
+func (s *Store) ChangePassword(ctx context.Context, accountID int64, passwordHash, keepTokenHash string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE accounts SET password_hash = ? WHERE id = ?`, passwordHash, accountID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE account_id = ? AND token_hash <> ?`, accountID, keepTokenHash); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// SetAccountDisabled sperrt das Konto der Lehrkraft (und meldet alle Geräte ab) oder gibt es wieder frei;
+// ErrNotFound, wenn sie kein Konto hat.
+func (s *Store) SetAccountDisabled(ctx context.Context, teacherID string, disabled bool) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var since int64
+	if disabled {
+		since = time.Now().Unix()
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE accounts SET disabled_at = ? WHERE teacher_id = ?`, since, teacherID)
+	if err != nil {
+		return err
+	}
+	if n, err := result.RowsAffected(); err != nil || n == 0 {
+		return errors.Join(ErrNotFound, err)
+	}
+	if disabled {
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM sessions WHERE account_id = (SELECT id FROM accounts WHERE teacher_id = ?)`, teacherID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }

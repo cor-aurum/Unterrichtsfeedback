@@ -1,6 +1,6 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { ConfigStore, isPeriod } from './config.store';
-import { containsDate, formatDate, Lesson, lessonPeriodId, Period, periodTeachers, ReportPeriodEntry, Student, Teacher, today } from './model';
+import { containsDate, formatDate, isActiveTeacher, Lesson, lessonPeriodId, Period, periodTeachers, ReportPeriodEntry, Student, Teacher, today } from './model';
 import { storageKey, storedSignal } from './stored-signal';
 
 /** Früher galt ein unbenannter Zeitraum nur auf dem Gerät; er wird beim ersten Start übernommen. */
@@ -24,7 +24,8 @@ export class ReportPeriod {
   readonly label = computed(() => labelOf(this.period()));
   /** Lehrer, die im gewählten Zeitraum unterrichten, in der Reihenfolge der Konfiguration */
   /** In der Reihenfolge des Zeitraums, der erste (z. B. die Leitung) vorne */
-  readonly teachers = computed<Teacher[]>(() => periodTeachers(this.configStore.config(), this.period()));
+  /** Die aktiven Lehrkräfte des Zeitraums, zur Auswahl; deaktivierte stehen nur noch in Auswertungen. */
+  readonly teachers = computed<Teacher[]>(() => periodTeachers(this.configStore.config(), this.period()).filter(isActiveTeacher));
 
   /** Zur Auswahl eines Lehrers im Zeitraum; ein schon gewählter, nicht mehr aktiver Lehrer bleibt dabei. */
   teachersWith(currentId: string | null): Teacher[] {

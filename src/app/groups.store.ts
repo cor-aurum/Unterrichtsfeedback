@@ -18,9 +18,10 @@ import {
   Teacher,
   teacherOf,
   today,
+  withSkippedLesson,
 } from './model';
 import { storedSignal } from './stored-signal';
-import { isRecord, parseLesson, sortedLessons, StudentsStore } from './students.store';
+import { isRecord, parseLesson, parseSkipped, sortedLessons, StudentsStore } from './students.store';
 
 /**
  * Gruppen und ihre Gruppenstunden. Gruppenstunden gehören der Gruppe, nutzen die Gruppen-Abschnitte der
@@ -289,7 +290,7 @@ export class GroupsStore {
       if (time && !lesson.start) this.mutateLesson(groupId, lesson.id, (l) => Object.assign(l, time));
     } else {
       if (!this.reportPeriod.contains(date)) return false;
-      lesson = { id: newId(), date, ...time, checked: {}, texts: {} };
+      lesson = { id: newId(), date, ...time, teacherId: groupTeacherOf(group, this.config()).id, checked: {}, texts: {} };
       const created = lesson;
       this.mutate(groupId, (g) => g.lessons.push(created));
     }
@@ -299,8 +300,12 @@ export class GroupsStore {
     return true;
   }
 
+  /** Eine gelöschte automatische Gruppenstunde entsteht nicht neu (siehe `AutoLessons`). */
   removeLesson(groupId: string, lessonId: string): void {
-    this.mutate(groupId, (group) => (group.lessons = group.lessons.filter((l) => l.id !== lessonId)));
+    this.mutate(groupId, (group) => {
+      group.lessons = group.lessons.filter((l) => l.id !== lessonId);
+      withSkippedLesson(group, lessonId);
+    });
     if (this.selectedLessonId() === lessonId) this.selectedLessonId.set(null);
   }
 
@@ -347,6 +352,16 @@ export class GroupsStore {
     this.mutate(groupId, (group) => (group.generalTexts[sectionId] = text));
   }
 
+  /** Neue Gruppenstunden je Gruppe, z. B. die automatischen; vorhandene IDs bleiben, wie sie sind. */
+  addLessons(byGroup: Map<string, Lesson[]>): void {
+    this.allGroups.update((groups) =>
+      groups.map((group) => {
+        const added = (byGroup.get(group.id) ?? []).filter((l) => !group.lessons.some((k) => k.id === l.id));
+        return added.length > 0 ? { ...group, lessons: [...group.lessons, ...added] } : group;
+      }),
+    );
+  }
+
   private mutateLesson(groupId: string, lessonId: string, change: (lesson: Lesson) => void): void {
     this.mutate(groupId, (group) => {
       const lesson = group.lessons.find((l) => l.id === lessonId);
@@ -381,5 +396,6 @@ export function parseGroups(data: unknown): Group[] {
       lessons: Array.isArray(g.lessons) ? g.lessons.map(parseLesson) : [],
       generalTexts: isRecord(g.generalTexts) ? g.generalTexts : {},
       ...(g.auto === true ? { auto: true } : {}),
+      ...parseSkipped(g.skippedLessons),
     }));
 }

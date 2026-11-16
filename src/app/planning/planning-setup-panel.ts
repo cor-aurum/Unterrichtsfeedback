@@ -57,6 +57,8 @@ export class PlanningSetupPanel {
   protected readonly effectiveMax = computed(() => this.max() ?? this.fair().share);
   /** Gilt nur auf diesem Gerät und wird für die nächste Planung vorgeschlagen. */
   protected readonly pin = storedSignal<string>('feedback.planningPin', () => '');
+  /** ⚠ bei Zeiten mit eigenem Gruppenunterricht; gilt nur auf diesem Gerät und wird für die nächste Planung vorgeschlagen. */
+  protected readonly markGroupClashes = storedSignal<boolean>('feedback.planningMarkGroups', () => true, (data) => data !== false);
   protected readonly formatShortDate = formatShortDate;
 
   protected valueOf(event: Event): string {
@@ -83,6 +85,7 @@ export class PlanningSetupPanel {
       from: this.from(),
       to: this.to(),
       maxPerStudent: this.effectiveMax(),
+      ...(this.markGroupClashes() ? {} : { markGroupClashes: false }),
       pin: this.pin().trim(),
     });
   }

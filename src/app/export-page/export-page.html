@@ -131,6 +131,8 @@
   </div>
 </section>
 
+<app-teacher-hours-panel />
+
 <section class="card">
   <h2>Server</h2>
   <p class="muted">
@@ -216,6 +218,7 @@
         <button class="secondary" (click)="loadFromServer()">Daten vom Server neu laden</button>
         <button class="secondary" (click)="disconnectServer()">Abmelden</button>
       </div>
+      <app-password-change />
     }
   }
   }

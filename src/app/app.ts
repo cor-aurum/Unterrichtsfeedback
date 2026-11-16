@@ -4,7 +4,10 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { ActiveTeacher } from './active-teacher';
 import { appVersion, AppUpdate } from './app-update';
 import { ConfigStore } from './config.store';
-import { byPeriodOrder, formatLongDate, homeLinkOf, today } from './model';
+import { byPeriodOrder, formatLongDate, homeLinkOf, isActiveTeacher, today } from './model';
+import { AutoLessons } from './lessons/auto-lessons';
+import { GroupChoice } from './groups/group-choice';
+import { GroupChoicePage } from './groups/group-choice-page';
 import { DEMO_PERIOD_ID, endDemo, startDemoPeriodToday } from './demo';
 import { demoMode } from './stored-signal';
 import { ReportPeriod } from './report-period';
@@ -17,7 +20,7 @@ import { StudentPlanningPage } from './planning/student-planning-page';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, WelcomeDialog, StudentPlanningPage, ShareSheet],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, WelcomeDialog, StudentPlanningPage, ShareSheet, GroupChoicePage],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
@@ -27,11 +30,15 @@ export class App {
   private readonly theme = computed(() => this.activeTeacher.theme());
   /** Die Lehrer des gewählten Zeitraums zuerst, in seiner Reihenfolge */
   protected readonly teachers = computed(() =>
-    byPeriodOrder(this.configStore.config().teachers, this.reportPeriod.period().teacherIds),
+    byPeriodOrder(this.configStore.config().teachers.filter(isActiveTeacher), this.reportPeriod.period().teacherIds),
   );
   /** Erster Start: Die Begrüßung legt den eigenen Lehrer an oder spielt eine Sicherung ein. */
   protected readonly setupPending = this.configStore.setupPending;
   protected readonly activeTeacher = inject(ActiveTeacher);
+  /** Geplante Stunden beginnen von selbst, solange die App läuft (auch rückwirkend im Berichtszeitraum). */
+  private readonly autoLessons = inject(AutoLessons);
+  /** Gruppenwahl am Tablet: Solange sie läuft, zeigt die App nur die Wahl. */
+  protected readonly groupChoice = inject(GroupChoice);
   /** Jede Lehrkraft legt unter Konfiguration → Allgemein fest, wohin das Logo führt. */
   protected readonly homeLink = computed(() => homeLinkOf(this.activeTeacher.teacher()));
   protected readonly reportPeriod = inject(ReportPeriod);

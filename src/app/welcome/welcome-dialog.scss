@@ -211,13 +211,18 @@ details {
   border-top: 1px solid var(--border);
 }
 
-@media (max-width: 480px) {
-  .day {
-    grid-template-columns: 1fr 1fr auto 1fr;
-  }
-}
-
 .home-screen {
   margin-bottom: 1rem;
   font-size: 0.9rem;
+}
+
+/* Handy: Wochentag über Von und Bis, damit die Uhrzeiten ganz zu sehen sind */
+@media (max-width: 480px) {
+  .day {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+
+    .check {
+      grid-column: 1 / -1;
+    }
+  }
 }

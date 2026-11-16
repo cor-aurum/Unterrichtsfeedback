@@ -60,6 +60,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/me", s.authed(s.me))
 	mux.HandleFunc("GET /api/accounts", s.authed(s.accounts))
 	mux.HandleFunc("POST /api/invites", s.authed(s.invite))
+	mux.HandleFunc("POST /api/password", s.authed(s.changePassword))
+	mux.HandleFunc("POST /api/accounts/{teacher}/disabled", s.authed(s.setAccountDisabled))
 	mux.HandleFunc("GET /api/docs", s.authed(s.listDocs))
 	mux.HandleFunc("GET /api/docs/{name}", s.authed(s.getDoc))
 	mux.HandleFunc("PUT /api/docs/{name}", s.authed(s.putDoc))
@@ -88,6 +90,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/plan/{token}/{person}/eintragen", s.book)
 	mux.HandleFunc("POST /api/plan/{token}/{person}/austragen", s.unbook)
 	mux.HandleFunc("GET /api/plans/{period}/bookings", s.authed(s.openBookings))
+	mux.HandleFunc("GET /api/plan/{token}/{person}/gruppe", s.groupChoicePage)
+	mux.HandleFunc("POST /api/plan/{token}/{person}/gruppe", s.chooseGroup)
+	mux.HandleFunc("GET /api/plans/{period}/group-choices", s.authed(s.openGroupChoices))
+	mux.HandleFunc("POST /api/plans/{period}/group-choices/{id}", s.authed(s.groupChoiceDone))
 	mux.HandleFunc("POST /api/plans/{period}/bookings/{id}", s.authed(s.bookingDone))
 	return s.cors(mux)
 }
@@ -134,6 +140,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.limiter.success(key)
+	if account.Disabled {
+		fail(w, http.StatusForbidden, disabledText)
+		return
+	}
 	s.startSession(w, r, account)
 }
 
@@ -208,6 +218,10 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "Zu diesem Code gibt es kein Konto mehr.")
 		return
 	}
+	if account.Disabled {
+		fail(w, http.StatusForbidden, disabledText)
+		return
+	}
 	if err := s.store.SetPassword(r.Context(), account.ID, hash); err != nil {
 		internal(w, err)
 		return
@@ -260,6 +274,10 @@ func (s *Server) authed(next func(http.ResponseWriter, *http.Request, store.Acco
 			fail(w, http.StatusUnauthorized, "Die Anmeldung ist abgelaufen. Bitte erneut anmelden.")
 			return
 		}
+		if account.Disabled {
+			fail(w, http.StatusUnauthorized, disabledText)
+			return
+		}
 		next(w, r, account)
 	}
 }
@@ -297,11 +315,88 @@ func (s *Server) accounts(w http.ResponseWriter, r *http.Request, _ store.Accoun
 		internal(w, err)
 		return
 	}
-	list := make([]map[string]string, 0, len(accounts))
+	type entry struct {
+		TeacherID string `json:"teacherId"`
+		Username  string `json:"username"`
+		Disabled  bool   `json:"disabled,omitempty"`
+	}
+	list := make([]entry, 0, len(accounts))
 	for _, a := range accounts {
-		list = append(list, map[string]string{"teacherId": a.TeacherID, "username": a.Username})
+		list = append(list, entry{TeacherID: a.TeacherID, Username: a.Username, Disabled: a.Disabled})
 	}
 	writeJSON(w, list)
+}
+
+const disabledText = "Dieses Konto ist gesperrt, weil die Lehrkraft deaktiviert wurde. Eine andere Lehrkraft kann sie unter Konfiguration → Lehrer:innen wieder aktivieren."
+
+// changePassword: Die angemeldete Lehrkraft setzt mit ihrem bisherigen Passwort ein neues. Andere Geräte werden
+// abgemeldet, dieses bleibt angemeldet.
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, account store.Account) {
+	var body struct{ Current, Password string }
+	if !readJSON(w, r, &body) {
+		return
+	}
+	key := clientIP(r) + "|" + strings.ToLower(account.Username)
+	if wait := s.limiter.blocked(key); wait > 0 {
+		fail(w, http.StatusTooManyRequests, "Zu viele Fehlversuche. Bitte in "+waitText(wait)+" erneut versuchen.")
+		return
+	}
+	if !auth.CheckPassword(account.PasswordHash, body.Current) {
+		s.limiter.failure(key)
+		fail(w, http.StatusForbidden, "Das bisherige Passwort stimmt nicht.")
+		return
+	}
+	s.limiter.success(key)
+	hash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		fail(w, http.StatusBadRequest, "Das Passwort braucht mindestens "+strconv.Itoa(auth.MinPasswordLength)+" Zeichen.")
+		return
+	}
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if err := s.store.ChangePassword(r.Context(), account.ID, hash, auth.Hash(token)); err != nil {
+		internal(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setAccountDisabled sperrt das Konto einer deaktivierten Lehrkraft oder gibt es wieder frei. Das darf, wer mit
+// ihr in einem Berichtszeitraum eingetragen ist oder war; sich selbst sperrt man nicht.
+func (s *Server) setAccountDisabled(w http.ResponseWriter, r *http.Request, account store.Account) {
+	teacherID := r.PathValue("teacher")
+	var body struct{ Disabled bool }
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if teacherID == account.TeacherID {
+		fail(w, http.StatusForbidden, "Das eigene Konto lässt sich nicht sperren.")
+		return
+	}
+	members, err := s.members(r.Context())
+	if err != nil {
+		internal(w, err)
+		return
+	}
+	shared := false
+	for periodID := range members {
+		if members.In(periodID, account.TeacherID) && members.In(periodID, teacherID) {
+			shared = true
+			break
+		}
+	}
+	if !shared {
+		fail(w, http.StatusForbidden, "Sperren darf nur, wer mit der Lehrkraft in einem Berichtszeitraum eingetragen ist oder war.")
+		return
+	}
+	err = s.store.SetAccountDisabled(r.Context(), teacherID, body.Disabled)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		fail(w, http.StatusNotFound, "Diese Lehrkraft hat kein Konto.")
+	case err != nil:
+		internal(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // invite: Jeder Lehrer darf einen Lehrer einladen, der noch kein Konto hat.

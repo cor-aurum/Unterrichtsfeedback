@@ -70,6 +70,11 @@
     </label>
   </div>
 
+  <label class="mark-groups">
+    <input type="checkbox" [checked]="markGroupClashes()" (change)="markGroupClashes.set($any($event.target).checked)" />
+    Zeiten mit eigenem Gruppenunterricht mit ⚠ markieren (wählbar bleiben sie so oder so)
+  </label>
+
   <p class="muted small">
     {{ fair().slots }} Termine an {{ fair().days }} Tagen (frei und schon vergeben) für {{ fair().students }}
     {{ fair().students === 1 ? 'Person' : 'Personen' }} – vorgeschlagen sind {{ fair().share }} je Person

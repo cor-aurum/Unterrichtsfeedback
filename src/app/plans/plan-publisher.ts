@@ -23,6 +23,8 @@ import { demoMode, storedSignal } from '../stored-signal';
 import { planServerId, realServerLogin } from './plan-access';
 import { isOpenSingle, isSpontaneous } from './plan-slots';
 import { PlanBookings } from './plan-bookings';
+import { PlanGroupChoices } from './plan-group-choices';
+import { GroupChoice } from '../groups/group-choice';
 import { PlanRequests } from './plan-requests';
 import { StudentsStore } from '../students.store';
 import { checksum } from '../sync/checksum';
@@ -59,6 +61,8 @@ interface PersonDraft {
   label: string;
   events: PlanEvent[];
   booking?: PersonBookingDraft;
+  /** Bei der Gruppenwahl die gewählte Gruppe */
+  group?: string;
 }
 
 interface PlansDraft {
@@ -67,6 +71,7 @@ interface PlansDraft {
   color: string;
   people: PersonDraft[];
   booking?: BookingDraft;
+  groupChoice?: { groups: { id: string; name: string; members: number }[] };
 }
 
 /** Selbsteintragung über den Link, wie der Server sie liest (siehe server/internal/api/plan_bookings.go) */
@@ -100,6 +105,8 @@ export class PlanPublisher {
   private readonly requests = inject(PlanRequests);
   private readonly bookings = inject(PlanBookings);
   private readonly planning = inject(StudentPlanning);
+  private readonly choice = inject(GroupChoice);
+  private readonly groupChoices = inject(PlanGroupChoices);
   /** Was zuletzt je Zeitraum geschickt (oder mangels Link nicht gebraucht) wurde, als Prüfsumme */
   private readonly published = storedSignal<Record<string, string>>('feedback.publishedPlans', () => ({}), (data) =>
     data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, string>) : {},
@@ -164,6 +171,11 @@ export class PlanPublisher {
           console.warn(`Eintragungen für ${period.name} nicht übernommen`, e);
         }
         try {
+          await this.groupChoices.apply(login, period);
+        } catch (e) {
+          console.warn(`Gruppenwahlen für ${period.name} nicht übernommen`, e);
+        }
+        try {
           await this.publish(login, period);
         } catch (e) {
           console.warn(`Pläne für ${period.name} nicht gesendet`, e);
@@ -208,12 +220,15 @@ export class PlanPublisher {
     const groups = this.groupsStore.allGroups().filter((g) => g.periodId === period.id);
     const shared = this.sharedEvents(period);
     const { booking, bookingPeople } = this.bookingDraft(period);
+    const offered = period.groupChoice ? this.choice.offered(period.id) : [];
+    const chosen = (student: Student) => offered.find((g) => g.memberIds.includes(student.id))?.id;
     const people = students
       .map((student) => ({
         id: student.id,
         label: labels.get(student.id) ?? student.name,
         events: [...this.lessonEvents(student, groups, labels, period, config), ...shared].sort(byTime),
         ...(bookingPeople.has(student.id) ? { booking: bookingPeople.get(student.id) } : {}),
+        ...(chosen(student) ? { group: chosen(student) } : {}),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'de'));
     return {
@@ -222,6 +237,9 @@ export class PlanPublisher {
       color: config.themeColor,
       people,
       ...(booking ? { booking } : {}),
+      ...(offered.length > 0
+        ? { groupChoice: { groups: offered.map((g) => ({ id: g.id, name: this.choice.label(g), members: g.memberIds.length })) } }
+        : {}),
     };
   }
 
@@ -338,9 +356,17 @@ export class PlanPublisher {
         ics: toICalendar(`${draft.title}: ${person.label}`, person.events, new Date(), { refreshHours: REFRESH_HOURS }),
         pdf: await toBase64(pdfs[index]),
         ...(person.booking ? { booking: person.booking } : {}),
+        ...(person.group && draft.groupChoice ? { group: person.group } : {}),
       })),
     );
-    return JSON.stringify({ title: draft.title, dates: draft.dates, color: draft.color, people, ...(draft.booking ? { booking: draft.booking } : {}) });
+    return JSON.stringify({
+      title: draft.title,
+      dates: draft.dates,
+      color: draft.color,
+      people,
+      ...(draft.booking ? { booking: draft.booking } : {}),
+      ...(draft.groupChoice ? { groupChoice: draft.groupChoice } : {}),
+    });
   }
 }
 

@@ -39,6 +39,8 @@ export class SelfBookingSettings {
   protected readonly to = linkedSignal(() => this.running()?.to ?? this.period().to);
   /** Leer: der faire Anteil */
   protected readonly max = linkedSignal<number | null>(() => this.running()?.maxPerStudent ?? null);
+  /** ⚠ bei Zeiten mit eigenem Gruppenunterricht */
+  protected readonly markGroupClashes = linkedSignal(() => this.running()?.markGroupClashes !== false);
   protected readonly fair = computed(() => this.planning.fairShare(this.teacherIds(), this.period().id, this.from(), this.to(), true));
   protected readonly effectiveMax = computed(() => this.max() ?? this.fair().share);
   protected readonly valid = computed(
@@ -82,6 +84,7 @@ export class SelfBookingSettings {
       from: this.from(),
       to: this.to(),
       maxPerStudent: this.effectiveMax(),
+      ...(this.markGroupClashes() ? {} : { markGroupClashes: false }),
     };
     this.configStore.setSelfBooking(this.period().id, selfBooking);
     this.editing.set(false);

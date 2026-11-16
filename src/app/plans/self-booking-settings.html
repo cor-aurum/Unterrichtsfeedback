@@ -14,7 +14,7 @@
       <p class="message small" role="status">
         Läuft für {{ names(booking.teacherIds) }}: {{ formatShortDate(booking.from) }} bis
         {{ formatShortDate(booking.to) }}, höchstens {{ booking.maxPerStudent }}
-        {{ booking.maxPerStudent === 1 ? 'Termin' : 'Termine' }} je Person.
+        {{ booking.maxPerStudent === 1 ? 'Termin' : 'Termine' }} je Person{{ booking.markGroupClashes === false ? ', ohne ⚠ bei Gruppenunterricht' : '' }}.
       </p>
       <div class="row actions">
         <button class="secondary" (click)="editing.set(true)">Ändern</button>
@@ -53,6 +53,10 @@
         <input type="number" min="1" [value]="effectiveMax()" (change)="setMax($event)" />
       </label>
     </div>
+    <label class="mark-groups">
+      <input type="checkbox" [checked]="markGroupClashes()" (change)="markGroupClashes.set($any($event.target).checked)" />
+      Zeiten mit eigenem Gruppenunterricht mit ⚠ markieren (wählbar bleiben sie so oder so)
+    </label>
     <p class="muted small">
       {{ fair().slots }} Termine an {{ fair().days }} Tagen (frei und schon vergeben) für {{ fair().students }}
       {{ fair().students === 1 ? 'Person' : 'Personen' }} – vorgeschlagen sind {{ fair().share }} je Person. Schon

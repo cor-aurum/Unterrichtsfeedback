@@ -438,7 +438,7 @@
           </select>
         </label>
 
-        @for (teacher of activeTeacher.visibleTeachers(); track teacher.id; let first = $first, last = $last) {
+        @for (teacher of periodTeacherList(); track teacher.id; let first = $first, last = $last) {
           <section class="card teacher">
             <div class="row teacher-head">
               <input
@@ -458,10 +458,11 @@
               >⧉</button>
               <button
                 class="icon"
-                [disabled]="first && last"
-                (click)="removeTeacher(teacher)"
-                [title]="first && last ? 'Mindestens eine Lehrkraft wird gebraucht' : 'Lehrkraft löschen'"
-              >✕</button>
+                [disabled]="!canDeactivate(teacher)"
+                (click)="deactivateTeacher(teacher)"
+                [title]="deactivateTitle(teacher)"
+                aria-label="Lehrkraft deaktivieren"
+              >Deaktivieren</button>
             </div>
             <div class="teacher-fields">
               <label>
@@ -527,12 +528,40 @@
               />
             }
           </section>
+        } @empty {
+          <p class="muted">In „{{ windowsPeriodName() }}“ ist noch keine Lehrkraft eingetragen.</p>
+        }
+
+        @if (otherTeacherCount() > 0) {
+          <p class="muted small">
+            {{ otherTeacherCount() === 1 ? 'Eine weitere Lehrkraft ist' : otherTeacherCount() + ' weitere Lehrkräfte sind' }}
+            nicht in „{{ windowsPeriodName() }}“ eingetragen. Wer in welchem Zeitraum unterrichtet, legst du unter
+            <button type="button" class="link" (click)="tab.set('general')">Allgemein</button> beim Berichtszeitraum fest.
+          </p>
         }
 
         <div class="row add">
           <input #newTeacher type="text" class="grow" placeholder="Neue Lehrkraft" (keydown.enter)="addTeacher(newTeacher)" />
           <button class="secondary" (click)="addTeacher(newTeacher)">Hinzufügen</button>
         </div>
+
+        @if (inactiveTeachers().length > 0) {
+          <details class="inactive-teachers">
+            <summary>Deaktivierte Lehrkräfte ({{ inactiveTeachers().length }})</summary>
+            <p class="muted small">
+              Sie stehen in keiner Auswahl mehr, bleiben aber mit ihren Stunden in laufenden und vergangenen
+              Berichtszeiträumen. Ihr Konto auf dem Server ist gesperrt.
+            </p>
+            <ul>
+              @for (teacher of inactiveTeachers(); track teacher.id) {
+                <li class="row">
+                  <span class="grow">{{ teacher.name }} <span class="muted small">· seit {{ formatShortDate(teacher.inactiveSince!) }}</span></span>
+                  <button class="secondary" (click)="reactivateTeacher(teacher)">Wieder aktivieren</button>
+                </li>
+              }
+            </ul>
+          </details>
+        }
       }
       @case ('calendar') {
         <h2 class="tab-title">Kalender</h2>

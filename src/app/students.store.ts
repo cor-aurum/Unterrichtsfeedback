@@ -1,6 +1,6 @@
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { ConfigStore } from './config.store';
-import { formatShortDate, isActiveIn, Lesson, lessonAt, newId, Student, Teacher, teacherOf, today } from './model';
+import { formatShortDate, isActiveIn, Lesson, lessonAt, newId, Student, Teacher, teacherOf, today, withSkippedLesson } from './model';
 import { samePerson } from './import/student-import';
 import { ReportPeriod } from './report-period';
 import { storedSignal } from './stored-signal';
@@ -212,7 +212,8 @@ export class StudentsStore {
       return true;
     }
     if (!this.canHaveLesson(student, date)) return false;
-    const lesson: Lesson = { id: newId(), date, ...time, periodId: this.periodId(), checked: {}, texts: {} };
+    const teacherId = teacherOf(student, this.config(), this.periodId()).id;
+    const lesson: Lesson = { id: newId(), date, ...time, periodId: this.periodId(), teacherId, checked: {}, texts: {} };
     this.mutateStudent(studentId, (s) => s.lessons.push(lesson));
     this.selectedLessonId.set(lesson.id);
     return true;
@@ -250,8 +251,12 @@ export class StudentsStore {
     return true;
   }
 
+  /** Eine gelöschte automatische Stunde entsteht nicht neu (siehe `AutoLessons`). */
   removeLesson(studentId: string, lessonId: string): void {
-    this.mutateStudent(studentId, (student) => (student.lessons = student.lessons.filter((l) => l.id !== lessonId)));
+    this.mutateStudent(studentId, (student) => {
+      student.lessons = student.lessons.filter((l) => l.id !== lessonId);
+      withSkippedLesson(student, lessonId);
+    });
     if (this.selectedLessonId() === lessonId) this.selectedLessonId.set(null);
   }
 
@@ -308,6 +313,16 @@ export class StudentsStore {
     };
   }
 
+  /** Neue Stunden je Person (Personen-ID → Stunden), z. B. die automatischen; vorhandene IDs bleiben, wie sie sind. */
+  addLessons(byStudent: Map<string, Lesson[]>): void {
+    this.allStudents.update((students) =>
+      students.map((student) => {
+        const added = (byStudent.get(student.id) ?? []).filter((l) => !student.lessons.some((k) => k.id === l.id));
+        return added.length > 0 ? { ...student, lessons: [...student.lessons, ...added] } : student;
+      }),
+    );
+  }
+
   private mutateStudent(studentId: string, change: (student: Student) => void): void {
     this.allStudents.update((students) =>
       students.map((student) => {
@@ -339,12 +354,19 @@ export function parseStudents(data: unknown): Student[] {
       // Ältere Daten haben noch keine allgemeinen Freitexte.
       generalTexts: isRecord(student.generalTexts) ? student.generalTexts : {},
       lessons: student.lessons.map(parseLesson),
+      ...parseSkipped(student.skippedLessons),
       // Ältere Daten haben einen Lehrer statt Zeiträumen; die Zeiträume ergänzt `withPeriodMembership`.
       ...(isRecord(student.periods)
         ? {}
         : { legacyTeacherId: typeof student.teacherId === 'string' ? student.teacherId : null }),
     };
   });
+}
+
+/** Gelöschte automatische Stunden, siehe `Student.skippedLessons` */
+export function parseSkipped(data: unknown): { skippedLessons?: string[] } {
+  const ids = Array.isArray(data) ? data.filter((id): id is string => typeof id === 'string') : [];
+  return ids.length > 0 ? { skippedLessons: ids } : {};
 }
 
 function parsePeriods(data: Record<string, unknown>): Record<string, string | null> {
@@ -365,6 +387,7 @@ export function parseLesson(lesson: Partial<Lesson>): Lesson {
     ...(start ? { start } : {}),
     ...(durationMinutes ? { durationMinutes } : {}),
     ...(typeof lesson.periodId === 'string' ? { periodId: lesson.periodId } : {}),
+    ...(typeof lesson.teacherId === 'string' ? { teacherId: lesson.teacherId } : {}),
     checked: isRecord(lesson.checked) ? lesson.checked : {},
     texts: isRecord(lesson.texts) ? lesson.texts : {},
   };
