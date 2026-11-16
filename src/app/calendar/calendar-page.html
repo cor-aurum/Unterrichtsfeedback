@@ -198,6 +198,23 @@
           (change)="setDraft({ durationMinutes: numberOf($event) })"
         />
       </label>
+      @if (d.groupId) {
+        <label class="wide-field">
+          Ort
+          <input
+            type="text"
+            list="known-locations"
+            [value]="draftLocation(d)"
+            [placeholder]="defaultLocation(d) || 'z. B. Großer Saal'"
+            (change)="setDraft({ location: valueOf($event) })"
+          />
+          <datalist id="known-locations">
+            @for (place of knownLocations(); track place) {
+              <option [value]="place"></option>
+            }
+          </datalist>
+        </label>
+      }
     </div>
     @if (!d.id && d.groupId && otherGroups(d).length > 0) {
       <div class="group-choice">
@@ -436,6 +453,9 @@
                   <span class="name">Gruppe {{ groupLabel(group) }}</span>
                   <span class="detail">
                     {{ teacherTag(item.occurrence.appointment) }}{{ memberCount(group) }} {{ memberCount(group) === 1 ? 'Person' : 'Personen' }}
+                    @if (item.occurrence.appointment.location) {
+                      · {{ item.occurrence.appointment.location }}
+                    }
                     @if (item.occurrence.appointment.repeat) {
                       · {{ repeatText(item.occurrence.appointment) }}
                     }

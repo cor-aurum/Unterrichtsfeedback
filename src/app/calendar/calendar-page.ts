@@ -15,6 +15,7 @@ import {
   groupTeacherOf,
   instrumentOf,
   isTeachingDay,
+  locationIn,
   locationOn,
   NO_TEACHING_TEXT,
   ReportPeriodEntry,
@@ -895,6 +896,27 @@ export class CalendarPage {
     this.openedOccurrence.set(occurrence);
   }
 
+  /** Ort der Lehrkraft, in deren Kalender der Termin landet; vorausgewählt für Gruppentermine */
+  protected defaultLocation(draft: Draft): string {
+    const { id: _id, location: _location, calendarTeacherId, extraGroupIds: _extra, ...rest } = draft;
+    return this.groupsStore.teacherLocation({ ...rest, id: '', teacherId: calendarTeacherId }, draft.date);
+  }
+
+  /** Was im Feld „Ort“ steht: der eigene Ort des Termins oder der der Lehrkraft */
+  protected draftLocation(draft: Draft): string {
+    return draft.location ?? this.defaultLocation(draft);
+  }
+
+  /** Orte zur Auswahl: die der Lehrkräfte im Zeitraum und alle schon vergebenen eigenen Orte, nach Namen */
+  protected readonly knownLocations = computed(() => {
+    const periodId = this.reportPeriod.period().id;
+    const names = [
+      ...this.config().teachers.map((t) => locationIn(t, periodId)),
+      ...this.calendar.appointments().map((a) => a.location ?? ''),
+    ];
+    return [...new Set(names.map((n) => n.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+  });
+
   protected newGroupAppointment(): void {
     this.newAppointment(this.defaultDate(), true);
   }
@@ -956,7 +978,10 @@ export class CalendarPage {
       this.message.set(this.noLessonText(draft.date));
       return;
     }
-    const { id, lessonId, teacherId: _, calendarTeacherId, extraGroupIds, ...draftRest } = draft;
+    const { id, lessonId, teacherId: _, calendarTeacherId, extraGroupIds, location, ...rawRest } = draft;
+    // Eigener Ort nur bei Gruppenterminen und nur, wenn er vom Ort der Lehrkraft abweicht; sonst folgt er ihr.
+    const ownLocation = rawRest.groupId && location?.trim() && location.trim() !== this.defaultLocation(draft) ? location.trim() : '';
+    const draftRest = ownLocation ? { ...rawRest, location: ownLocation } : rawRest;
     // Neue Termine einer Person gehören zum gewählten Zeitraum; danach richtet sich auch ihr Lehrer.
     const rest = draftRest.studentId && !draftRest.periodId ? { ...draftRest, periodId: this.reportPeriod.period().id } : draftRest;
     // Steht der Termin nicht im Kalender des Lehrers der Person oder Gruppe, ist er eine Ausnahme.

@@ -36,6 +36,11 @@ export interface Appointment {
    * ältere Termine ohne ihn: siehe `studentPeriodOn`.
    */
   periodId?: string;
+  /**
+   * Eigener Ort eines Gruppentermins, z. B. „Großer Saal“ für eine Probe; fehlt er, gilt der Ort der Lehrkraft, in
+   * deren Kalender der Termin steht (siehe `GroupsStore.appointmentLocation`).
+   */
+  location?: string;
 }
 
 /** Welche Termine gemeint sind: die Termine dieser Personen und Gruppen (IDs) oder alle, für die die Funktion passt */
@@ -212,6 +217,7 @@ export function parseAppointments(data: unknown, periods: Period[]): Appointment
       ...(typeof a.lessonId === 'string' ? { lessonId: a.lessonId } : {}),
       ...(typeof a.teacherId === 'string' ? { teacherId: a.teacherId } : {}),
       ...(typeof a.periodId === 'string' && typeof a.studentId === 'string' ? { periodId: a.periodId } : {}),
+      ...(typeof a.location === 'string' && a.location.trim() && typeof a.groupId === 'string' ? { location: a.location.trim() } : {}),
     }));
 }
 

@@ -126,6 +126,12 @@ export class GroupsStore {
 
   /** Ort eines Termins an einem Tag: der seines Lehrers im Zeitraum des Termins */
   appointmentLocation(appointment: Appointment, date: string): string {
+    if (appointment.groupId && appointment.location?.trim()) return appointment.location.trim();
+    return this.teacherLocation(appointment, date);
+  }
+
+  /** Ort der Lehrkraft, in deren Kalender der Termin steht, im Zeitraum des Termins; ohne eigenen Ort des Termins */
+  teacherLocation(appointment: Appointment, date: string): string {
     const teacher = this.calendarTeacherOf(appointment);
     const periodId = this.appointmentPeriodId(appointment);
     const period = this.config().reportPeriods.find((p) => p.id === periodId);
