@@ -76,7 +76,40 @@ export class GroupPlanningPage {
    * Links alle Personen des Zeitraums. „Ohne Gruppe“ gibt es nicht mehr: Jede Person ist mindestens in der
    * automatischen Gruppe ihrer Lehrkraft.
    */
-  protected readonly listed = this.students;
+  protected readonly listed = computed(() => {
+    const search = this.search().trim().toLowerCase();
+    const instrumentId = this.instrumentFilter();
+    const matchesGroup = this.groupMatcher(this.groupFilter());
+    return this.students()
+      .filter((student) => !search || student.name.toLowerCase().includes(search))
+      .filter((student) => !instrumentId || instrumentOf(student, this.config()).id === instrumentId)
+      .filter(matchesGroup);
+  });
+
+  // Filter der Personenliste links; der Lehrerfilter oben gilt für die ganze Seite.
+  protected readonly search = signal('');
+  protected readonly instrumentFilter = signal('');
+  /** Leer: alle; `none`: nur in der automatischen Gruppe; sonst die ID einer Gruppe */
+  protected readonly groupFilter = signal('');
+  protected readonly filtered = computed(() => !!(this.search().trim() || this.instrumentFilter() || this.groupFilter()));
+  /** Instrumente der Personen in der Liste, nach Namen */
+  protected readonly instruments = computed(() => {
+    const byId = new Map(this.students().map((s) => instrumentOf(s, this.config())).map((i) => [i.id, i]));
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  });
+
+  protected resetFilters(): void {
+    this.search.set('');
+    this.instrumentFilter.set('');
+    this.groupFilter.set('');
+  }
+
+  private groupMatcher(filter: string): (student: Student) => boolean {
+    if (!filter) return () => true;
+    if (filter === 'none') return (student) => this.groupsStore.groupsOf(student.id).every((group) => group.auto);
+    const group = this.groupsStore.groups().find((g) => g.id === filter);
+    return (student) => !!group?.memberIds.includes(student.id);
+  }
   protected readonly selected = signal(new Set<string>());
   /** ID der Zielgruppe oder `new` */
   protected readonly target = signal('new');

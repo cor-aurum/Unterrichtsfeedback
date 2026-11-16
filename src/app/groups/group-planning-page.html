@@ -23,12 +23,44 @@
 <div class="planning">
   <section class="card unassigned">
     <h2>Personen <span class="badge">{{ students().length }}</span></h2>
-    @if (listed().length === 0) {
+    @if (students().length === 0) {
       <p class="muted">Noch keine Personen in diesem Zeitraum. <a routerLink="/personen">Personen anlegen</a></p>
     } @else {
+      <div class="person-filter">
+        <input
+          type="search"
+          placeholder="Personen suchen …"
+          aria-label="Personen suchen"
+          [value]="search()"
+          (input)="search.set(valueOf($event))"
+        />
+        <div class="row filter-selects">
+          @if (instruments().length > 1) {
+            <select aria-label="Nach Instrument filtern" (change)="instrumentFilter.set(valueOf($event))">
+              <option value="" [selected]="!instrumentFilter()">Alle Instrumente</option>
+              @for (instrument of instruments(); track instrument.id) {
+                <option [value]="instrument.id" [selected]="instrument.id === instrumentFilter()">{{ instrument.name }}</option>
+              }
+            </select>
+          }
+          <select aria-label="Nach Gruppe filtern" (change)="groupFilter.set(valueOf($event))">
+            <option value="" [selected]="!groupFilter()">Alle Gruppen</option>
+            <option value="none" [selected]="groupFilter() === 'none'">Ohne eigene Gruppe</option>
+            @for (group of groups(); track group.id) {
+              <option [value]="group.id" [selected]="group.id === groupFilter()">Gruppe {{ label(group) }}</option>
+            }
+          </select>
+        </div>
+        @if (filtered()) {
+          <p class="muted small filter-count">
+            {{ listed().length }} von {{ students().length }} Personen
+            <button class="secondary small-button" (click)="resetFilters()">Filter zurücksetzen</button>
+          </p>
+        }
+      </div>
       <label class="check select-all">
         <input type="checkbox" [checked]="allSelected()" (change)="selectAll($any($event.target).checked)" />
-        Alle auswählen
+        {{ filtered() ? 'Alle angezeigten auswählen' : 'Alle auswählen' }}
       </label>
       <ul class="people">
         @for (student of listed(); track student.id) {
@@ -38,12 +70,14 @@
               <span class="grow">
                 {{ student | studentLabel }}
                 @if (groupsText(student); as text) {
-                  <span class="groups-line">{{ text }}</span>
+                  <span class="groups-line">· {{ text }}</span>
                 }
               </span>
               <span class="muted small">{{ ageText(student) }}</span>
             </label>
           </li>
+        } @empty {
+          <li class="muted small">Keine Personen passen zum Filter.</li>
         }
       </ul>
       <div class="assign">

@@ -166,7 +166,10 @@
     <li>
       <strong>Person bearbeiten:</strong> Klickst du eine Person an, änderst du rechts Name, Geburtsdatum, Instrument und – bei
       mehreren Lehrer:innen – ihre Lehrkraft im gewählten Berichtszeitraum. Darunter stehen ihre Berichtszeiträume und
-      Gruppen (ein Klick öffnet die Gruppe), der nächste freie Termin mit <kbd>Termin eintragen</kbd> und
+      Gruppen (ein Klick öffnet die Gruppe, ✕ nimmt sie heraus). Über <em>+ Zu Gruppe hinzufügen …</em> nimmst du sie
+      direkt in eine Gruppe des Zeitraums auf oder legst mit <em>Neue Gruppe …</em> eine an, in der sie gleich Mitglied
+      ist (bei ihrer Lehrkraft). Aus der automatischen Gruppe ihrer Lehrkraft lässt sie sich nicht herausnehmen.
+      Weiter unten stehen der nächste freie Termin mit <kbd>Termin eintragen</kbd> und
       <kbd>Stunden erfassen</kbd>, das direkt zu ihren Stunden führt.
     </li>
     <li>
@@ -212,9 +215,11 @@
   <ul>
     <li>
       <strong>Personen:</strong> Links stehen alle Personen des gewählten Berichtszeitraums mit ihrem Alter (sofern
-      ein Geburtsdatum eingetragen ist); unter jeder steht, in welchen Gruppen sie ist – mindestens in der
+      ein Geburtsdatum eingetragen ist); klein hinter dem Namen steht, in welchen Gruppen sie ist – mindestens in der
       automatischen Gruppe ihrer Lehrkraft. Bei mehreren Lehrkräften schränkst du oben unter <em>Lehrkraft</em> auf
-      eine ein.
+      eine ein. Über der Liste suchst du nach Namen und filterst nach Instrument oder Gruppe; <em>Ohne eigene
+      Gruppe</em> zeigt, wer nur in der automatischen Gruppe ist. <em>Alle angezeigten auswählen</em> hakt dann nur die
+      gefilterten an.
     </li>
     <li>
       <strong>Zuordnen:</strong> Personen anhaken (oder <em>Alle auswählen</em>), eine Gruppe wählen oder
@@ -257,8 +262,8 @@
 <section class="card" id="kalender">
   <h2>Kalender</h2>
   <figure>
-    <img src="help/kalender.jpg" alt="Seite „Kalender“ mit einer Woche und den Terminen je Tag" />
-    <figcaption>Eine Woche mit den Terminen je Tag; mit den Pfeilen blätterst du weiter.</figcaption>
+    <img src="help/kalender.jpg" alt="Seite „Kalender“ mit einer Woche als Zeitraster: allgemeine Termine, Gruppentermine und eine erfasste Stunde" />
+    <figcaption>Eine Woche als Zeitraster mit den Terminen je Tag; mit den Pfeilen blätterst du weiter.</figcaption>
   </figure>
   <h3>Ansicht</h3>
   <ul>
@@ -632,7 +637,7 @@
 <section class="card" id="konfiguration">
   <h2>Konfiguration</h2>
   <figure>
-    <img src="help/konfiguration.jpg" alt="Seite „Konfiguration“ mit Überschrift, Themenfarbe und Instrumenten" />
+    <img src="help/konfiguration.jpg" alt="Seite „Konfiguration“, Bereich Allgemein mit eigener Farbe, Ziel des Logos und Platzhaltern" />
     <figcaption>
       Hier richtest du ein, was du im Unterricht anklicken kannst und was im PDF steht. Links wählst du den
       Bereich: Allgemein, Abschnitte, Feste Inhalte, Gruppen-Abschnitte, Gruppen-Inhalte, Kopf- &amp; Fußzeile,
@@ -772,19 +777,19 @@
 <section class="card" id="export">
   <h2>Export &amp; Sicherung</h2>
   <figure>
-    <img src="help/export.jpg" alt="Seite „Export &amp; Sicherung“ mit PDF-Export und Datensicherung" />
-    <figcaption>Oben erstellst du das PDF, unten sicherst du deine Daten.</figcaption>
+    <img src="help/export.jpg" alt="Seite „Export &amp; Sicherung“ mit der Auswertung des Unterrichts je Lehrkraft" />
+    <figcaption>Ganz oben steht die Auswertung der Stunden je Lehrkraft; darunter folgen die PDFs, Server und Datensicherung.</figcaption>
   </figure>
   <ul>
     <li>
-      <strong>PDF erstellen:</strong> Wähle <em>Alle Personen</em> oder <em>Nur eine Person</em> und klicke auf <kbd>PDF erstellen</kbd>. Jede Person
-      beginnt auf einer neuen Seite.
-    </li>
-    <li>
-      <strong>Auswertung: Unterricht je Lehrkraft</strong> zeigt für einen Berichtszeitraum, wie viele Stunden jede
+      <strong>Auswertung: Unterricht je Lehrkraft</strong> (ganz oben) zeigt für einen Berichtszeitraum, wie viele Stunden jede
       Lehrkraft gegeben hat und wie lange – getrennt nach Einzel- und Gruppenunterricht, auch für deaktivierte
       Lehrkräfte. Gezählt wird bei der Lehrkraft, die die Stunde gegeben hat; Stunden ohne Länge zählen mit der
       Standardlänge. <kbd>Als Tabelle (Excel/CSV) herunterladen</kbd> gibt die Zahlen für Excel aus.
+    </li>
+    <li>
+      <strong>PDF erstellen:</strong> Wähle <em>Alle Personen</em> oder <em>Nur eine Person</em> und klicke auf <kbd>PDF erstellen</kbd>. Jede Person
+      beginnt auf einer neuen Seite.
     </li>
     <li>
       Gibt es Gruppen, erstellst du darunter das <strong>Gruppen-PDF</strong> für alle Gruppen mit Gruppenstunden im
@@ -798,6 +803,12 @@
     <li>
       Im PDF stehen nacheinander: die festen Inhalte für den Anfang, der allgemeine Teil, die Stunden als
       Zeitleiste und die festen Inhalte für das Ende. Bei nur einer Stunde steht ihr Datum oben in der Infozeile.
+    </li>
+    <li>
+      <strong>Server</strong> (über der Datensicherung): Über einen Unterrichtsfeedback-Server teilen sich mehrere Lehrkräfte und Geräte die Daten
+      (siehe unten). Eigene Änderungen schickt die App kurz nach der Eingabe, Änderungen anderer übernimmt sie beim
+      Start, beim Zurückkehren zur App und alle 20 Sekunden. Nur wenn dieselben Daten hier und auf einem anderen
+      Gerät geändert wurden, fragt die App, welche Fassung gilt.
     </li>
     <li>
       <strong>Daten exportieren</strong> lädt ein ZIP mit allen Personen, Stunden, Terminen und der
@@ -815,12 +826,6 @@
       Zeitraum neu dazukommt: Sie spielt sie beim ersten Start im Willkommensdialog ein, der Zeitraum ist dann gewählt,
       und man wählt sich aus oder legt sich mit Name und Instrument neu an. Auf einem Gerät mit Daten ersetzt auch
       diese Sicherung alles – darauf weist die App vorher hin.
-    </li>
-    <li>
-      <strong>Server:</strong> Über einen Unterrichtsfeedback-Server teilen sich mehrere Lehrkräfte und Geräte die Daten
-      (siehe unten). Eigene Änderungen schickt die App kurz nach der Eingabe, Änderungen anderer übernimmt sie beim
-      Start, beim Zurückkehren zur App und alle 20 Sekunden. Nur wenn dieselben Daten hier und auf einem anderen
-      Gerät geändert wurden, fragt die App, welche Fassung gilt.
     </li>
     <li>
       <strong>Alles zurücksetzen</strong> (ganz unten) löscht auf diesem Gerät alle Personen, Stunden, Gruppen,

@@ -238,6 +238,31 @@ export class PeoplePage {
     this.router.navigate(['/stunden']);
   }
 
+  /** Gruppen des Zeitraums, in die man die Person noch aufnehmen kann, nach Namen; automatische nicht */
+  protected joinableGroups(student: Student): Group[] {
+    return this.groups
+      .groups()
+      .filter((group) => !group.auto && !group.memberIds.includes(student.id))
+      .sort((a, b) => this.groupName(a).localeCompare(this.groupName(b), 'de'));
+  }
+
+  /** Nimmt die Person in die gewählte Gruppe auf; „Neue Gruppe …“ legt sie bei ihrer Lehrkraft an. */
+  protected joinGroup(student: Student, event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const choice = select.value;
+    select.value = '';
+    if (choice === 'new') {
+      const name = prompt('Name der neuen Gruppe:')?.trim();
+      if (name) this.groups.createGroups([{ name, teacherId: this.teacherOf(student).id, memberIds: [student.id] }]);
+    } else if (choice) {
+      this.groups.addMembers(choice, [student.id]);
+    }
+  }
+
+  protected leaveGroup(student: Student, group: Group): void {
+    this.groups.toggleMember(group.id, student.id);
+  }
+
   /** z. B. „Gruppe Chor“ oder „Gruppen Chor, Streicher“; leer, wenn die Person in keiner Gruppe ist */
   protected groupsLineOf(student: Student): string {
     const names = this.groups.groupsOf(student.id).map((group) => this.groupName(group));

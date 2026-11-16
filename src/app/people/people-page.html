@@ -218,15 +218,32 @@
           }
         </div>
         <span class="muted">Gruppen</span>
-        @if (groups.groupsOf(student.id).length > 0) {
-          <div class="member-groups">
-            @for (group of groups.groupsOf(student.id); track group.id) {
+        <div class="member-groups">
+          @for (group of groups.groupsOf(student.id); track group.id) {
+            <span class="group-chip">
               <button class="secondary" (click)="openGroup(group)" title="Gruppe öffnen">{{ groupName(group) }}</button>
-            }
-          </div>
-        } @else {
-          <span class="muted small">in keiner Gruppe – Mitglieder legst du unter „Stunden erfassen“ bei der Gruppe fest</span>
-        }
+              @if (!group.auto) {
+                <button
+                  class="icon chip-remove"
+                  (click)="leaveGroup(student, group)"
+                  title="Aus der Gruppe nehmen"
+                  [attr.aria-label]="student.name + ' aus ' + groupName(group) + ' nehmen'"
+                >✕</button>
+              }
+            </span>
+          } @empty {
+            <span class="muted small">in keiner Gruppe</span>
+          }
+          @if (isActive(student)) {
+            <select class="join-group" [attr.aria-label]="student.name + ' zu einer Gruppe hinzufügen'" (change)="joinGroup(student, $event)">
+              <option value="" selected>+ Zu Gruppe hinzufügen …</option>
+              @for (group of joinableGroups(student); track group.id) {
+                <option [value]="group.id">{{ groupName(group) }}</option>
+              }
+              <option value="new">Neue Gruppe …</option>
+            </select>
+          }
+        </div>
       </div>
 
       @if (isActive(student)) {

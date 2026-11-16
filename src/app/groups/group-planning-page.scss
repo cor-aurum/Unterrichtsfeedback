@@ -93,6 +93,42 @@ h3 {
   min-width: 0;
 }
 
+.person-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+
+  input[type='search'] {
+    width: 100%;
+  }
+}
+
+.filter-selects {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+
+  select {
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
+}
+
+.filter-count {
+  margin: 0;
+
+  .small-button {
+    margin-left: 0.4rem;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+.groups-line {
+  margin-left: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .assign {
   display: flex;
   flex-direction: column;
