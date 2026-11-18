@@ -548,6 +548,18 @@ code {
   margin-top: 0.35rem;
 }
 
+.without-period-title {
+  margin: 1.25rem 0 0.25rem;
+}
+
+.join-periods {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-basis: 100%;
+  font-size: 0.9rem;
+}
+
 .inactive-teachers {
   margin-top: 1.25rem;
 
@@ -566,4 +578,15 @@ code {
     padding: 0.35rem 0;
     border-top: 1px solid var(--border);
   }
+}
+
+/* Verweis auf einen anderen Tab mitten im Text */
+.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary-text);
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
 }

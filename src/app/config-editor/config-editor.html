@@ -143,7 +143,7 @@
                     <app-teaching-windows-editor class="shared-windows" [periodId]="period.id" [readonly]="locked(period)" />
                   }
                 </div>
-                @if (activeTeacher.visibleTeachers().length > 1) {
+                @if (teachersOf(period).length > 1) {
                   <div class="period-teachers">
                     <span class="choice-label">Aktive Lehrer:innen</span>
                     <ul>
@@ -483,30 +483,13 @@
               </label>
             </div>
 
-            @if (sync.login()) {
-              <div class="account">
-                @if (accounts().get(teacher.id); as username) {
-                  <span class="muted small">Konto auf dem Server: <strong>{{ username }}</strong></span>
-                } @else {
-                  <button class="secondary" (click)="invite(teacher)">Einladungscode erzeugen</button>
-                  @if (invites()[teacher.id]; as invite) {
-                    <textarea class="invite-code" readonly rows="2" [value]="invite.code" (focus)="selectAll($event)"></textarea>
-                    <span class="muted small">
-                      Gültig bis {{ invite.expires }}, einmal. {{ teacher.name }} fügt ihn beim ersten Start der App unter
-                      „Einladungscode“ ein. Personen sind erst in Berichtszeiträumen zu sehen, in denen du die Lehrkraft unter
-                      „Allgemein“ als aktive Lehrkraft einträgst.
-                    </span>
-                    <button class="secondary" (click)="copy(invite.code)">Kopieren</button>
-                  }
-                }
-              </div>
-            }
+            <ng-container *ngTemplateOutlet="account; context: { $implicit: teacher }" />
 
             <h3>Unterrichtszeiten <span class="muted">· {{ windowsPeriodName() }}</span></h3>
             @if (windowsPeriodShared()) {
               <p class="muted small inherit-hint">
                 In „{{ windowsPeriodName() }}“ gelten für alle Lehrkräfte dieselben Unterrichtszeiten. Du bearbeitest sie
-                unter <button type="button" class="link" (click)="tab.set('general')">Allgemein</button> beim
+                unter <button type="button" class="link-button" (click)="tab.set('general')">Allgemein</button> beim
                 Berichtszeitraum.
               </p>
             } @else {
@@ -536,14 +519,87 @@
           <p class="muted small">
             {{ otherTeacherCount() === 1 ? 'Eine weitere Lehrkraft ist' : otherTeacherCount() + ' weitere Lehrkräfte sind' }}
             nicht in „{{ windowsPeriodName() }}“ eingetragen. Wer in welchem Zeitraum unterrichtet, legst du unter
-            <button type="button" class="link" (click)="tab.set('general')">Allgemein</button> beim Berichtszeitraum fest.
+            <button type="button" class="link-button" (click)="tab.set('general')">Allgemein</button> beim Berichtszeitraum fest.
           </p>
+        }
+
+        @if (teachersWithoutPeriod().length > 0) {
+          <h3 class="without-period-title">Ohne Berichtszeitraum</h3>
+          <p class="muted small">
+            Diese Lehrkräfte stehen in keinem laufenden oder künftigen Berichtszeitraum und in keiner Auswahl.
+            @if (sync.login()) {
+              Alle Lehrkräfte sehen sie hier und können sie in ihre Berichtszeiträume aufnehmen.
+            }
+            Aufnehmen kannst du sie hier in den oben gewählten Zeitraum oder unter
+            <button type="button" class="link-button" (click)="tab.set('general')">Allgemein</button> beim Berichtszeitraum.
+          </p>
+          @for (teacher of teachersWithoutPeriod(); track teacher.id) {
+            <section class="card teacher without-period">
+              <div class="row teacher-head">
+                <input
+                  type="text"
+                  class="grow title"
+                  [value]="teacher.name"
+                  (change)="setTeacherName(teacher, $event)"
+                  aria-label="Name der Lehrkraft"
+                />
+                <button
+                  class="secondary"
+                  [disabled]="!canJoinWindowsPeriod()"
+                  (click)="joinWindowsPeriod(teacher)"
+                  [title]="canJoinWindowsPeriod() ? '' : 'Nur in laufende oder künftige Berichtszeiträume, in denen du selbst eingetragen bist'"
+                >In „{{ windowsPeriodName() }}“ aufnehmen</button>
+                <button
+                  class="icon"
+                  [disabled]="!canDeactivate(teacher)"
+                  (click)="deactivateTeacher(teacher)"
+                  [title]="deactivateTitle(teacher)"
+                  aria-label="Lehrkraft deaktivieren"
+                >Deaktivieren</button>
+              </div>
+              <div class="teacher-fields">
+                <label>
+                  Instrument
+                  <app-instrument-select
+                    [value]="teacherInstrumentId(teacher)"
+                    (valueChange)="store.updateTeacher(teacher.id, { instrumentId: $event })"
+                  />
+                </label>
+              </div>
+              <ng-container *ngTemplateOutlet="account; context: { $implicit: teacher }" />
+            </section>
+          }
         }
 
         <div class="row add">
           <input #newTeacher type="text" class="grow" placeholder="Neue Lehrkraft" (keydown.enter)="addTeacher(newTeacher)" />
           <button class="secondary" (click)="addTeacher(newTeacher)">Hinzufügen</button>
+          <label class="check join-periods">
+            <input type="checkbox" [checked]="joinPeriods()" (change)="joinPeriods.set($any($event.target).checked)" />
+            gleich in {{ sync.login() ? 'meine' : 'alle' }} laufenden Berichtszeiträume eintragen
+          </label>
         </div>
+
+        <ng-template #account let-teacher>
+            @if (sync.login()) {
+              <div class="account">
+                @if (accounts().get(teacher.id); as username) {
+                  <span class="muted small">Konto auf dem Server: <strong>{{ username }}</strong></span>
+                } @else {
+                  <button class="secondary" (click)="invite(teacher)">Einladungscode erzeugen</button>
+                  @if (invites()[teacher.id]; as invite) {
+                    <textarea class="invite-code" readonly rows="2" [value]="invite.code" (focus)="selectAll($event)"></textarea>
+                    <span class="muted small">
+                      Gültig bis {{ invite.expires }}, einmal. {{ teacher.name }} fügt ihn beim ersten Start der App unter
+                      „Einladungscode“ ein. Personen sind erst in Berichtszeiträumen zu sehen, in denen du die Lehrkraft unter
+                      „Allgemein“ als aktive Lehrkraft einträgst.
+                    </span>
+                    <button class="secondary" (click)="copy(invite.code)">Kopieren</button>
+                  }
+                }
+              </div>
+            }
+        </ng-template>
 
         @if (inactiveTeachers().length > 0) {
           <details class="inactive-teachers">

@@ -1,6 +1,6 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { ConfigStore } from './config.store';
-import { isActiveTeacher, Student, Teacher } from './model';
+import { isActiveTeacher, Student, Teacher, today } from './model';
 import { storedSignal } from './stored-signal';
 import { StudentsStore } from './students.store';
 import { ServerSync } from './sync/server-sync';
@@ -29,6 +29,21 @@ export class ActiveTeacher {
     if (!me) return active;
     const shared = new Set([me, ...config.reportPeriods.filter((p) => p.teacherIds.includes(me)).flatMap((p) => p.teacherIds)]);
     return active.filter((teacher) => shared.has(teacher.id));
+  });
+
+  /**
+   * Aktive Lehrkräfte, die in keinem laufenden oder künftigen Berichtszeitraum stehen und die man in einen aufnehmen
+   * kann. Mit Server kennt die App nur die eigenen Zeiträume; dort zählen deshalb nur die ohne Zeitraum angelegten
+   * (`Teacher.withoutPeriod`) und die sichtbaren, z. B. aus einem gemeinsamen früheren Zeitraum.
+   */
+  readonly teachersWithoutPeriod = computed<Teacher[]>(() => {
+    const config = this.config();
+    const current = new Set(config.reportPeriods.filter((p) => p.to >= today()).flatMap((p) => p.teacherIds));
+    const visible = new Set(this.visibleTeachers().map((t) => t.id));
+    return config.teachers
+      .filter(isActiveTeacher)
+      .filter((teacher) => !current.has(teacher.id))
+      .filter((teacher) => teacher.withoutPeriod || visible.has(teacher.id));
   });
 
   /** Farbe der aktiven Lehrkraft, sonst die allgemeine */

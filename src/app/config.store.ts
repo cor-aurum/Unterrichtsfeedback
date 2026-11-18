@@ -138,6 +138,7 @@ export class ConfigStore {
         teachingWindows: defaultTeachingWindows(config.calendar),
         periodWindows: {},
         periodLocations: {},
+        ...(joinPeriodsOf === null ? { withoutPeriod: true as const } : {}),
       });
       if (joinPeriodsOf === null) return;
       config.reportPeriods
@@ -157,12 +158,13 @@ export class ConfigStore {
    * wenn jemand eine Lehrkraft „neu“ anlegt, die es schon gibt, die er bisher aber nicht sehen konnte.
    */
   joinTeacherToPeriods(teacherId: string, ofTeacherId: string): void {
-    this.mutate((config) =>
-      config.reportPeriods
+    this.mutate((config) => {
+      const periods = config.reportPeriods
         .filter((period) => period.to >= today() && period.teacherIds.includes(ofTeacherId))
-        .filter((period) => !period.teacherIds.includes(teacherId))
-        .forEach((period) => period.teacherIds.push(teacherId)),
-    );
+        .filter((period) => !period.teacherIds.includes(teacherId));
+      periods.forEach((period) => period.teacherIds.push(teacherId));
+      if (periods.length > 0) clearWithoutPeriod(config, teacherId);
+    });
   }
 
   /** Ort des Lehrers in einem Berichtszeitraum; die anderen Zeiträume behalten ihren. */
@@ -493,9 +495,9 @@ export class ConfigStore {
     this.mutate((config) => {
       const period = config.reportPeriods.find((p) => p.id === periodId);
       if (!period) return;
-      period.teacherIds = period.teacherIds.includes(teacherId)
-        ? period.teacherIds.filter((id) => id !== teacherId)
-        : [...period.teacherIds, teacherId];
+      const joining = !period.teacherIds.includes(teacherId);
+      period.teacherIds = joining ? [...period.teacherIds, teacherId] : period.teacherIds.filter((id) => id !== teacherId);
+      if (joining) clearWithoutPeriod(config, teacherId);
     });
   }
 
@@ -879,6 +881,7 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       ...(isHexColor(t.themeColor) ? { themeColor: t.themeColor.toLowerCase() } : {}),
       ...(HOME_PAGES.some((page) => page.path === t.homePage) ? { homePage: t.homePage } : {}),
       ...(typeof t.inactiveSince === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.inactiveSince) ? { inactiveSince: t.inactiveSince } : {}),
+      ...(t.withoutPeriod === true ? { withoutPeriod: true as const } : {}),
     }));
   }
   const legacyWindows = (config.calendar as { teachingWindows?: unknown } | undefined)?.teachingWindows;
@@ -1157,4 +1160,10 @@ export function defaultConfig(): FeedbackConfig {
     reportPeriods: [{ ...schoolHalfYear(today()), teacherIds: [teacherId] }],
     calendarPdf: { ...DEFAULT_CALENDAR_PDF_TEXTS },
   };
+}
+
+/** Die Lehrkraft ist jetzt in einem Berichtszeitraum; siehe `Teacher.withoutPeriod` */
+function clearWithoutPeriod(config: FeedbackConfig, teacherId: string): void {
+  const teacher = config.teachers.find((t) => t.id === teacherId);
+  if (teacher) delete teacher.withoutPeriod;
 }

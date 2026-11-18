@@ -29,6 +29,7 @@ import {
   homeLinkOf,
   isActiveTeacher,
   formatShortDate,
+  today,
 } from '../model';
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
@@ -172,12 +173,36 @@ export class ConfigEditor {
     const login = this.sync.login();
     const hidden = login && this.hiddenTeacherNamed(name);
     if (login && hidden) {
-      this.store.joinTeacherToPeriods(hidden.id, login.teacherId);
-      this.showError(`${hidden.name} gab es schon; die Lehrkraft ist jetzt in deinen laufenden Berichtszeiträumen.`);
+      if (this.joinPeriods()) this.store.joinTeacherToPeriods(hidden.id, login.teacherId);
+      this.showError(
+        this.joinPeriods()
+          ? `${hidden.name} gab es schon; die Lehrkraft ist jetzt in deinen laufenden Berichtszeiträumen.`
+          : `${hidden.name} gibt es schon; du kannst sie in einen deiner Berichtszeiträume aufnehmen.`,
+      );
+    } else if (!this.joinPeriods()) {
+      this.store.addTeacher(name, { joinPeriodsOf: null });
     } else {
       this.store.addTeacher(name, login ? { joinPeriodsOf: login.teacherId } : {});
     }
     input.value = '';
+  }
+
+  /** Neue Lehrkräfte gleich in die laufenden Berichtszeiträume eintragen; sonst stehen sie unter „Ohne Berichtszeitraum“. */
+  protected readonly joinPeriods = signal(true);
+
+  /** Lehrkräfte ohne laufenden oder künftigen Berichtszeitraum, nach Namen */
+  protected readonly teachersWithoutPeriod = computed(() =>
+    [...this.activeTeacher.teachersWithoutPeriod()].sort((a, b) => a.name.localeCompare(b.name, 'de')),
+  );
+
+  /** Aufnehmen geht in den oben gewählten Zeitraum, wenn er nicht vorbei ist; mit Server nur in einen eigenen. */
+  protected canJoinWindowsPeriod(): boolean {
+    const period = this.store.config().reportPeriods.find((p) => p.id === this.windowsPeriodId());
+    return !!period && !this.locked(period) && period.to >= today();
+  }
+
+  protected joinWindowsPeriod(teacher: Teacher): void {
+    if (this.canJoinWindowsPeriod()) this.store.toggleReportPeriodTeacher(this.windowsPeriodId(), teacher.id);
   }
 
   private hiddenTeacherNamed(name: string): Teacher | undefined {
@@ -264,9 +289,10 @@ export class ConfigEditor {
     return period ? byPeriodOrder(teachers, period.teacherIds) : teachers;
   });
   /** Sichtbare aktive Lehrkräfte, die nicht im gewählten Zeitraum sind */
-  protected readonly otherTeacherCount = computed(
-    () => this.activeTeacher.visibleTeachers().length - this.periodTeacherList().length,
-  );
+  protected readonly otherTeacherCount = computed(() => {
+    const listed = new Set([...this.periodTeacherList(), ...this.activeTeacher.teachersWithoutPeriod()].map((t) => t.id));
+    return this.activeTeacher.visibleTeachers().filter((t) => !listed.has(t.id)).length;
+  });
   protected readonly inactiveTeachers = computed(() => this.store.config().teachers.filter((t) => !isActiveTeacher(t)));
   protected readonly formatShortDate = formatShortDate;
 
@@ -449,7 +475,10 @@ export class ConfigEditor {
   /** Die aktiven Lehrer des Zeitraums in seiner Reihenfolge, danach die übrigen */
   protected teachersOf(period: ReportPeriodEntry): Teacher[] {
     // Lehrkräfte des Zeitraums immer, dazu die sichtbaren zum Aufnehmen
-    const teachers = this.store.config().teachers.filter((t) => period.teacherIds.includes(t.id) || this.activeTeacher.isVisible(t.id));
+    const pool = new Set(this.activeTeacher.teachersWithoutPeriod().map((t) => t.id));
+    const teachers = this.store
+      .config()
+      .teachers.filter((t) => period.teacherIds.includes(t.id) || this.activeTeacher.isVisible(t.id) || pool.has(t.id));
     return byPeriodOrder(teachers, period.teacherIds);
   }
 
