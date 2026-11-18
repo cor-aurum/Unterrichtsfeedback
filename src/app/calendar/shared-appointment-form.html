@@ -27,15 +27,15 @@
         />
       </label>
     }
-    <label class="check open-end">
-      <input type="checkbox" [checked]="!!d.openEnd" (change)="setOpenEnd(checked($event))" />
-      ohne Ende, nur Beginn (z. B. „Abfahrt“)
-    </label>
     <label>
       Ort
       <input type="text" [value]="d.location" placeholder="z. B. Aula" (change)="set({ location: valueOf($event) })" />
     </label>
   </div>
+  <label class="weekly">
+    <input type="checkbox" [checked]="!!d.openEnd" (change)="setOpenEnd(checked($event))" />
+    Ohne Ende, nur mit Beginn (z. B. „Abfahrt“)
+  </label>
   <div class="teacher-choice">
     <span class="choice-label">Lehrkräfte{{ periodName() ? ' in „' + periodName() + '“' : '' }}</span>
     <label>
