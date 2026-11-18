@@ -19,7 +19,7 @@ import { hoursText, teacherHours, TeacherHours } from './teacher-hours';
       <h2>Auswertung: Unterricht je Lehrkraft</h2>
       <p class="muted">
         Alle Stunden im Berichtszeitraum – von Hand erfasste und von selbst begonnene. Gezählt wird bei der Lehrkraft,
-        die die Stunde gegeben hat. Gelöschte (ausgefallene) Stunden zählen nicht.
+        die die Stunde gegeben hat. Gelöschte (ausgefallene) Stunden zählen nicht, Stunden ohne erschienene Person schon.
       </p>
       <label class="period">
         Berichtszeitraum
@@ -57,7 +57,12 @@ import { hoursText, teacherHours, TeacherHours } from './teacher-hours';
                       <span class="muted small">(deaktiviert)</span>
                     }
                   </td>
-                  <td>{{ row.individual.count }}</td>
+                  <td>
+                    {{ row.individual.count }}
+                    @if (row.absent > 0) {
+                      <span class="muted small" title="Davon nicht erschienen">({{ row.absent }} n. e.)</span>
+                    }
+                  </td>
                   <td>{{ hours(row.individual.minutes) }}</td>
                   <td>{{ row.group.count }}</td>
                   <td>{{ hours(row.group.minutes) }}</td>
@@ -68,6 +73,13 @@ import { hoursText, teacherHours, TeacherHours } from './teacher-hours';
             </tbody>
           </table>
         </div>
+        @if (absent() > 0) {
+          <p class="muted small">
+            „n. e.“: {{ absent() === 1 ? 'Eine Einzelstunde' : absent() + ' Einzelstunden' }}, zu
+            {{ absent() === 1 ? 'der' : 'denen' }} die Person nicht erschienen ist; sie
+            {{ absent() === 1 ? 'zählt' : 'zählen' }} mit.
+          </p>
+        }
         @if (withoutDuration() > 0) {
           <p class="muted small">
             {{ withoutDuration() === 1 ? 'Eine Stunde hat' : withoutDuration() + ' Stunden haben' }} keine Länge (ohne
@@ -140,6 +152,7 @@ export class TeacherHoursPanel {
     teacherHours(this.config(), this.periodId(), this.students(), this.groups()),
   );
   protected readonly withoutDuration = computed(() => this.rows().reduce((sum, row) => sum + row.withoutDuration, 0));
+  protected readonly absent = computed(() => this.rows().reduce((sum, row) => sum + row.absent, 0));
   protected readonly defaultMinutes = computed(() => this.config().calendar.defaultDurationMinutes);
   protected readonly hours = hoursText;
 
@@ -158,6 +171,7 @@ export class TeacherHoursPanel {
       'Lehrkraft',
       'Einzelstunden',
       'Einzelunterricht (Minuten)',
+      'Einzelstunden, nicht erschienen',
       'Gruppenstunden',
       'Gruppenunterricht (Minuten)',
       'Stunden gesamt',
@@ -168,6 +182,7 @@ export class TeacherHoursPanel {
       row.teacher.name + (row.teacher.inactiveSince ? ' (deaktiviert)' : ''),
       String(row.individual.count),
       String(row.individual.minutes),
+      String(row.absent),
       String(row.group.count),
       String(row.group.minutes),
       String(row.total.count),

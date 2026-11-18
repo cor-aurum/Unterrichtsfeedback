@@ -25,7 +25,15 @@ export interface SharedAppointment {
   allTeachers?: boolean;
   /** Die beteiligten Lehrer bekommen in dieser Zeit keine Terminvorschläge (automatische Planung). */
   blocksPlanning: boolean;
+  /**
+   * Nur Beginn, kein Ende, z. B. „Abfahrt“ oder „Treffpunkt“. Der Termin blockiert keine Zeit; `durationMinutes` bleibt
+   * für das Formular gespeichert, zählt aber nirgends (siehe `sharedTimeText`, `sharedSpanMinutes`).
+   */
+  openEnd?: true;
 }
+
+/** Höhe eines Termins ohne Ende im Raster und in den Plänen, in Minuten; eine Zeile Text */
+export const OPEN_END_MINUTES = 20;
 
 /** Ein allgemeiner Termin an einem bestimmten Tag; bei Terminserien eine der Wiederholungen. */
 export interface SharedOccurrence {
@@ -37,8 +45,19 @@ export function sharedEndTime(appointment: SharedAppointment): string {
   return timeOf(minutesOf(appointment.start) + appointment.durationMinutes);
 }
 
-/** Überschneidet der Termin den Zeitraum von `start` bis `start + duration` Minuten (an seinem Tag)? */
+/** „15:00–16:00“, ohne Ende „ab 15:00“ */
+export function sharedTimeText(appointment: SharedAppointment): string {
+  return appointment.openEnd ? `ab ${appointment.start}` : `${appointment.start}–${sharedEndTime(appointment)}`;
+}
+
+/** Platz im Raster und in Plänen; ohne Ende eine Zeile (`OPEN_END_MINUTES`) */
+export function sharedSpanMinutes(appointment: SharedAppointment): number {
+  return appointment.openEnd ? OPEN_END_MINUTES : appointment.durationMinutes;
+}
+
+/** Überschneidet der Termin den Zeitraum von `start` bis `start + duration` Minuten (an seinem Tag)? Ohne Ende nie. */
 export function sharedOverlaps(appointment: SharedAppointment, start: number, duration: number): boolean {
+  if (appointment.openEnd) return false;
   const own = minutesOf(appointment.start);
   return start < own + appointment.durationMinutes && own < start + duration;
 }
@@ -60,5 +79,6 @@ export function parseSharedAppointments(data: unknown, periods: Period[]): Share
       teacherIds: Array.isArray(a.teacherIds) ? a.teacherIds.filter((id) => typeof id === 'string') : [],
       ...(a.allTeachers ? { allTeachers: true } : {}),
       blocksPlanning: a.blocksPlanning !== false,
+      ...(a.openEnd === true ? { openEnd: true as const } : {}),
     }));
 }

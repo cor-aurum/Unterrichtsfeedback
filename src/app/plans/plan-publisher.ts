@@ -2,6 +2,7 @@ import { DestroyRef, effect, inject, Injectable } from '@angular/core';
 import { addDays, Appointment, minutesOf, startMinutes, timeOf } from '../calendar/appointments';
 import { CalendarStore } from '../calendar/calendar.store';
 import { CalendarEvent, toICalendar } from '../calendar/ical';
+import { sharedSpanMinutes, sharedTimeText } from '../calendar/shared-appointments';
 import { ConfigStore } from '../config.store';
 import { GroupsStore } from '../groups.store';
 import {
@@ -324,9 +325,12 @@ export class PlanPublisher {
     return this.calendar
       .sharedOccurrences(period.from, period.to)
       .filter(({ appointment }) => appointment.allTeachers && appointment.teacherIds.length > 0)
-      .map(({ date, appointment }) =>
-        planEvent(appointment.id, date, minutesOf(appointment.start), appointment.durationMinutes, appointment.title, appointment.location),
-      );
+      .map(({ date, appointment }) => {
+        const begin = minutesOf(appointment.start);
+        const event = planEvent(appointment.id, date, begin, sharedSpanMinutes(appointment), appointment.title, appointment.location);
+        // Ohne Ende: „ab 15:00“, in der Kalenderdatei ein Zeitpunkt
+        return appointment.openEnd ? { ...event, time: sharedTimeText(appointment), end: event.start } : event;
+      });
   }
 
   /** Fertige Pläne für den Server: Termine je Tag, PDF (Base64) und Kalenderdatei je Person */

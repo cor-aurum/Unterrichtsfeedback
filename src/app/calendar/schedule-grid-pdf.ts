@@ -276,7 +276,8 @@ function writeBlock(doc: jsPDF, theme: Theme, block: Block, columnX: number, col
 
   const textX = x + 2.4;
   const textWidth = width - 3.4;
-  const time = `${timeOf(block.startMinutes)}–${timeOf(block.startMinutes + block.durationMinutes)}`;
+  // Der Eintrag bringt seine Zeit mit, z. B. „ab 15:00“ bei allgemeinen Terminen ohne Ende.
+  const time = block.time || `${timeOf(block.startMinutes)}–${timeOf(block.startMinutes + block.durationMinutes)}`;
   if (block.shared) {
     // Allgemeine Termine knapp: Zeit und Bezeichnung in einer Zeile oben im Kasten – passt die Zeile nicht (z. B.
     // in einer schmalen Bahn neben Unterricht), stehen sie wie beim Unterricht untereinander.

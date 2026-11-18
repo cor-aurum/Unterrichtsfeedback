@@ -14,6 +14,8 @@ export interface TeacherHours {
   total: LessonTally;
   /** Stunden ohne Länge (von Hand ohne Uhrzeit angelegt); sie zählen mit der Standardlänge */
   withoutDuration: number;
+  /** Einzelstunden, zu denen die Person nicht erschienen ist; sie zählen mit und sind hier noch einmal gezählt */
+  absent: number;
 }
 
 /**
@@ -30,7 +32,7 @@ export function teacherHours(config: FeedbackConfig, periodId: string, students:
   const row = (teacher: Teacher) => {
     let entry = rows.get(teacher.id);
     if (!entry) {
-      entry = { teacher, individual: tally(), group: tally(), total: tally(), withoutDuration: 0 };
+      entry = { teacher, individual: tally(), group: tally(), total: tally(), withoutDuration: 0, absent: 0 };
       rows.set(teacher.id, entry);
     }
     return entry;
@@ -41,6 +43,7 @@ export function teacherHours(config: FeedbackConfig, periodId: string, students:
     const entry = row(teacher);
     const minutes = lesson.durationMinutes ?? fallback;
     if (!lesson.durationMinutes) entry.withoutDuration++;
+    if (lesson.absent) entry.absent++;
     add(entry[kind], minutes);
     add(entry.total, minutes);
   };

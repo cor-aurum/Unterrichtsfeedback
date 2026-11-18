@@ -49,7 +49,8 @@ export class CalendarEvents {
       // Dieselbe UID bei allen Lehrern: Wer mehrere Lehrer in einen Kalender übernimmt, hat den Termin nur einmal.
       uid: `${appointment.id}-${date}@unterrichtsfeedback`,
       start: `${date}T${appointment.start}`,
-      end: endOf(date, minutesOf(appointment.start) + appointment.durationMinutes),
+      // Ohne Ende ein Zeitpunkt: Ende gleich Beginn
+      end: appointment.openEnd ? `${date}T${appointment.start}` : endOf(date, minutesOf(appointment.start) + appointment.durationMinutes),
       summary: appointment.title,
       location: appointment.location || undefined,
     }));

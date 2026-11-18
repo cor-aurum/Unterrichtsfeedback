@@ -89,6 +89,19 @@
       nicht neu. Leere, von selbst begonnene Stunden zählen im PDF mit, erscheinen dort aber nicht als eigene Einträge.
       Jede neue Stunde merkt sich die Lehrkraft, die sie gegeben hat.
     </li>
+    <li>
+      <strong>Zur Stunde, die dran ist:</strong> Ab 10 Minuten vor einem Einzel- oder Gruppentermin in deinem Kalender
+      steht oben auf „Stunden erfassen“ der Knopf <kbd>Zur Stunde von …</kbd>. Zum Beginn des Termins wechselt die Seite
+      einmal von selbst in diese Stunde, frühestens aber 5 Minuten nach dem Ende der vorigen Stunde – so kannst du
+      sie in Ruhe fertig ausfüllen. Solange du gerade in ein Textfeld schreibst, wartet der Wechsel. Gehst du danach
+      woandershin, bleibt es dabei; der Knopf bringt dich zurück.
+    </li>
+    <li>
+      <strong>Nicht zur Stunde erschienen:</strong> Der Knopf oben in einer Einzelstunde markiert sie, auch nachträglich;
+      <kbd>Doch erschienen</kbd> nimmt das zurück. Die Stunde fehlt dann im Feedback-PDF, zählt in der Auswertung je
+      Lehrkraft aber mit und steht dort als „n. e.“. Im Kalender ist der Termin grau mit durchgestrichenem Namen, und
+      die nächste Stunde muss nicht auf ihr Ende warten.
+    </li>
     <li><strong>Feedback geben:</strong> Passende Textbausteine anhaken und bei Bedarf etwas in die Freitextfelder schreiben.</li>
     <li>
       <strong>Baustein fehlt?</strong> Unter jeder Liste mit Textbausteinen kannst du einen neuen eintragen. Er wird
@@ -291,7 +304,8 @@
     </li>
     <li>
       <strong>Termine anderer Lehrkräfte:</strong> Im Termin- und im Blocker-Formular wählst du unter <em>Lehrer:innen</em>,
-      in wessen Kalender der Eintrag steht – vorausgewählt ist die aktive Lehrkraft. Über der Woche schaltest du
+      in wessen Kalender der Eintrag steht – vorausgewählt ist die aktive Lehrkraft. Zur Wahl stehen nur die
+      Lehrkräfte des Berichtszeitraums, in dem das Datum liegt. Über der Woche schaltest du
       zwischen der aktiven Lehrkraft und <em>Alle Lehrkräfte</em> um: Dann stehen die Termine, Blocker und allgemeinen
       Termine aller Lehrer:innen mit dem Namen der Lehrkraft in der Woche und lassen sich anklicken und bearbeiten.
     </li>
@@ -305,13 +319,12 @@
   <h3>Termine</h3>
   <ul>
     <li>
-      <strong>Termin anlegen:</strong> <kbd>+ Termin</kbd> oben oder <kbd>+</kbd> an einem Tag, dann Person oder
-      Gruppe, Datum, Beginn und Dauer wählen. Ein Klick auf eine freie Stelle im Raster legt dagegen einen
+      <strong>Termin anlegen:</strong> <kbd>+ Neu</kbd> → <kbd>Termin</kbd> oben oder <kbd>+</kbd> an einem Tag, dann
+      Person oder Gruppe, Datum, Beginn und Dauer wählen. Ein Klick auf eine freie Stelle im Raster legt dagegen einen
       <em>allgemeinen Termin</em> für alle Lehrkräfte des Berichtszeitraums an, mit dieser Uhrzeit (auf 15 Minuten
       abgerundet). Als Datum ist heute vorausgewählt – liegt heute nicht im
-      Berichtszeitraum, dessen erster Tag. <kbd>+ Gruppentermin</kbd> wählt gleich die erste Gruppe der Lehrkraft
-      vor (ohne Gruppen ist der Knopf gesperrt; Gruppen legst du unter „Stunden erfassen“ oder „Gruppenplanung“
-      an). Bei einem neuen
+      Berichtszeitraum, dessen erster Tag. Für einen Gruppentermin wählst du unter „Person oder Gruppe“ eine
+      Gruppe (Gruppen legst du unter „Stunden erfassen“ oder „Gruppenplanung“ an). Bei einem neuen
       Gruppentermin kannst du darunter weitere Gruppen anhaken, auch von anderen Lehrkräften: Jede bekommt einen Termin
       zur selben Zeit im Kalender ihrer Lehrkraft. Gruppentermine stehen als „Gruppe …“ mit gestricheltem Rand im
       Kalender. Unter <em>Ort</em> steht bei Gruppenterminen der Ort der Lehrkraft; trägst du einen anderen ein
@@ -372,12 +385,19 @@
       Wiederholung im Kalender ihrer Lehrkraft; der allgemeine Termin wird gelöscht.
     </li>
     <li>
+      <strong>Ohne Ende:</strong> Hakst du im Formular <em>ohne Ende, nur Beginn</em> an, z. B. für „Abfahrt“ oder
+      „Treffpunkt“, hat der Termin keine Dauer. Er steht als flache Leiste mit „ab 8:00“ im Kalender, in den PDFs und
+      auf den Seiten des Download-Links, in der iCal-Datei als Zeitpunkt. Er blockiert keine Zeit für die automatische
+      Planung und die Selbsteintragung. Die zuletzt eingetragene Dauer bleibt gespeichert, falls du den Haken wieder
+      wegnimmst.
+    </li>
+    <li>
       <strong>Allgemeine Termine importieren:</strong> <kbd>Termine importieren …</kbd> liest eine Excel- (.xlsx) oder
       CSV-Datei mit einer Zeile je Termin. Du ordnest die Spalten zu (Bezeichnung, Datum, Beginn, Ende oder Dauer,
       Ort, Lehrkraft); Überschriften wie „Datum“ oder „Raum“ erkennt die App selbst. Mehrere Lehrkräfte trennst du mit
       Komma oder „und“, Vor- oder Nachname genügt, wenn er eindeutig ist; ohne Lehrkraft gilt der Termin für alle, die
       am Tag im Berichtszeitraum aktiv sind. Die Vorschau zeigt jede Zeile; fehlerhafte Zeilen und Termine, die es
-      schon gibt (gleiche Bezeichnung, gleiches Datum, gleicher Beginn), werden übersprungen. Hat die Datei eine
+      schon gibt (gleiche Bezeichnung, gleiches Datum, gleicher Beginn), werden übersprungen. Sind in einer Datei mit Spalte „Ende“ Ende und Dauer leer, bekommt der Termin kein Ende. Hat die Datei eine
       Spalte „Art“ (wie die Tabelle aus dem Export), werden nur die Zeilen der Art „Allgemein“ übernommen. Mit
       <em>Frühester Termin am</em> übernimmst du z. B. die Termine des letzten Schuljahrs: Der früheste Termin der
       Datei liegt dann an diesem Tag, alle anderen behalten ihren Abstand in Tagen – auf den Wochentag wird dabei nicht

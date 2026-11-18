@@ -119,6 +119,8 @@ export function toSharedRows(
     const start =
       parseTime(cell(row, mapping.start)) ?? (mapping.start === null ? parseTime(dateCell) : null);
     const durationMinutes = durationOf(start, cell(row, mapping.end), cell(row, mapping.duration));
+    // Gibt es eine Spalte „Ende“ und sind Ende und Dauer leer, hat der Termin kein Ende (wie im Export der Tabelle).
+    const openEnd = mapping.end !== null && !cell(row, mapping.end) && !cell(row, mapping.duration);
     const { teacherIds, unknown, allTeachers } = teachersOf(cell(row, mapping.teachers), config, date);
     const problem = !title
       ? 'Bezeichnung fehlt'
@@ -142,6 +144,7 @@ export function toSharedRows(
         teacherIds,
         ...(allTeachers ? { allTeachers: true } : {}),
         blocksPlanning: true,
+        ...(openEnd ? { openEnd: true as const } : {}),
       },
       fileDate,
       unknownTeachers: unknown,

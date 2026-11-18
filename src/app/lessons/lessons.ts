@@ -1,10 +1,11 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ActiveTeacher } from '../active-teacher';
 import { StudentLabelPipe } from '../student-label.pipe';
 import { RouterLink } from '@angular/router';
 import { CalendarStore } from '../calendar/calendar.store';
 import { lessonStartAt } from '../calendar/lesson-start';
 import { LessonOpener } from '../calendar/lesson-opener';
+import { CurrentLesson, DueLesson } from '../calendar/current-lesson';
 import { minutesOf, startMinutes } from '../calendar/appointments';
 import { oneColumn } from '../viewport';
 import { FitViewport } from '../fit-viewport';
@@ -159,11 +160,63 @@ export class Lessons {
     if (next && this.opener.open(next.appointment, today())) scrollToTop();
   }
 
+  private readonly currentLesson = inject(CurrentLesson);
+  /** „Zur Stunde von …“: die Stunde, die laut Kalender dran ist, solange sie nicht offen ist */
+  protected readonly jumpOffer = computed(() => {
+    const due = this.currentLesson.due();
+    return due && !this.isShowing(due) ? due : null;
+  });
+
+  /** Bis zum Wechsel: wann die Seite von selbst zur Stunde wechselt */
+  protected followHint(due: DueLesson): string {
+    const now = this.clock.now();
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    return time < due.switchAt ? `wechselt um ${due.switchAt} von selbst` : '';
+  }
+
+  protected jumpTo(due: DueLesson): void {
+    if (this.currentLesson.open(due)) scrollToTop();
+  }
+
+  /**
+   * Wechselt einmal je Termin von selbst zur Stunde, die dran ist: ab ihrem Beginn, frühestens 5 Minuten nach dem Ende
+   * der vorigen. Nicht, solange man gerade tippt; dann beim nächsten Takt der Uhr.
+   */
+  private follow(due: DueLesson | null): void {
+    if (!due) return;
+    if (this.isShowing(due)) {
+      this.currentLesson.markFollowed(due);
+    } else if (this.currentLesson.shouldFollow(due) && !isTyping()) {
+      this.jumpTo(due);
+    }
+  }
+
+  /** Ist die Stunde zum Termin gerade offen? */
+  private isShowing(due: DueLesson): boolean {
+    const lesson = this.currentLesson.lessonOf(due.occurrence);
+    if (!lesson) return false;
+    const shown = due.occurrence.appointment.groupId
+      ? this.groups.selectedLesson()
+      : !this.groups.selectedGroup() && this.store.selectedLesson();
+    return !!shown && shown.id === lesson.id;
+  }
+
+  /** „Nicht zur Stunde erschienen“ setzen oder zurücknehmen; geht auch bei vergangenen Stunden. */
+  protected setAbsent(student: Student, lesson: Lesson, absent: boolean): void {
+    this.store.setLessonAbsent(student.id, lesson.id, absent);
+  }
+
   constructor() {
     // Der Hinweis gehört zur Person, bei der er entstanden ist.
     effect(() => {
       this.store.selectedStudentId();
       this.lessonMessage.set(null);
+    });
+    // Takt: die Uhr (alle 30 Sekunden) und die Stunde, die dran ist
+    effect(() => {
+      const due = this.currentLesson.due();
+      this.clock.now();
+      untracked(() => this.follow(due));
     });
   }
 
@@ -333,4 +386,9 @@ export class Lessons {
 
 function scrollToTop(): void {
   window.scrollTo({ top: 0 });
+}
+
+/** Steht der Cursor in einem Textfeld? Dann wechselt die Seite nicht mitten im Schreiben. */
+function isTyping(): boolean {
+  return !!document.activeElement?.matches('textarea, input[type="text"], input[type="search"]');
 }

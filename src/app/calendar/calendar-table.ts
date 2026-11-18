@@ -11,8 +11,9 @@ export interface CalendarRow {
   /** ISO-Datum */
   date: string;
   start: string;
+  /** Leer bei allgemeinen Terminen ohne Ende */
   end: string;
-  durationMinutes: number;
+  durationMinutes: number | null;
   location: string;
   teachers: string[];
 }
@@ -53,7 +54,7 @@ function rowCells(row: CalendarRow): string[] {
     WEEKDAY_NAMES[weekday(row.date)],
     row.start,
     row.end,
-    String(row.durationMinutes),
+    row.durationMinutes === null ? '' : String(row.durationMinutes),
     row.location,
     row.teachers.join(', '),
   ];

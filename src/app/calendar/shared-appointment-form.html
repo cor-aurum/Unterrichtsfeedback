@@ -15,15 +15,21 @@
       Beginn
       <input type="time" [value]="d.start" (change)="set({ start: valueOf($event) })" />
     </label>
-    <label>
-      Dauer (Minuten)
-      <input
-        type="number"
-        min="5"
-        step="5"
-        [value]="d.durationMinutes"
-        (change)="set({ durationMinutes: +valueOf($event) })"
-      />
+    @if (!d.openEnd) {
+      <label>
+        Dauer (Minuten)
+        <input
+          type="number"
+          min="5"
+          step="5"
+          [value]="d.durationMinutes"
+          (change)="set({ durationMinutes: +valueOf($event) })"
+        />
+      </label>
+    }
+    <label class="check open-end">
+      <input type="checkbox" [checked]="!!d.openEnd" (change)="setOpenEnd(checked($event))" />
+      ohne Ende, nur Beginn (z. B. „Abfahrt“)
     </label>
     <label>
       Ort
@@ -46,10 +52,12 @@
     }
   </div>
   <app-recurrence-fields [date]="d.date" [repeat]="d.repeat" (repeatChange)="set({ repeat: $event })" />
-  <label class="weekly">
-    <input type="checkbox" [checked]="d.blocksPlanning" (change)="set({ blocksPlanning: checked($event) })" />
-    Blockiert die Lehrkräfte für die automatische Planung
-  </label>
+  @if (!d.openEnd) {
+    <label class="weekly">
+      <input type="checkbox" [checked]="d.blocksPlanning" (change)="set({ blocksPlanning: checked($event) })" />
+      Blockiert die Lehrkräfte für die automatische Planung
+    </label>
+  }
   @if (d.id && d.repeat) {
     <p class="muted small">Änderungen und Löschen gelten für alle Wiederholungen und alle beteiligten Lehrkräfte.</p>
   }

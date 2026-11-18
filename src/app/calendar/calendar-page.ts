@@ -18,6 +18,7 @@ import {
   locationIn,
   locationOn,
   NO_TEACHING_TEXT,
+  periodTeachers,
   ReportPeriodEntry,
   Student,
   Teacher,
@@ -64,7 +65,7 @@ import { IcalExportPanel } from './ical-export-panel';
 import { RecurrenceFields } from './recurrence-fields';
 import { LessonLoadPanel } from './lesson-load-panel';
 import { newSharedDraft, SharedAppointmentForm, SharedDraft } from './shared-appointment-form';
-import { SharedAppointment, sharedEndTime } from './shared-appointments';
+import { SharedAppointment, sharedSpanMinutes, sharedTimeText } from './shared-appointments';
 
 /** `calendarTeacherId`: in wessen Kalender der Termin steht; nur fürs Formular, gespeichert als Ausnahme (`teacherId`). */
 type Draft = Omit<Appointment, 'id'> & { id: string | null; calendarTeacherId: string; extraGroupIds?: string[] };
@@ -245,7 +246,14 @@ export class CalendarPage {
           // An Tagen in mehreren Zeiträumen nur die Termine des gewählten
           .filter((o) => o.date === date && this.reportPeriod.contains(date) && this.inSelectedPeriod(o.appointment))
           .map((occurrence) => ({ kind: 'appointment' as const, occurrence, ...spanOf(occurrence.appointment) })),
-        ...shared.filter((o) => o.date === date).map(({ appointment }) => ({ kind: 'shared' as const, shared: appointment, ...spanOf(appointment) })),
+        ...shared
+          .filter((o) => o.date === date)
+          .map(({ appointment }) => ({
+            kind: 'shared' as const,
+            shared: appointment,
+            startMinutes: minutesOf(appointment.start),
+            durationMinutes: sharedSpanMinutes(appointment),
+          })),
         ...blockerParts
           .filter((entry) => !fullDay.includes(entry))
           .map(({ blocker, part }) => ({
@@ -476,7 +484,7 @@ export class CalendarPage {
   protected readonly draft = signal<Draft | null>(null);
   protected readonly blockerDraft = signal<BlockerDraft | null>(null);
   protected readonly sharedDraft = signal<SharedDraft | null>(null);
-  protected readonly sharedEndTime = sharedEndTime;
+  protected readonly sharedTimeText = sharedTimeText;
   protected readonly minutesOf = minutesOf;
   protected readonly repeatText = repeatText;
   /** Angeklickter Termin an einem bestimmten Tag; nur gesetzt, solange ein vorhandener Termin bearbeitet wird. */
@@ -555,6 +563,20 @@ export class CalendarPage {
    * Wechselt den Kalender im Formular; eine Gruppe eines anderen Lehrers wird dabei durch eine passende ersetzt.
    * Ein neuer Termin beginnt dann mit der ersten Unterrichtszeit dieses Lehrers am Tag.
    */
+  /**
+   * Lehrkräfte zur Auswahl im Termin- und Blocker-Formular: die des Berichtszeitraums am Tag (liegt er in keinem, die
+   * des oben gewählten), ohne deaktivierte und mit Server ohne unsichtbare. Die schon eingetragene bleibt wählbar,
+   * z. B. bei einem älteren Termin, dessen Lehrkraft nicht mehr im Zeitraum ist.
+   */
+  protected teachersOn(date: string, selectedId: string): Teacher[] {
+    const config = this.config();
+    const inPeriod = config.reportPeriods.some((period) => containsDate(period, date));
+    const candidates = inPeriod ? activeTeachersOn(config, date) : periodTeachers(config, this.reportPeriod.period());
+    const choice = candidates.filter((teacher) => teacher.id === selectedId || this.activeTeacher.isVisible(teacher.id));
+    const selected = config.teachers.find((teacher) => teacher.id === selectedId);
+    return selected && !choice.includes(selected) ? [selected, ...choice] : choice;
+  }
+
   protected setDraftTeacher(teacherId: string): void {
     this.draft.update((current) => {
       if (!current) return current;
@@ -851,7 +873,7 @@ export class CalendarPage {
       appointment.location,
       this.soleTeacherOf(appointment),
       appointment.repeat ? repeatEveryText(appointment) : '',
-      appointment.blocksPlanning ? '' : 'blockiert nicht',
+      appointment.blocksPlanning || appointment.openEnd ? '' : 'blockiert nicht',
     ]
       .filter((part) => part)
       .join(' · ');
@@ -867,20 +889,18 @@ export class CalendarPage {
   }
 
   /**
-   * Neuer Termin im Kalender des aktiven Lehrers; mit `forGroup` ist eine Gruppe vorausgewählt. Hat der aktive
-   * Lehrer keine Gruppe, gilt der Kalender des Lehrers der ersten Gruppe.
+   * Neuer Termin im Kalender des aktiven Lehrers für seine erste Person, ohne Personen für seine erste Gruppe; Person
+   * oder Gruppe wählt man im Formular.
    */
-  protected newAppointment(date = this.defaultDate(), forGroup = false, start?: string): void {
+  protected newAppointment(date = this.defaultDate(), start?: string): void {
     const settings = this.config().calendar;
-    const firstGroup = this.groupsStore.groups()[0];
-    const teacher =
-      forGroup && this.groups().length === 0 && firstGroup ? groupTeacherOf(firstGroup, this.config()) : this.teacher();
+    const teacher = this.teacher();
     const firstWindow = teachingWindowsOn(teacher, this.config(), date, this.reportPeriod.period().id)[0];
     this.closeForms();
     this.draft.set({
       id: null,
       calendarTeacherId: teacher.id,
-      ...this.firstOwnerOf(teacher.id, forGroup),
+      ...this.firstOwnerOf(teacher.id, false),
       date,
       start: start ?? firstWindow?.from ?? '15:00',
       durationMinutes: settings.defaultDurationMinutes,
@@ -917,17 +937,13 @@ export class CalendarPage {
     return [...new Set(names.map((n) => n.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
   });
 
-  protected newGroupAppointment(): void {
-    this.newAppointment(this.defaultDate(), true);
-  }
-
   /** Gibt es zum Termin an diesem Tag schon eine Stunde (bei Gruppen: eine Gruppenstunde)? */
   protected hasLesson({ date, appointment }: Occurrence): boolean {
     return !!this.opener.lessonFor(appointment, date);
   }
 
   protected stateOf(occurrence: Occurrence): AppointmentState {
-    return appointmentState(occurrence.appointment, occurrence.date, this.hasLesson(occurrence), this.clock.now());
+    return appointmentState(occurrence.appointment, occurrence.date, this.opener.lessonFor(occurrence.appointment, occurrence.date), this.clock.now());
   }
 
   /** Öffnet die Stunde zum Termin oder legt sie mit Datum und Uhrzeit des Termins an und wechselt zur Erfassung. */
@@ -1196,10 +1212,10 @@ export class CalendarPage {
 /** Allgemeiner Termin als Eintrag im Plan, mit dem Ort hinter der Bezeichnung */
 function sharedEntry(appointment: SharedAppointment): ScheduleEntry {
   return {
-    time: `${appointment.start}–${sharedEndTime(appointment)}`,
+    time: sharedTimeText(appointment),
     name: appointment.location ? `${appointment.title} · ${appointment.location}` : appointment.title,
     startMinutes: minutesOf(appointment.start),
-    durationMinutes: appointment.durationMinutes,
+    durationMinutes: sharedSpanMinutes(appointment),
     shared: true,
   };
 }

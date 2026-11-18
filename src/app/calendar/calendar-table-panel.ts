@@ -111,8 +111,8 @@ export class CalendarTablePanel {
       title: appointment.title,
       date,
       start: appointment.start,
-      end: sharedEndTime(appointment),
-      durationMinutes: appointment.durationMinutes,
+      end: appointment.openEnd ? '' : sharedEndTime(appointment),
+      durationMinutes: appointment.openEnd ? null : appointment.durationMinutes,
       location: appointment.location,
       teachers: teachers.filter((t) => appointment.teacherIds.includes(t.id)).map((t) => t.name),
     }));

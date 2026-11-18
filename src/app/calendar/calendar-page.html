@@ -20,15 +20,7 @@
   <details class="menu" #newMenu>
     <summary class="button">+ Neu</summary>
     <div class="menu-items right" (click)="newMenu.open = false">
-      <button [disabled]="!anyStudents() && allGroupsEmpty()" (click)="newAppointment()">Termin</button>
-      <button
-        class="secondary"
-        [disabled]="allGroupsEmpty()"
-        (click)="newGroupAppointment()"
-        [title]="allGroupsEmpty() ? 'Gruppen legst du unter „Stunden erfassen“ an' : 'Termin für eine Gruppe'"
-      >
-        Gruppentermin
-      </button>
+      <button [disabled]="!anyStudents() && allGroupsEmpty()" (click)="newAppointment()" title="Termin für eine Person oder Gruppe">Termin</button>
       <button class="secondary" (click)="newShared()" title="Termin für mehrere Lehrer:innen, z. B. eine Konferenz">
         Allgemeiner Termin
       </button>
@@ -84,11 +76,12 @@
       App keine Termine vor.
     </p>
     <div class="fields">
-      @if (teachers().length > 1) {
+      @let blockerTeachers = teachersOn(b.fromDate, b.teacherId);
+      @if (blockerTeachers.length > 1) {
         <label>
           Lehrer:innen
           <select (change)="setBlockerDraft({ teacherId: valueOf($event) })">
-            @for (t of teachers(); track t.id) {
+            @for (t of blockerTeachers; track t.id) {
               <option [value]="t.id" [selected]="t.id === b.teacherId">{{ t.name }}</option>
             }
           </select>
@@ -142,11 +135,12 @@
   <section class="card form">
     <h2>{{ d.id ? (d.groupId ? 'Gruppentermin bearbeiten' : 'Termin bearbeiten') : d.groupId ? 'Neuer Gruppentermin' : 'Neuer Termin' }}</h2>
     <div class="fields">
-      @if (teachers().length > 1) {
+      @let draftTeachers = teachersOn(d.date, d.calendarTeacherId);
+      @if (draftTeachers.length > 1) {
         <label>
           Lehrer:innen (Kalender)
           <select [disabled]="draftFollowsLesson(d)" (change)="setDraftTeacher(valueOf($event))">
-            @for (t of teachers(); track t.id) {
+            @for (t of draftTeachers; track t.id) {
               <option [value]="t.id" [selected]="t.id === d.calendarTeacherId">{{ t.name }}</option>
             }
           </select>
@@ -388,17 +382,18 @@
             @case ('shared') {
               <button
                 class="entry shared"
+                [class.open-end]="!!item.shared.openEnd"
                 [style.top.px]="boxOf(item).top"
                 [style.height.px]="boxOf(item).height"
                 [style.left.%]="boxOf(item).left"
                 [style.width.%]="boxOf(item).width"
-                [title]="item.shared.start + '–' + sharedEndTime(item.shared) + ' ' + item.shared.title"
+                [title]="sharedTimeText(item.shared) + ' ' + item.shared.title"
                 [style.transform]="dragTransform(day.date, { kind: 'shared', shared: item.shared })"
                 [class.dragging]="!!dragTransform(day.date, { kind: 'shared', shared: item.shared })"
                 (pointerdown)="startDrag($event, day.date, { kind: 'shared', shared: item.shared })"
                 (click)="editShared(item.shared)"
               >
-                <span class="time">{{ item.shared.start }}–{{ sharedEndTime(item.shared) }}</span>
+                <span class="time">{{ sharedTimeText(item.shared) }}</span>
                 <span class="name">{{ item.shared.title }}</span>
                 @if (sharedDetail(item.shared); as detail) {
                   <span class="detail">{{ detail }}</span>

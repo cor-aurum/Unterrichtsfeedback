@@ -198,22 +198,13 @@
   align-items: flex-start;
   gap: 0.1rem;
   width: 100%;
-  padding: 0.45rem 0.6rem;
+  padding: 0.3rem 0.6rem;
   border: 1px solid var(--primary-text);
   border-left: 3px double var(--primary-text);
   background: var(--card);
   color: var(--text);
   text-align: left;
   white-space: normal;
-  padding-block: 0.3rem;
-
-  /* Zeit und Bezeichnung in einer Zeile, damit allgemeine Termine wenig Platz brauchen */
-  .headline {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0 0.4rem;
-  }
 
   .time {
     font-size: 0.8rem;
@@ -245,7 +236,9 @@
 }
 
 .appointment[data-state='missed'],
-.swatch[data-state='missed'] {
+.appointment[data-state='absent'],
+.swatch[data-state='missed'],
+.swatch[data-state='absent'] {
   border-left-color: var(--state-missed);
   background: var(--state-missed-bg);
 }
@@ -282,8 +275,14 @@
   color: var(--state-lesson);
 }
 
-.appointment[data-state='missed'] .state {
+.appointment[data-state='missed'] .state,
+.appointment[data-state='absent'] .state {
   color: var(--state-missed);
+}
+
+/* Nicht erschienen: wie „vorbei“, der Name durchgestrichen */
+.appointment[data-state='absent'] .name {
+  text-decoration: line-through;
 }
 
 .legend {
@@ -475,6 +474,15 @@
 }
 
 /* Einträge im Raster: absolut nach Beginn, Dauer und Spur; was nicht passt, wird abgeschnitten. */
+/* Allgemeiner Termin ohne Ende: eine flache Leiste, Beginn, Bezeichnung und Ort in einer Zeile */
+.entry.open-end {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  padding-block: 0;
+  white-space: nowrap;
+}
+
 .entry {
   position: absolute;
   box-sizing: border-box;

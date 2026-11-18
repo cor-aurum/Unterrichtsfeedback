@@ -1,7 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { ActiveTeacher } from '../active-teacher';
 import { GroupsStore } from '../groups.store';
-import { groupLabel, today } from '../model';
+import { groupLabel, Lesson, today } from '../model';
 import { StudentsStore } from '../students.store';
 import { Appointment, endTime, startMinutes } from './appointments';
 import { appointmentState } from './appointment-state';
@@ -48,7 +48,7 @@ export class QuickStart {
         ...owner,
         time: `${appointment.start}–${endTime(appointment)}`,
         current: minutes >= start - LEAD_MINUTES,
-        state: appointmentState(appointment, date, owner.hasLesson, now),
+        state: appointmentState(appointment, date, owner.lesson, now),
       }];
     });
   });
@@ -58,14 +58,16 @@ export class QuickStart {
   }
 
   /** Anzeigename und ob es die Stunde (bei Gruppen: die Gruppenstunde) heute schon gibt */
-  private ownerOf(appointment: Appointment, date: string): { name: string; hasLesson: boolean } | null {
+  private ownerOf(appointment: Appointment, date: string): { name: string; hasLesson: boolean; lesson?: Lesson } | null {
     const students = this.students.students();
     if (appointment.groupId) {
       const group = this.groups.groups().find((g) => g.id === appointment.groupId);
       if (!group) return null;
-      return { name: `Gruppe ${groupLabel(group, students)}`, hasLesson: !!this.opener.lessonFor(appointment, date) };
+      const lesson = this.opener.lessonFor(appointment, date);
+      return { name: `Gruppe ${groupLabel(group, students)}`, hasLesson: !!lesson, lesson };
     }
     const student = students.find((s) => s.id === appointment.studentId);
-    return student ? { name: student.name, hasLesson: !!this.opener.lessonFor(appointment, date) } : null;
+    const lesson = this.opener.lessonFor(appointment, date);
+    return student ? { name: student.name, hasLesson: !!lesson, lesson } : null;
   }
 }

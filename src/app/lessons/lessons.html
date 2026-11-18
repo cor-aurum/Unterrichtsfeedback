@@ -1,3 +1,12 @@
+@if (jumpOffer(); as due) {
+  <button class="full jump-to-lesson" (click)="jumpTo(due)">
+    Zur Stunde von {{ due.name }} · {{ due.time }}
+    @if (followHint(due); as hint) {
+      <span class="small">({{ hint }})</span>
+    }
+  </button>
+}
+
 @if (shows('list')) {
   <app-quick-start />
 }
@@ -96,7 +105,11 @@
             @if (isDoubleLesson(student, lesson)) {
               <span class="double-warning" title="An diesem Tag ist noch eine Stunde eingetragen">⚠</span>
             }
-            <span class="badge" title="Einträge">{{ entryCount(lesson) }}</span>
+            @if (lesson.absent) {
+              <span class="muted small">nicht erschienen</span>
+            } @else {
+              <span class="badge" title="Einträge">{{ entryCount(lesson) }}</span>
+            }
           </li>
         } @empty {
           <li class="empty muted">Noch keine Stunden.</li>
@@ -130,8 +143,19 @@
             aria-label="Uhrzeit der Stunde"
             title="Uhrzeit (leer lassen, wenn keine)"
           />
+          @if (!lesson.absent) {
+            <button class="secondary" (click)="setAbsent(student, lesson, true)">Nicht zur Stunde erschienen</button>
+          }
           <button class="danger" (click)="removeLesson(student, lesson)">Stunde löschen</button>
         </div>
+
+        @if (lesson.absent) {
+          <p class="message warning">
+            {{ student.name }} ist nicht zur Stunde erschienen. Die Stunde fehlt im Feedback-PDF und zählt in der
+            Auswertung je Lehrkraft mit, als „nicht erschienen“ ausgewiesen.
+            <button class="secondary" (click)="setAbsent(student, lesson, false)">Doch erschienen</button>
+          </p>
+        } @else {
 
         @if (isDoubleLesson(student, lesson)) {
           <p class="message warning">
@@ -245,6 +269,7 @@
             Es sind noch keine Abschnitte konfiguriert.
             <a routerLink="/konfiguration">Zur Konfiguration</a>
           </p>
+        }
         }
       </section>
       }

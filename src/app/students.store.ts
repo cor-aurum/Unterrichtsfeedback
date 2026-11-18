@@ -224,6 +224,17 @@ export class StudentsStore {
     return this.reportPeriod.contains(date) && isActiveIn(student, this.periodId());
   }
 
+  /** „Nicht zur Stunde erschienen“ setzen oder zurücknehmen; geht auch nachträglich. */
+  setLessonAbsent(studentId: string, lessonId: string, absent: boolean): void {
+    this.mutateLesson(studentId, lessonId, (lesson) => {
+      if (absent) {
+        lesson.absent = true;
+      } else {
+        delete lesson.absent;
+      }
+    });
+  }
+
   /** Ohne `start` hat die Stunde keine Uhrzeit mehr; die Länge gilt nur zusammen mit dem Beginn. */
   setLessonStart(studentId: string, lessonId: string, start: string): void {
     this.mutateLesson(studentId, lessonId, (lesson) => {
@@ -390,6 +401,7 @@ export function parseLesson(lesson: Partial<Lesson>): Lesson {
     ...(typeof lesson.teacherId === 'string' ? { teacherId: lesson.teacherId } : {}),
     checked: isRecord(lesson.checked) ? lesson.checked : {},
     texts: isRecord(lesson.texts) ? lesson.texts : {},
+    ...(lesson.absent === true ? { absent: true as const } : {}),
   };
 }
 

@@ -16,7 +16,7 @@ import { realServerLogin } from '../plans/plan-access';
 import { StudentLabelPipe } from '../student-label.pipe';
 import { StudentsStore } from '../students.store';
 import { GroupsStore } from '../groups.store';
-import { Group, groupLabel, Student } from '../model';
+import { Group, groupLabel, Lesson, Student } from '../model';
 
 type Scope = 'all' | 'single';
 
@@ -45,11 +45,14 @@ export class ExportPage {
   protected readonly scope = signal<Scope>('all');
   protected readonly studentId = signal<string | null>(this.store.selectedStudentId());
 
-  /** Personen mit mindestens einer Stunde im Berichtszeitraum, jeweils nur mit diesen Stunden */
+  /**
+   * Personen mit mindestens einer Stunde im Berichtszeitraum, jeweils nur mit diesen Stunden; Stunden, zu denen sie
+   * nicht erschienen sind, fehlen im PDF.
+   */
   protected readonly studentsInPeriod = computed(() =>
     this.store
       .sortedStudents()
-      .map((student) => ({ ...student, lessons: this.reportPeriod.lessonsOf(student) }))
+      .map((student) => ({ ...student, lessons: this.pdfLessonsOf(student) }))
       .filter((student) => student.lessons.length > 0),
   );
   protected readonly studentsToExport = computed(() =>
@@ -109,7 +112,11 @@ export class ExportPage {
   }
 
   protected lessonsInPeriod(student: Student): number {
-    return this.reportPeriod.lessonsOf(student).length;
+    return this.pdfLessonsOf(student).length;
+  }
+
+  private pdfLessonsOf(student: Student): Lesson[] {
+    return this.reportPeriod.lessonsOf(student).filter((lesson) => !lesson.absent);
   }
 
   protected selectStudent(event: Event): void {

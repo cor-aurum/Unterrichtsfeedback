@@ -111,6 +111,11 @@ export class SharedAppointmentForm {
     this.draft.update((draft) => ({ ...draft, ...change }));
   }
 
+  /** Ohne Ende bleibt die Dauer gespeichert, damit sie beim Zurückschalten wieder da ist. */
+  protected setOpenEnd(openEnd: boolean): void {
+    this.draft.update(({ openEnd: _, ...draft }) => (openEnd ? { ...draft, openEnd: true } : draft));
+  }
+
   /** Alle Lehrkräfte des Zeitraums (auch später dazukommende) oder ausgewählte; beim Abwählen sind alle angehakt. */
   protected setAllTeachers(all: boolean): void {
     this.set(all ? { allTeachers: true, teacherIds: [] } : { allTeachers: false, teacherIds: this.teachers().map((t) => t.id) });
@@ -155,7 +160,7 @@ export class SharedAppointmentForm {
   private problemOf(appointment: Omit<SharedAppointment, 'id'>): string | null {
     if (!appointment.title.trim()) return 'Bitte gib dem Termin eine Bezeichnung, z. B. „Konferenz“.';
     if (!appointment.date || !appointment.start) return 'Bitte Datum und Beginn angeben.';
-    if (!(appointment.durationMinutes >= 5)) return 'Die Dauer muss mindestens 5 Minuten betragen.';
+    if (!appointment.openEnd && !(appointment.durationMinutes >= 5)) return 'Die Dauer muss mindestens 5 Minuten betragen.';
     if (!appointment.allTeachers && appointment.teacherIds.length === 0) {
       return 'Bitte mindestens eine Lehrkraft des Berichtszeitraums auswählen.';
     }

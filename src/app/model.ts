@@ -700,6 +700,11 @@ export interface Lesson {
   checked: Record<string, string[]>;
   /** Freitext je Abschnitt (Abschnitts-ID → Text) */
   texts: Record<string, string>;
+  /**
+   * Die Person ist nicht zur Stunde erschienen (nur Einzelstunden). Die Stunde fehlt im Feedback-PDF, zählt in der
+   * Auswertung je Lehrkraft aber mit und wird dort getrennt ausgewiesen; Einträge bleiben gespeichert.
+   */
+  absent?: true;
 }
 
 /** Uhrzeit einer Stunde für Anzeige und Platzhalter, z. B. „15:00–15:45“ oder nur „15:00“; leer ohne Uhrzeit. */

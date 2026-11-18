@@ -108,7 +108,7 @@
                 </td>
                 <td>
                   @if (row.appointment.start) {
-                    {{ row.appointment.start }} · {{ row.appointment.durationMinutes }} Min.
+                    {{ row.appointment.openEnd ? 'ab ' + row.appointment.start : row.appointment.start + ' · ' + row.appointment.durationMinutes + ' Min.' }}
                   }
                 </td>
                 <td>{{ row.appointment.location }}</td>
