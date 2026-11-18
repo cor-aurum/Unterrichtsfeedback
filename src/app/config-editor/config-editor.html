@@ -438,6 +438,11 @@
             }
           </select>
         </label>
+        @if (periodTeacherList().length > 1) {
+          <button class="secondary door-signs" (click)="doorSigns(periodTeacherList())">
+            Alle Türschilder (PDF)
+          </button>
+        }
 
         @for (teacher of periodTeacherList(); track teacher.id; let first = $first, last = $last) {
           <section class="card teacher">
@@ -457,6 +462,11 @@
                 title="Duplizieren: neue Lehrkraft mit denselben Unterrichtszeiten"
                 aria-label="Lehrkraft duplizieren"
               >⧉</button>
+              <button
+                class="icon"
+                (click)="doorSigns([teacher])"
+                title="Türschild mit Name, Instrument und Ort als PDF"
+              >Türschild</button>
               <button
                 class="icon"
                 [disabled]="!canDeactivate(teacher)"

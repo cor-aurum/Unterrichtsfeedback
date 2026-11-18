@@ -202,6 +202,23 @@ export class PdfExport {
     await deliver(`Tagesplan_${range.from}_${range.to}.pdf`, doc.output('blob'), action);
   }
 
+  /**
+   * Türschilder im Querformat, je Lehrkraft eine Seite in ihrer Farbe (siehe `door-sign-pdf.ts`); mit dem Kopflogo
+   * aus den PDF-Einstellungen.
+   */
+  async exportDoorSigns(config: FeedbackConfig, signs: DoorSignData[], action: 'open' | 'share'): Promise<void> {
+    const [{ jsPDF }, { writeDoorSigns }, prepared] = await Promise.all([
+      import('jspdf'),
+      import('./door-sign-pdf'),
+      forPrint(config),
+    ]);
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+    const themed = signs.map(({ color, ...sign }) => ({ ...sign, theme: pdfTheme({ ...config, themeColor: color }) }));
+    writeDoorSigns(doc, prepared.pdfLayout.headerLogo, themed);
+    const name = signs.length === 1 ? `Türschild_${safeFileName(signs[0].name)}` : 'Türschilder';
+    await deliver(`${name}.pdf`, doc.output('blob'), action);
+  }
+
   /** Wochenplan als Tabelle im Querformat, je Lehrer und Woche eine Seite (siehe `schedule-grid-pdf.ts`). */
   async exportScheduleGrid(
     config: FeedbackConfig,
@@ -219,6 +236,14 @@ export class PdfExport {
     writeScheduleGrid(doc, pdfTheme(config), prepared.pdfLayout.headerLogo, config.calendarPdf, teachers, range);
     await deliver(`Wochenplan_${range.from}_${range.to}.pdf`, doc.output('blob'), action);
   }
+}
+
+/** Inhalt eines Türschilds; `color` ist die Farbe der Lehrkraft (im Schwarzweißmodus gilt Grau). */
+export interface DoorSignData {
+  name: string;
+  instrument: string;
+  location: string;
+  color: string;
 }
 
 /** Terminliste im Hochformat; `newPage` beginnt eine Seite mit derselben großen Überschrift wie die erste. */

@@ -34,6 +34,7 @@ import {
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
 import { InstrumentSelect } from '../instrument-select';
+import { PdfExport } from '../pdf-export';
 import { TeachingWindowsEditor } from './teaching-windows-editor';
 import { PlanLinkPanel } from '../plans/plan-link-panel';
 import { BoardLinkPanel } from '../plans/board-link-panel';
@@ -90,6 +91,7 @@ export class ConfigEditor {
   protected readonly planLinkLogin = demoMode ? signal(realServerLogin()).asReadonly() : this.sync.login;
   protected readonly reportPeriod = inject(ReportPeriod);
   protected readonly activeTeacher = inject(ActiveTeacher);
+  private readonly pdfExport = inject(PdfExport);
   protected readonly tabs = CONFIG_TABS;
   /** Zuletzt geöffneter Bereich; gilt nur auf diesem Gerät. */
   protected readonly tab = storedSignal<ConfigTab>('feedback.configTab', () => 'general', (data) =>
@@ -497,6 +499,22 @@ export class ConfigEditor {
   /** Ort im oben gewählten Berichtszeitraum; ein neuer Zeitraum übernimmt ihn aus dem vorigen. */
   protected locationOf(teacher: Teacher): string {
     return locationIn(teacher, this.windowsPeriodId());
+  }
+
+  /** Türschilder als PDF, mit dem Ort im oben gewählten Zeitraum; mehrere Lehrkräfte bekommen je eine Seite. */
+  protected async doorSigns(teachers: Teacher[]): Promise<void> {
+    const config = this.store.config();
+    const signs = teachers.map((teacher) => ({
+      name: teacher.name,
+      instrument: teacherInstrument(teacher, config).name,
+      location: this.locationOf(teacher),
+      color: teacher.themeColor ?? config.themeColor,
+    }));
+    try {
+      await this.pdfExport.exportDoorSigns(config, signs, 'share');
+    } catch (e) {
+      this.showError(`Das Türschild ließ sich nicht erstellen: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   /** Mit Server sind gemeinsame Inhalte und Varianten gesperrt; jede Lehrkraft ändert nur eigene. */
