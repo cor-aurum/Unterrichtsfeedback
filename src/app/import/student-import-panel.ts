@@ -54,8 +54,9 @@ export class StudentImportPanel {
   protected readonly tableIndex = signal(0);
   protected readonly table = computed(() => this.tables()[this.tableIndex()] ?? { name: '', rows: [] });
   protected readonly mapping = signal<ColumnMapping>({
-    firstName: 0,
+    firstName: null,
     lastName: null,
+    fullName: 0,
     instrument: null,
     teacher: null,
     groups: null,
@@ -119,7 +120,7 @@ export class StudentImportPanel {
   }
 
   protected setColumn(
-    key: 'firstName' | 'lastName' | 'instrument' | 'teacher' | 'groups' | 'birthDate',
+    key: 'firstName' | 'lastName' | 'fullName' | 'instrument' | 'teacher' | 'groups' | 'birthDate',
     event: Event,
   ): void {
     const value = (event.target as HTMLSelectElement).value;

@@ -8,8 +8,13 @@ export interface ImportTable {
 
 /** Welche Spalte was enthält; `null` heißt „nicht vorhanden“. */
 export interface ColumnMapping {
-  firstName: number;
+  firstName: number | null;
   lastName: number | null;
+  /**
+   * Ganzer Name in einer Spalte („Anna Berg“ oder „Berg, Anna“); gilt für Zeilen, in denen Vor- und Nachname leer
+   * sind. So lassen sich auch Listen einlesen, die beides gemischt enthalten.
+   */
+  fullName: number | null;
   instrument: number | null;
   /** Lehrer der Person; ohne Spalte legst du ihn im letzten Schritt fest. */
   teacher: number | null;
@@ -78,7 +83,7 @@ export function columnLabels(table: ImportTable, hasHeader: boolean): string[] {
   });
 }
 
-/** Rät die Spalten anhand der Überschriften; ohne passende Überschrift: Vorname in Spalte A. */
+/** Rät die Spalten anhand der Überschriften; ohne passende Überschrift: ganzer Name in Spalte A. */
 export function guessMapping(table: ImportTable): ColumnMapping {
   const header = (table.rows[0] ?? []).map((cell) => cell.toLowerCase());
   const find = (...patterns: RegExp[]) => {
@@ -86,17 +91,27 @@ export function guessMapping(table: ImportTable): ColumnMapping {
     return index >= 0 ? index : null;
   };
   const firstName = find(/vorname/, /first ?name/, /rufname/);
-  const lastName = find(/nachname/, /familienname/, /last ?name/, /^name$/);
+  const lastName = find(/nachname/, /familienname/, /last ?name/);
+  const fullName = find(/^name$/, /^(vollständiger|ganzer|voller) name$/, /full ?name/, /^schüler(:?in(nen)?)?$/, /^person$/);
   const instrument = find(/instrument/, /fach/);
   const teacher = find(/lehrer/, /lehrkraft/);
   const groups = find(/gruppe/);
-  const birthDate = find(/geburt/, /^geb\.?$/, /birth/);
-  const hasHeader = [firstName, lastName, instrument, teacher, groups, birthDate].some((index) => index !== null);
-  // Nur eine Spalte „Name“: Sie enthält den ganzen Namen.
-  if (firstName === null && lastName !== null) {
-    return { firstName: lastName, lastName: null, instrument, teacher, groups, birthDate, hasHeader };
-  }
-  return { firstName: firstName ?? 0, lastName, instrument, teacher, groups, birthDate, hasHeader };
+  const birthDate = find(/geburt/, /^geb\.?(\s*-?\s*dat(um|\.)?)?$/, /birth/);
+  const hasHeader = [firstName, lastName, fullName, instrument, teacher, groups, birthDate].some((index) => index !== null);
+  const nothingFound = firstName === null && lastName === null && fullName === null;
+  return { firstName, lastName, fullName: nothingFound ? 0 : fullName, instrument, teacher, groups, birthDate, hasHeader };
+}
+
+/** Name einer Zeile: Vor- und Nachname, sind beide leer, der ganze Name */
+function rowName(first: string, last: string, full: string): string {
+  return [first, last].filter(Boolean).join(' ') || orderedName(full);
+}
+
+/** „Berg, Anna“ → „Anna Berg“; sonst bleibt der Name, wie er ist (ohne doppelte Leerzeichen). */
+export function orderedName(name: string): string {
+  const parts = name.split(',').map((part) => part.trim());
+  const ordered = parts.length === 2 && parts[0] && parts[1] ? `${parts[1]} ${parts[0]}` : name;
+  return ordered.trim().replace(/\s+/g, ' ');
 }
 
 /** Zeilen für den Import; Zeilen ohne Namen entfallen. */
@@ -112,7 +127,7 @@ export function toImportRows(
     .map((row, index) => ({ row, line: index + 1 }))
     .slice(mapping.hasHeader ? 1 : 0)
     .map(({ row, line }) => {
-      const name = [cell(row, mapping.firstName), cell(row, mapping.lastName)].filter(Boolean).join(' ');
+      const name = rowName(cell(row, mapping.firstName), cell(row, mapping.lastName), cell(row, mapping.fullName));
       const birthText = cell(row, mapping.birthDate);
       const birthDate = parseBirthDate(birthText, date) ?? undefined;
       const person = knownPerson(known, { name, birthDate });

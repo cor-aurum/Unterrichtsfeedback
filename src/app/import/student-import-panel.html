@@ -18,7 +18,7 @@
     @case ('file') {
       <p class="muted">
         Wähle eine Excel-Datei (.xlsx) oder eine CSV-Datei mit einer Zeile je Person. Welche Spalte Vorname,
-        Nachname, Instrument, Lehrkraft und Gruppen enthält, legst du im nächsten Schritt fest. Personen aus anderen
+        Nachname (oder den ganzen Namen), Instrument, Lehrkraft und Gruppen enthält, legst du im nächsten Schritt fest. Personen aus anderen
         Berichtszeiträumen werden übernommen statt doppelt angelegt; benannte Gruppen aus der Datei werden in
         „{{ periodName() }}“ ohne Mitglieder angelegt.
       </p>
@@ -42,6 +42,7 @@
         <label>
           Vorname
           <select (change)="setColumn('firstName', $event)">
+            <option value="" [selected]="mapping().firstName === null">– keine Spalte –</option>
             @for (column of columns(); track $index) {
               <option [value]="$index" [selected]="$index === mapping().firstName">{{ column }}</option>
             }
@@ -53,6 +54,15 @@
             <option value="" [selected]="mapping().lastName === null">– keine Spalte –</option>
             @for (column of columns(); track $index) {
               <option [value]="$index" [selected]="$index === mapping().lastName">{{ column }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          Ganzer Name
+          <select (change)="setColumn('fullName', $event)">
+            <option value="" [selected]="mapping().fullName === null">– keine Spalte –</option>
+            @for (column of columns(); track $index) {
+              <option [value]="$index" [selected]="$index === mapping().fullName">{{ column }}</option>
             }
           </select>
         </label>
@@ -97,6 +107,9 @@
         <input type="checkbox" [checked]="mapping().hasHeader" (change)="setHasHeader($event)" />
         Erste Zeile enthält Überschriften (wird nicht importiert)
       </label>
+      @if (mapping().fullName !== null && (mapping().firstName !== null || mapping().lastName !== null)) {
+        <p class="muted small">Den ganzen Namen nimmt der Import nur in Zeilen, in denen Vor- und Nachname leer sind.</p>
+      }
 
       <h3>Vorschau</h3>
       <table class="preview">
