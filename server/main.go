@@ -30,8 +30,8 @@ const usage = `unterricht-feedback-server %s
 
 Befehle:
   serve       Server starten
-  invite      Einladungscode für einen neuen Lehrer erzeugen (z. B. den ersten)
-  reset-code  Code erzeugen, mit dem ein Lehrer ein neues Passwort vergibt
+  invite      Einladungscode für eine neue Lehrkraft erzeugen (z. B. die erste)
+  reset-code  Code erzeugen, mit dem eine Lehrkraft ein neues Passwort vergibt
   accounts    Konten auflisten
   version     Version anzeigen
 
@@ -186,7 +186,7 @@ func invite(args []string) error {
 func resetCode(args []string) error {
 	var user string
 	o, err := flags("reset-code", args, func(fs *flag.FlagSet) {
-		fs.StringVar(&user, "user", "", "Benutzername des Lehrers")
+		fs.StringVar(&user, "user", "", "Benutzername der Lehrkraft")
 	})
 	if err != nil {
 		return err
@@ -230,11 +230,11 @@ func accounts(args []string) error {
 		return err
 	}
 	if len(list) == 0 {
-		fmt.Println("Noch keine Konten. Einen ersten Lehrer lädt „invite“ ein.")
+		fmt.Println("Noch keine Konten. Die erste Lehrkraft lädt „invite“ ein.")
 		return nil
 	}
 	for _, a := range list {
-		fmt.Printf("%-24s seit %s  (Lehrer-ID %s)\n", a.Username, a.CreatedAt.Format("02.01.2006"), a.TeacherID)
+		fmt.Printf("%-24s seit %s  (ID der Lehrkraft %s)\n", a.Username, a.CreatedAt.Format("02.01.2006"), a.TeacherID)
 	}
 	return nil
 }

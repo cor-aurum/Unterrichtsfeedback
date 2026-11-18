@@ -167,7 +167,7 @@ func (s *Server) redeem(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.TeacherID != "" {
 		if _, err := access.Parse("lehrer-" + body.TeacherID + ".json"); err != nil {
-			fail(w, http.StatusBadRequest, "Ungültige Lehrer-ID.")
+			fail(w, http.StatusBadRequest, "Ungültige ID der Lehrkraft.")
 			return
 		}
 	}
@@ -181,7 +181,7 @@ func (s *Server) redeem(w http.ResponseWriter, r *http.Request) {
 	}
 	if teacherID == "" {
 		_ = s.store.PutCodeBack(r.Context(), codeHash, code)
-		fail(w, http.StatusBadRequest, "Die Lehrer-ID fehlt.")
+		fail(w, http.StatusBadRequest, "Die ID der Lehrkraft fehlt.")
 		return
 	}
 	account, err := s.store.CreateAccount(r.Context(), username, teacherID, hash)
@@ -189,7 +189,7 @@ func (s *Server) redeem(w http.ResponseWriter, r *http.Request) {
 		// Der Code bleibt gültig, damit man es mit einem anderen Namen erneut versuchen kann.
 		_ = s.store.PutCodeBack(r.Context(), codeHash, code)
 		if errors.Is(err, store.ErrTaken) {
-			fail(w, http.StatusConflict, "Den Benutzernamen gibt es schon, oder dieser Lehrer hat bereits ein Konto.")
+			fail(w, http.StatusConflict, "Den Benutzernamen gibt es schon, oder diese Lehrkraft hat bereits ein Konto.")
 			return
 		}
 		internal(w, err)
@@ -406,11 +406,11 @@ func (s *Server) invite(w http.ResponseWriter, r *http.Request, _ store.Account)
 		return
 	}
 	if _, err := access.Parse("lehrer-" + body.TeacherID + ".json"); err != nil {
-		fail(w, http.StatusBadRequest, "Ungültige Lehrer-ID.")
+		fail(w, http.StatusBadRequest, "Ungültige ID der Lehrkraft.")
 		return
 	}
 	if _, err := s.store.AccountByTeacher(r.Context(), body.TeacherID); err == nil {
-		fail(w, http.StatusConflict, "Dieser Lehrer hat schon ein Konto. Ein neues Passwort gibt es mit einem Reset-Code vom Server.")
+		fail(w, http.StatusConflict, "Diese Lehrkraft hat schon ein Konto. Ein neues Passwort gibt es mit einem Reset-Code vom Server.")
 		return
 	}
 	code, expires, err := s.NewCode(r.Context(), store.Invite, body.TeacherID)

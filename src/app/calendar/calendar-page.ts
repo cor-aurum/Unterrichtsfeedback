@@ -1017,7 +1017,7 @@ export class CalendarPage {
   /** In der eigenen Woche fehlt ein Termin für einen anderen Lehrer; ein Hinweis sagt, wo er steht. */
   private noteOtherCalendar(teacherId: string): void {
     if (!this.showAll() && teacherId !== this.teacher().id) {
-      this.notice.set(`Gespeichert im Kalender von ${this.teacherNameOf(teacherId)}. „Alle Lehrer“ zeigt ihn hier.`);
+      this.notice.set(`Gespeichert im Kalender von ${this.teacherNameOf(teacherId)}. „Alle Lehrer:innen“ zeigt ihn hier.`);
     }
   }
 

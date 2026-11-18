@@ -552,6 +552,10 @@ code {
   margin: 1.25rem 0 0.25rem;
 }
 
+.without-period .last-period {
+  margin: 0.25rem 0 0;
+}
+
 .join-periods {
   display: flex;
   align-items: center;

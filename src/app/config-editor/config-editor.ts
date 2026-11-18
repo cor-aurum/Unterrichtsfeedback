@@ -187,13 +187,21 @@ export class ConfigEditor {
     input.value = '';
   }
 
-  /** Neue Lehrkräfte gleich in die laufenden Berichtszeiträume eintragen; sonst stehen sie unter „Ohne Berichtszeitraum“. */
+  /** Neue Lehrkräfte gleich in die laufenden Berichtszeiträume eintragen; sonst stehen sie unter „Ohne laufenden Berichtszeitraum“. */
   protected readonly joinPeriods = signal(true);
 
   /** Lehrkräfte ohne laufenden oder künftigen Berichtszeitraum, nach Namen */
   protected readonly teachersWithoutPeriod = computed(() =>
     [...this.activeTeacher.teachersWithoutPeriod()].sort((a, b) => a.name.localeCompare(b.name, 'de')),
   );
+
+  /** Der späteste vergangene Zeitraum der Lehrkraft, den man sehen kann; mit Server nur die eigenen */
+  protected lastPeriodOf(teacher: Teacher): ReportPeriodEntry | undefined {
+    return this.store
+      .config()
+      .reportPeriods.filter((period) => !period.placeholder && period.teacherIds.includes(teacher.id))
+      .reduce<ReportPeriodEntry | undefined>((latest, period) => (!latest || period.to > latest.to ? period : latest), undefined);
+  }
 
   /** Aufnehmen geht in den oben gewählten Zeitraum, wenn er nicht vorbei ist; mit Server nur in einen eigenen. */
   protected canJoinWindowsPeriod(): boolean {

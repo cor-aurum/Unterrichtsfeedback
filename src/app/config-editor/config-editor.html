@@ -524,9 +524,10 @@
         }
 
         @if (teachersWithoutPeriod().length > 0) {
-          <h3 class="without-period-title">Ohne Berichtszeitraum</h3>
+          <h3 class="without-period-title">Ohne laufenden Berichtszeitraum</h3>
           <p class="muted small">
-            Diese Lehrkräfte stehen in keinem laufenden oder künftigen Berichtszeitraum und in keiner Auswahl.
+            Diese Lehrkräfte stehen in keinem laufenden oder künftigen Berichtszeitraum, höchstens in vergangenen, und
+            deshalb in keiner Auswahl.
             @if (sync.login()) {
               Alle Lehrkräfte sehen sie hier und können sie in ihre Berichtszeiträume aufnehmen.
             }
@@ -557,6 +558,13 @@
                   aria-label="Lehrkraft deaktivieren"
                 >Deaktivieren</button>
               </div>
+              <p class="muted small last-period">
+                @if (lastPeriodOf(teacher); as period) {
+                  Zuletzt in „{{ period.name }}“ (bis {{ formatShortDate(period.to) }})
+                } @else {
+                  Noch in keinem Berichtszeitraum
+                }
+              </p>
               <div class="teacher-fields">
                 <label>
                   Instrument

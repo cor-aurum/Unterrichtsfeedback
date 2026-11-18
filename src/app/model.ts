@@ -389,7 +389,7 @@ export interface Teacher {
   inactiveSince?: string;
   /**
    * Ohne Berichtszeitraum angelegt und noch in keinen eingetragen. Mit Server sehen alle Lehrkräfte sie dadurch unter
-   * „Lehrer:innen“ und können sie in ihre Zeiträume aufnehmen; sobald das geschieht, entfällt die Markierung.
+   * „Lehrer:innen“ → „Ohne laufenden Berichtszeitraum“ und können sie in ihre Zeiträume aufnehmen; sobald das geschieht, entfällt die Markierung.
    */
   withoutPeriod?: true;
   /** Standard-Unterrichtszeiten für Berichtszeiträume ohne eigene (`periodWindows`) */
