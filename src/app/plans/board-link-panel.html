@@ -1,0 +1,59 @@
+<details class="plan-link" (toggle)="toggled($event)">
+  <summary>Aushang-Link für ein Tablet</summary>
+  <p class="muted small">
+    Eine Seite mit allen Terminen des Zeitraums für ein zentrales Tablet, das Schüler:innen selbst bedienen: je
+    Lehrkraft eine Spalte, tageweise zum Blättern. Einzeltermine stehen mit dem Kurznamen der Person da (z. B.
+    „Anna B.“), Gruppen mit ihrem Namen; die Mitglieder erscheinen nach Antippen. Ändern lässt sich dort nichts. Die
+    Seite lädt jede Minute neu und springt dabei zurück auf heute.
+  </p>
+  @if (demoMode) {
+    <p class="message small">
+      Demomodus: Der Aushang zeigt die Demodaten über deinen Server. Er gilt bis drei Tage nach der letzten
+      Aktualisierung.
+    </p>
+  }
+  @if (!login()) {
+    <p class="muted small">Dafür musst du am Server angemeldet sein.</p>
+  } @else if (state(); as link) {
+    @if (link.url) {
+      <div class="row link">
+        <input type="text" readonly [value]="link.url" (focus)="selectAll($event)" aria-label="Aushang-Link" />
+        <button class="secondary" (click)="copy(link.url)">Kopieren</button>
+        <a [href]="link.url" target="_blank" rel="noopener noreferrer">Seite öffnen</a>
+      </div>
+      <p class="muted small">
+        Öffne den Link auf dem Tablet im Browser und sperre es z. B. mit „App anheften“ (Android) oder „Geführter
+        Zugriff“ (iPad) auf diese Seite.
+        Gilt bis {{ expires() }}
+        ({{ demoMode ? 'drei Tage nach der letzten Aktualisierung' : 'zwei Wochen nach Ende des Zeitraums' }}).
+        @if (link.updatedAt) {
+          Termine zuletzt aktualisiert: {{ formatTime(link.updatedAt) }}.
+        }
+      </p>
+      <p class="message warning small">
+        Wer den Link hat, sieht alle Termine des Zeitraums mit den Kurznamen der Personen und der Gruppenmitglieder.
+        Zeig ihn nur auf dem Tablet. Ist er in falsche Hände geraten, erzeuge einen neuen.
+      </p>
+      <div class="row actions">
+        <button class="secondary" [disabled]="busy()" (click)="refresh()">Jetzt aktualisieren</button>
+        <button class="secondary" [disabled]="busy()" (click)="renew()">Neuen Link erzeugen</button>
+        <button class="secondary" [disabled]="busy()" (click)="remove()">Link löschen</button>
+      </div>
+    } @else {
+      <div class="row actions">
+        <button [disabled]="busy()" (click)="create()">Link erzeugen</button>
+      </div>
+    }
+  } @else if (busy()) {
+    <p class="muted small">Wird geladen …</p>
+  }
+  @if (busy() && state()) {
+    <p class="muted small">Einen Moment …</p>
+  }
+  @if (message(); as text) {
+    <p class="message small" role="status">{{ text }}</p>
+  }
+  @if (error(); as text) {
+    <p class="message error small">{{ text }}</p>
+  }
+</details>

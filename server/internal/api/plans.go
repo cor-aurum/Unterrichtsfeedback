@@ -107,7 +107,7 @@ func (s *Server) planPeriod(w http.ResponseWriter, r *http.Request, account stor
 		return "", time.Time{}, false
 	}
 	if !isDemoPlan(periodID) && !members.In(periodID, account.TeacherID) {
-		fail(w, http.StatusForbidden, "Den Download-Link verwalten nur die Lehrkräfte des Berichtszeitraums.")
+		fail(w, http.StatusForbidden, "Download-Link und Aushang verwalten nur die Lehrkräfte des Berichtszeitraums.")
 		return "", time.Time{}, false
 	}
 	lastDay, err := s.planLastDay(r.Context(), periodID)

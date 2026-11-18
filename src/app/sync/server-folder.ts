@@ -266,7 +266,30 @@ export const serverApi = {
   async putPlan(login: ServerLogin, periodId: string, plans: string): Promise<void> {
     await checked(await request(login.url, 'PUT', planPath(periodId), { token: login.token, body: plans }));
   },
+
+  /** Aushang-Link eines Berichtszeitraums für ein zentrales Tablet: `url` ist leer, solange es keinen gibt. */
+  board(login: ServerLogin, periodId: string): Promise<PlanLinkState> {
+    return json(request(login.url, 'GET', boardPath(periodId), { token: login.token }));
+  },
+
+  /** Richtet den Aushang-Link ein oder ersetzt ihn; der alte gilt danach nicht mehr. */
+  newBoardAddress(login: ServerLogin, periodId: string): Promise<PlanLinkState> {
+    return json(request(login.url, 'POST', `${boardPath(periodId)}/address`, { token: login.token }));
+  },
+
+  async deleteBoard(login: ServerLogin, periodId: string): Promise<void> {
+    await checked(await request(login.url, 'DELETE', boardPath(periodId), { token: login.token }));
+  },
+
+  /** Wirft `ServerError` mit Status 404, wenn es für den Zeitraum keinen Aushang-Link gibt. */
+  async putBoard(login: ServerLogin, periodId: string, board: string): Promise<void> {
+    await checked(await request(login.url, 'PUT', boardPath(periodId), { token: login.token, body: board }));
+  },
 };
+
+function boardPath(periodId: string): string {
+  return `/api/boards/${encodeURIComponent(periodId)}`;
+}
 
 function planPath(periodId: string): string {
   return `/api/plans/${encodeURIComponent(periodId)}`;

@@ -189,6 +189,7 @@
                 }
                 @if (planLinkLogin() && !period.placeholder && !locked(period)) {
                   <app-plan-link-panel [period]="period" />
+                  <app-board-link-panel [period]="period" />
                 }
               </li>
             }

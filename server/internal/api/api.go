@@ -95,6 +95,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/plans/{period}/group-choices", s.authed(s.openGroupChoices))
 	mux.HandleFunc("POST /api/plans/{period}/group-choices/{id}", s.authed(s.groupChoiceDone))
 	mux.HandleFunc("POST /api/plans/{period}/bookings/{id}", s.authed(s.bookingDone))
+	mux.HandleFunc("GET /api/boards/{period}", s.authed(s.getBoard))
+	mux.HandleFunc("PUT /api/boards/{period}", s.authed(s.putBoard))
+	mux.HandleFunc("DELETE /api/boards/{period}", s.authed(s.deleteBoard))
+	mux.HandleFunc("POST /api/boards/{period}/address", s.authed(s.newBoardAddress))
+	mux.HandleFunc("GET /api/aushang/{token}", s.publicBoard)
 	return s.cors(mux)
 }
 

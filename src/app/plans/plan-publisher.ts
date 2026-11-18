@@ -23,6 +23,7 @@ import { isOwnOneOff, PersonOffer, StudentPlanning } from '../planning/student-p
 import { demoMode, storedSignal } from '../stored-signal';
 import { planServerId, realServerLogin } from './plan-access';
 import { isOpenSingle, isSpontaneous } from './plan-slots';
+import { BoardPublisher } from './board-publisher';
 import { PlanBookings } from './plan-bookings';
 import { PlanGroupChoices } from './plan-group-choices';
 import { GroupChoice } from '../groups/group-choice';
@@ -108,6 +109,7 @@ export class PlanPublisher {
   private readonly planning = inject(StudentPlanning);
   private readonly choice = inject(GroupChoice);
   private readonly groupChoices = inject(PlanGroupChoices);
+  private readonly board = inject(BoardPublisher);
   /** Was zuletzt je Zeitraum geschickt (oder mangels Link nicht gebraucht) wurde, als Prüfsumme */
   private readonly published = storedSignal<Record<string, string>>('feedback.publishedPlans', () => ({}), (data) =>
     data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, string>) : {},
@@ -180,6 +182,11 @@ export class PlanPublisher {
           await this.publish(login, period);
         } catch (e) {
           console.warn(`Pläne für ${period.name} nicht gesendet`, e);
+        }
+        try {
+          await this.board.publish(login, period);
+        } catch (e) {
+          console.warn(`Aushang für ${period.name} nicht gesendet`, e);
         }
       }
     })();

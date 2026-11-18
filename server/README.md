@@ -203,6 +203,21 @@ trägt die Person in die Gruppe ein (und aus den übrigen zur Wahl aus) und meld
 (`POST …/group-choices/{id}`; 409, wenn die Wahl inzwischen ersetzt ist). Bis die Pläne die Wahl zeigen, zeigt die
 Seite sie trotzdem (höchstens eine Stunde). Je Zeitraum gibt es höchstens 5000 Wahlen.
 
+## Aushang
+
+Für ein zentrales Tablet, das Schüler:innen selbst bedienen, kann eine Lehrkraft des Berichtszeitraums in der App
+(Konfiguration → Allgemein → beim Zeitraum) einen Aushang-Link erzeugen: `https://feedback.example.de/api/aushang/<Schlüssel>`.
+Die Seite zeigt einen Tag mit allen Einzel-, Gruppen- und allgemeinen Terminen des Zeitraums, je Lehrkraft eine
+Spalte; `?tag=JJJJ-MM-TT` blättert bis zum Ende des Zeitraums. Personen stehen nur mit ihrem Kurznamen darin,
+Gruppenmitglieder erst nach Antippen. Die Termine erzeugt die App bei Änderungen und schickt sie mit
+(`PUT /api/boards/{Zeitraum}`); der Server zeigt sie nur an. Die Seite hat weder Formulare noch JavaScript: Das
+Fenster eines Termins öffnet ein Anker (`:target`), und nach einer Minute lädt sie neu und springt zurück auf heute.
+
+Wie beim Download-Link ist der Link selbst der Schlüssel, ein neuer macht den alten ungültig, und er gilt bis
+14 Tage nach dem Ende des Zeitraums (danach `410`). Im Demomodus gibt es ihn wie den Download-Link unter
+`demo-konto-<Lehrer-ID>`, gültig bis drei Tage nach der letzten Aktualisierung. Wer ihn nicht in den
+Zugriffsprotokollen haben will, schließt `/api/aushang/` vom Protokoll aus.
+
 ## Konten
 
 Jede Lehrkraft ändert ihr Passwort in der App mit dem bisherigen (`POST /api/password`); andere Geräte des Kontos
@@ -261,5 +276,10 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `GET /api/plan/{Schlüssel}/{Person}/termine` | Freie Zeiten zum Wählen, eigene Termine und Eintragungen |
 | `POST /api/plan/{Schlüssel}/{Person}/eintragen\|austragen` | Zeit wählen bzw. Eintragung zurücknehmen oder Termin austragen (Formulare) |
 | `GET/POST /api/plan/{Schlüssel}/{Person}/gruppe` | Gruppen zur Wahl bzw. eine wählen (Formular)           |
+| `GET /api/boards/{Zeitraum}` | Aushang-Link des Zeitraums (nur seine Lehrkräfte): `{url, updatedAt, expiresAt}`; `url` leer ohne Link |
+| `PUT /api/boards/{Zeitraum}` | Termine senden: `{title, dates, color, from, to, columns: [{id, name}], days: [{day, date, entries}]}`; `404` ohne Link |
+| `POST /api/boards/{Zeitraum}/address` | Neuer Aushang-Link (der alte gilt nicht mehr)                  |
+| `DELETE /api/boards/{Zeitraum}` | Aushang-Link und Termine löschen                                 |
+| `GET /api/aushang/{Schlüssel}[?tag=JJJJ-MM-TT]` | Aushang eines Tages, ohne Anmeldung                    |
 
 Angemeldet wird mit `Authorization: Bearer <token>`. Fehler kommen als `{error: "…"}` mit einem Text für die App.
