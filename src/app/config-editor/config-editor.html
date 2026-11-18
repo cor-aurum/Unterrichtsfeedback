@@ -584,8 +584,13 @@
           <input #newTeacher type="text" class="grow" placeholder="Neue Lehrkraft" (keydown.enter)="addTeacher(newTeacher)" />
           <button class="secondary" (click)="addTeacher(newTeacher)">Hinzufügen</button>
           <label class="check join-periods">
-            <input type="checkbox" [checked]="joinPeriods()" (change)="joinPeriods.set($any($event.target).checked)" />
-            gleich in {{ sync.login() ? 'meine' : 'alle' }} laufenden Berichtszeiträume eintragen
+            <input
+              type="checkbox"
+              [checked]="joinsPeriod()"
+              [disabled]="!canJoinWindowsPeriod()"
+              (change)="joinPeriods.set($any($event.target).checked)"
+            />
+            gleich in „{{ windowsPeriodName() }}“ eintragen
           </label>
         </div>
 

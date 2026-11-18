@@ -233,7 +233,7 @@ export class WelcomeDialog {
       this.error.set('Bitte gib deinen Namen und dein Instrument an.');
       return;
     }
-    this.configStore.addTeacher(name, { instrument, id: login.teacherId, joinPeriodsOf: null });
+    this.configStore.addTeacher(name, { instrument, id: login.teacherId, period: null });
     this.activeTeacher.select(login.teacherId);
     this.error.set(null);
     this.configStore.setupPending.set(false);

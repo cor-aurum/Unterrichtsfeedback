@@ -120,14 +120,14 @@ export class ConfigStore {
 
   /**
    * Legt einen Lehrer an und liefert seine ID. Ohne Instrument gilt das Standardinstrument, ein unbekanntes wird
-   * angelegt. Er ist in allen laufenden und künftigen Berichtszeiträumen aktiv; mit `joinPeriodsOf` nur in denen,
-   * in denen dieser Lehrer aktiv ist (mit Server darf man nur dort Lehrer eintragen), mit `null` in keinem.
+   * angelegt. Er ist in allen laufenden und künftigen Berichtszeiträumen aktiv; mit `period` nur in diesem
+   * Zeitraum, mit `null` in keinem.
    */
   addTeacher(
     name: string,
-    options: { instrument?: string; id?: string; joinPeriodsOf?: string | null } = {},
+    options: { instrument?: string; id?: string; period?: string | null } = {},
   ): string {
-    const { instrument: instrumentName, id = newId(), joinPeriodsOf } = options;
+    const { instrument: instrumentName, id = newId(), period: periodId } = options;
     const instrumentId = instrumentName ? this.ensureInstruments([instrumentName]).get(instrumentName.trim().toLowerCase()) : null;
     this.mutate((config) => {
       config.teachers.push({
@@ -138,12 +138,11 @@ export class ConfigStore {
         teachingWindows: defaultTeachingWindows(config.calendar),
         periodWindows: {},
         periodLocations: {},
-        ...(joinPeriodsOf === null ? { withoutPeriod: true as const } : {}),
+        ...(periodId === null ? { withoutPeriod: true as const } : {}),
       });
-      if (joinPeriodsOf === null) return;
+      if (periodId === null) return;
       config.reportPeriods
-        .filter((period) => period.to >= today())
-        .filter((period) => joinPeriodsOf === undefined || period.teacherIds.includes(joinPeriodsOf))
+        .filter((period) => (periodId === undefined ? period.to >= today() : period.id === periodId))
         .forEach((period) => period.teacherIds.push(id));
     });
     return id;
@@ -154,16 +153,15 @@ export class ConfigStore {
   }
 
   /**
-   * Nimmt eine vorhandene Lehrkraft in die laufenden und künftigen Berichtszeiträume von `ofTeacherId` auf, z. B.
-   * wenn jemand eine Lehrkraft „neu“ anlegt, die es schon gibt, die er bisher aber nicht sehen konnte.
+   * Nimmt eine vorhandene Lehrkraft in den Berichtszeitraum auf, falls sie noch nicht darin steht, z. B. wenn jemand
+   * eine Lehrkraft „neu“ anlegt, die es schon gibt, die er bisher aber nicht sehen konnte.
    */
-  joinTeacherToPeriods(teacherId: string, ofTeacherId: string): void {
+  joinTeacherToPeriod(teacherId: string, periodId: string): void {
     this.mutate((config) => {
-      const periods = config.reportPeriods
-        .filter((period) => period.to >= today() && period.teacherIds.includes(ofTeacherId))
-        .filter((period) => !period.teacherIds.includes(teacherId));
-      periods.forEach((period) => period.teacherIds.push(teacherId));
-      if (periods.length > 0) clearWithoutPeriod(config, teacherId);
+      const period = config.reportPeriods.find((p) => p.id === periodId);
+      if (!period || period.teacherIds.includes(teacherId)) return;
+      period.teacherIds.push(teacherId);
+      clearWithoutPeriod(config, teacherId);
     });
   }
 

@@ -171,25 +171,28 @@ export class ConfigEditor {
   protected addTeacher(input: HTMLInputElement): void {
     const name = input.value.trim();
     if (!name) return;
-    const login = this.sync.login();
-    const hidden = login && this.hiddenTeacherNamed(name);
-    if (login && hidden) {
-      if (this.joinPeriods()) this.store.joinTeacherToPeriods(hidden.id, login.teacherId);
+    const period = this.joinsPeriod() ? this.windowsPeriodId() : null;
+    const hidden = this.sync.login() && this.hiddenTeacherNamed(name);
+    if (hidden) {
+      if (period) this.store.joinTeacherToPeriod(hidden.id, period);
       this.showError(
-        this.joinPeriods()
-          ? `${hidden.name} gab es schon; die Lehrkraft ist jetzt in deinen laufenden Berichtszeiträumen.`
+        period
+          ? `${hidden.name} gab es schon; die Lehrkraft ist jetzt in „${this.windowsPeriodName()}“.`
           : `${hidden.name} gibt es schon; du kannst sie in einen deiner Berichtszeiträume aufnehmen.`,
       );
-    } else if (!this.joinPeriods()) {
-      this.store.addTeacher(name, { joinPeriodsOf: null });
     } else {
-      this.store.addTeacher(name, login ? { joinPeriodsOf: login.teacherId } : {});
+      this.store.addTeacher(name, { period });
     }
     input.value = '';
   }
 
-  /** Neue Lehrkräfte gleich in die laufenden Berichtszeiträume eintragen; sonst stehen sie unter „Ohne laufenden Berichtszeitraum“. */
+  /**
+   * Neue Lehrkräfte gleich in den oben gewählten Berichtszeitraum eintragen; sonst stehen sie unter „Ohne laufenden
+   * Berichtszeitraum“.
+   */
   protected readonly joinPeriods = signal(true);
+  /** Der Haken gilt nur, wenn man in den gewählten Zeitraum eintragen darf (wie bei „In „…“ aufnehmen“). */
+  protected readonly joinsPeriod = computed(() => this.joinPeriods() && this.canJoinWindowsPeriod());
 
   /** Lehrkräfte ohne laufenden oder künftigen Berichtszeitraum, nach Namen */
   protected readonly teachersWithoutPeriod = computed(() =>
