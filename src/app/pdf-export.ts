@@ -133,27 +133,10 @@ export class PdfExport {
     await deliver(`${safeFileName(fileName)}_${today()}.pdf`, writer.toBlob(), action);
   }
 
-  /** Terminliste aller Lehrer: je Lehrer Name und Raum, darunter je Tag die Termine mit Uhrzeit und Person. */
-  async exportSchedule(
-    config: FeedbackConfig,
-    teachers: ScheduleTeacher[],
-    range: SchedulePeriod,
-    action: 'open' | 'share',
-  ): Promise<void> {
-    config = this.personal(config);
-    const list = await listDocument(config, config.calendarPdf.listTitle, range);
-    teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0, true));
-    list.writer.addFooters();
-    await deliver(`Unterrichtsplan_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
-  }
-
   /**
-   * Terminliste ohne Einzelunterricht: Gruppentermine und allgemeine Termine aller Lehrer, Tag für Tag. Jeder
-   * Eintrag nennt seinen Raum (siehe `ScheduleEntry.name`).
-   */
-  /**
-   * Gruppen- und allgemeine Termine ohne Einzelunterricht. Mit `periodName` steht der Name des Berichtszeitraums als
-   * Überschrift darüber und die konfigurierte Überschrift der Liste vor den Daten.
+   * Gruppen- und allgemeine Termine ohne Einzelunterricht, Tag für Tag; jeder Eintrag nennt seinen Raum (siehe
+   * `ScheduleEntry.name`). Mit `periodName` steht der Name des Berichtszeitraums als Überschrift darüber und die
+   * konfigurierte Überschrift der Liste vor den Daten.
    */
   async exportAppointmentList(
     config: FeedbackConfig,
@@ -173,7 +156,7 @@ export class PdfExport {
   }
 
   /**
-   * Nur Einzelunterricht, alle Lehrer: Jeder Lehrer beginnt auf einer neuen Seite, seine Tage folgen darunter ohne
+   * Nur Einzelunterricht: Jede Lehrkraft beginnt auf einer neuen Seite, ihre Tage folgen darunter ohne
    * Seitenwechsel.
    */
   async exportIndividualList(
@@ -184,22 +167,9 @@ export class PdfExport {
   ): Promise<void> {
     config = this.personal(config);
     const list = await listDocument(config, config.calendarPdf.individualListTitle, range);
-    teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0, false));
+    teachers.forEach((teacher, index) => writeScheduleTeacher(list, teacher, index === 0));
     list.writer.addFooters();
     await deliver(`Einzelunterricht_${range.from}_${range.to}.pdf`, list.writer.toBlob(), action);
-  }
-
-  /** Tagesplan im Querformat: je Tag eine Seite mit allen Lehrern als Spalten (siehe `schedule-grid-pdf.ts`). */
-  async exportDayGrid(config: FeedbackConfig, days: DayPlan[], range: SchedulePeriod, action: 'open' | 'share'): Promise<void> {
-    config = this.personal(config);
-    const [{ jsPDF }, { writeDayGrid }, prepared] = await Promise.all([
-      import('jspdf'),
-      import('./calendar/schedule-grid-pdf'),
-      forPrint(config),
-    ]);
-    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-    writeDayGrid(doc, pdfTheme(config), prepared.pdfLayout.headerLogo, config.calendarPdf, days, range);
-    await deliver(`Tagesplan_${range.from}_${range.to}.pdf`, doc.output('blob'), action);
   }
 
   /**
@@ -219,23 +189,6 @@ export class PdfExport {
     await deliver(`${name}.pdf`, doc.output('blob'), action);
   }
 
-  /** Wochenplan als Tabelle im Querformat, je Lehrer und Woche eine Seite (siehe `schedule-grid-pdf.ts`). */
-  async exportScheduleGrid(
-    config: FeedbackConfig,
-    teachers: ScheduleTeacher[],
-    range: SchedulePeriod,
-    action: 'open' | 'share',
-  ): Promise<void> {
-    config = this.personal(config);
-    const [{ jsPDF }, { writeScheduleGrid }, prepared] = await Promise.all([
-      import('jspdf'),
-      import('./calendar/schedule-grid-pdf'),
-      forPrint(config),
-    ]);
-    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-    writeScheduleGrid(doc, pdfTheme(config), prepared.pdfLayout.headerLogo, config.calendarPdf, teachers, range);
-    await deliver(`Wochenplan_${range.from}_${range.to}.pdf`, doc.output('blob'), action);
-  }
 }
 
 /** Inhalt eines Türschilds; `color` ist die Farbe der Lehrkraft (im Schwarzweißmodus gilt Grau). */
@@ -305,10 +258,10 @@ function listDocumentWith(
 }
 
 /**
- * Jeder Tag eines Lehrers steht auf einer eigenen Seite, mit Name und Raum darüber. Der erste Lehrer beginnt direkt
- * unter der Überschrift der Liste.
+ * Eine Lehrkraft mit Name, Funktion und Raum, darunter ihre Tage fortlaufend. Die erste beginnt direkt unter der
+ * Überschrift der Liste, jede weitere auf einer neuen Seite.
  */
-function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, first: boolean, pagePerDay: boolean): void {
+function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, first: boolean): void {
   const { writer } = list;
   if (!first) list.newPage();
   const heading = () => {
@@ -318,7 +271,7 @@ function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, firs
     writer.gap(4, false);
   };
   heading();
-  writeScheduleDays(list, teacher.days, pagePerDay, heading);
+  writeScheduleDays(list, teacher.days, false, heading);
 }
 
 /**
@@ -352,8 +305,6 @@ export interface ScheduleTeacher {
   /** Funktion der Lehrkraft (`Teacher.role`), leer ohne */
   role: string;
   location: string;
-  /** Für den Wochenplan: Unterrichtszeiten je Tag im Zeitraum, sie werden hinterlegt. */
-  windowsByDate: Record<string, { from: string; to: string }[]>;
   days: ScheduleDay[];
 }
 
@@ -386,31 +337,6 @@ export interface ScheduleEntry {
   group?: boolean;
   /** Allgemeiner Termin mehrerer Lehrer, z. B. eine Konferenz */
   shared?: boolean;
-}
-
-/** Ein Tag im Tagesplan aller Lehrer: je Lehrer eine Spalte, allgemeine Termine über die Spalten ihrer Lehrer */
-export interface DayPlan {
-  date: string;
-  columns: DayColumn[];
-  shared: SharedSpan[];
-}
-
-export interface DayColumn {
-  name: string;
-  /** Funktion der Lehrkraft (`Teacher.role`), leer ohne; steht mit dem Ort unter dem Namen */
-  role: string;
-  /** Raum oder Ort des Lehrers; steht im Tagesplan unter dem Namen */
-  location: string;
-  /** Unterrichtszeiten an diesem Tag */
-  teachingWindows: { from: string; to: string }[];
-  /** Einzel- und Gruppenunterricht sowie Blocker */
-  entries: ScheduleEntry[];
-}
-
-/** Allgemeiner Termin mit den Spalten (Indizes in `DayPlan.columns`) der beteiligten Lehrer */
-export interface SharedSpan {
-  entry: ScheduleEntry;
-  columns: number[];
 }
 
 /** Empfänger eines Abschnitts im PDF: eine Person mit ihrer Konfiguration oder eine Gruppe (siehe `groupRecipient`) */

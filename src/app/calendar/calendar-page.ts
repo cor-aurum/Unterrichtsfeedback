@@ -26,7 +26,7 @@ import {
   teachingWindowsOn,
   today,
 } from '../model';
-import { DayPlan, PdfExport, ScheduleDay, ScheduleEntry } from '../pdf-export';
+import { PdfExport, ScheduleDay, ScheduleEntry } from '../pdf-export';
 import { SharedImportPanel } from '../import/shared-import-panel';
 import { ReportPeriod } from '../report-period';
 import { isNativeApp } from '../save-file';
@@ -499,11 +499,11 @@ export class CalendarPage {
   /** Zeitraum der PDF-Liste: der gewählte Berichtszeitraum, bis man ihn selbst ändert. */
   protected readonly pdfFrom = linkedSignal(() => this.reportPeriod.period().from);
   protected readonly pdfTo = linkedSignal(() => this.reportPeriod.period().to);
-  /** Liste oder Wochenplan als Tabelle; gilt nur auf diesem Gerät. */
-  protected readonly pdfFormat = storedSignal<'list' | 'individual' | 'events' | 'grid' | 'day'>(
+  /** Liste nur mit oder ohne Einzelunterricht; gilt nur auf diesem Gerät. */
+  protected readonly pdfFormat = storedSignal<'individual' | 'events'>(
     'feedback.scheduleFormat',
-    () => 'list',
-    (data) => (data === 'individual' || data === 'events' || data === 'grid' || data === 'day' ? data : 'list'),
+    () => 'individual',
+    (data) => (data === 'events' ? data : 'individual'),
   );
 
   private readonly studentsById = computed(() => new Map(this.studentsStore.students().map((s) => [s.id, s])));
@@ -1059,40 +1059,31 @@ export class CalendarPage {
     }
     this.message.set(null);
     const period = { from, to, label: formatPeriod(from, to) };
-    if (this.pdfFormat() === 'day') {
-      this.pdf.exportDayGrid(this.config(), this.dayPlans(from, to), period, action);
-      return;
-    }
     if (this.pdfFormat() === 'events') {
       // Überschrift ist der Name des Berichtszeitraums, in dem die Liste beginnt.
       const periodName = (this.periodAt(from) ?? this.reportPeriod.period()).name;
       this.pdf.exportAppointmentList(this.config(), this.eventDays(from, to), period, action, periodName);
       return;
     }
-    const teachers = teachersInOrderOn(this.config(), from).filter((t) => this.activeTeacher.isVisible(t.id)).map((teacher) => ({
-      name: teacher.name,
-      role: teacher.role ?? '',
-      // Der Ort am ersten Tag; meist liegt der Zeitraum der Liste in einem Berichtszeitraum.
-      location: locationOn(teacher, this.config(), from, this.reportPeriod.period().id),
-      windowsByDate: Object.fromEntries(
-        daysBetween(from, to).map((date) => [date, teachingWindowsOn(teacher, this.config(), date, this.reportPeriod.period().id)]),
-      ),
-      days: this.scheduleDays(teacher, from, to, true),
-    }));
-    if (this.pdfFormat() === 'individual') {
-      // Nur Einzelunterricht: ohne Gruppentermine, allgemeine Termine und Blocker; alle Lehrer bleiben in der Liste.
-      const individual = teachers.map((teacher) => ({
-        ...teacher,
-        days: teacher.days
+    // Nur Einzelunterricht: ohne Gruppentermine, allgemeine Termine und Blocker; Lehrkräfte ohne Einzelunterricht im
+    // Zeitraum fallen weg.
+    const teachers = teachersInOrderOn(this.config(), from)
+      .filter((t) => this.activeTeacher.isVisible(t.id))
+      .map((teacher) => ({
+        name: teacher.name,
+        role: teacher.role ?? '',
+        // Der Ort am ersten Tag; meist liegt der Zeitraum der Liste in einem Berichtszeitraum.
+        location: locationOn(teacher, this.config(), from, this.reportPeriod.period().id),
+        days: this.scheduleDays(teacher, from, to, false)
           .map((day) => ({ ...day, entries: day.entries.filter((e) => !e.blocked && !e.shared && !e.group) }))
           .filter((day) => day.entries.length > 0),
-      }));
-      this.pdf.exportIndividualList(this.config(), individual, period, action);
-    } else if (this.pdfFormat() === 'grid') {
-      this.pdf.exportScheduleGrid(this.config(), teachers, period, action);
-    } else {
-      this.pdf.exportSchedule(this.config(), teachers, period, action);
+      }))
+      .filter((teacher) => teacher.days.length > 0);
+    if (teachers.length === 0) {
+      this.message.set('Im gewählten Zeitraum hat keine Lehrkraft Einzelunterricht.');
+      return;
     }
+    this.pdf.exportIndividualList(this.config(), teachers, period, action);
   }
 
   /**
@@ -1134,39 +1125,6 @@ export class CalendarPage {
           .sort((a, b) => a.startMinutes - b.startMinutes),
       }))
       .filter((day) => day.entries.length > 0);
-  }
-
-  /**
-   * Je Tag die Spalten der Lehrer, die an dem Tag aktiv sind oder Termine haben, und die allgemeinen Termine
-   * über den Spalten ihrer Lehrer.
-   */
-  private dayPlans(from: string, to: string): DayPlan[] {
-    const config = this.config();
-    return daysBetween(from, to).map((date) => {
-      const shared = this.calendar.sharedOccurrences(date, date).map((o) => o.appointment);
-      const visible = this.activeTeacher.visibleTeachers();
-      const entries = new Map(visible.map((t) => [t.id, this.scheduleDays(t, date, date, false)[0]?.entries ?? []]));
-      const involved = new Set([
-        ...activeTeachersOn(config, date).map((t) => t.id),
-        ...visible.filter((t) => entries.get(t.id)!.length > 0).map((t) => t.id),
-        ...shared.flatMap((appointment) => appointment.teacherIds),
-      ]);
-      const teachers = teachersInOrderOn(config, date).filter((t) => involved.has(t.id) && entries.has(t.id));
-      return {
-        date,
-        columns: teachers.map((teacher) => ({
-          name: teacher.name,
-          role: teacher.role ?? '',
-          location: locationOn(teacher, config, date, this.reportPeriod.period().id),
-          teachingWindows: teachingWindowsOn(teacher, config, date, this.reportPeriod.period().id),
-          entries: entries.get(teacher.id)!,
-        })),
-        shared: shared.map((appointment) => ({
-          entry: sharedEntry(appointment),
-          columns: teachers.flatMap((teacher, index) => (appointment.teacherIds.includes(teacher.id) ? [index] : [])),
-        })),
-      };
-    });
   }
 
   /**

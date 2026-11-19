@@ -474,24 +474,12 @@
   <h2>Termine aller Lehrkräfte als PDF</h2>
   <div class="row pdf-format" role="radiogroup" aria-label="Darstellung">
     <label>
-      <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'list'" (change)="pdfFormat.set('list')" />
-      Liste
-    </label>
-    <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'individual'" (change)="pdfFormat.set('individual')" />
       Liste nur mit Einzelunterricht (je Lehrkraft eine neue Seite)
     </label>
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'events'" (change)="pdfFormat.set('events')" />
       Liste ohne Einzelunterricht (Gruppen- und allgemeine Termine mit Raum)
-    </label>
-    <label>
-      <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'grid'" (change)="pdfFormat.set('grid')" />
-      Wochenplan als Tabelle (je Lehrkraft und Woche eine Seite, Querformat)
-    </label>
-    <label>
-      <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'day'" (change)="pdfFormat.set('day')" />
-      Tagesplan aller Lehrkräfte (je Tag eine Seite, Querformat)
     </label>
   </div>
   <div class="row period">

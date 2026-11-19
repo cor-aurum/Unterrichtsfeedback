@@ -108,10 +108,8 @@ export class ConfigEditor {
   );
   protected readonly logoSlots = LOGO_SLOTS;
   protected readonly calendarPdfFields: { key: keyof CalendarPdfTexts; label: string }[] = [
-    { key: 'listTitle', label: 'Überschrift der Liste' },
     { key: 'eventListTitle', label: 'Überschrift der Liste ohne Einzelunterricht' },
     { key: 'individualListTitle', label: 'Überschrift der Liste nur mit Einzelunterricht' },
-    { key: 'dayPlanTitle', label: 'Überschrift des Tagesplans' },
     { key: 'footer', label: 'Fußzeile links (alle Kalender-PDFs)' },
     { key: 'noAppointments', label: 'Hinweis, wenn der Zeitraum keine Termine hat' },
     { key: 'blocked', label: 'Bezeichnung für Blocker (auch in der iCal-Datei)' },

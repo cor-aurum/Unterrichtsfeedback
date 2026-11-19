@@ -526,10 +526,8 @@ export interface FeedbackConfig {
 }
 
 export interface CalendarPdfTexts {
-  listTitle: string;
   eventListTitle: string;
   individualListTitle: string;
-  dayPlanTitle: string;
   /** Links in der Fußzeile jeder Seite */
   footer: string;
   /** Steht im PDF, wenn der Zeitraum keine Termine hat */
@@ -539,10 +537,8 @@ export interface CalendarPdfTexts {
 }
 
 export const DEFAULT_CALENDAR_PDF_TEXTS: CalendarPdfTexts = {
-  listTitle: 'Unterrichtsplan',
   eventListTitle: 'Termine ohne Einzelunterricht',
   individualListTitle: 'Einzelunterricht',
-  dayPlanTitle: 'Tagesplan aller Lehrkräfte',
   footer: 'Unterrichtsplan',
   noAppointments: 'In diesem Zeitraum sind keine Termine geplant.',
   blocked: 'Blockiert',

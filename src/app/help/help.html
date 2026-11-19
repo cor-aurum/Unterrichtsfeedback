@@ -364,7 +364,7 @@
     <li>
       <strong>Blocker:</strong> Mit <kbd>+ Blocker</kbd> blockierst du Zeit, ohne jemanden einzutragen, z. B. für
       eine Fortbildung – ganze Tage oder von einer Uhrzeit bis zu einer Uhrzeit, auch über mehrere Tage. Blocker
-      erscheinen schraffiert an jedem betroffenen Tag und im Wochenplan-PDF. „Nächster freier Termin“ und das
+      erscheinen schraffiert an jedem betroffenen Tag. „Nächster freier Termin“ und das
       automatische Einplanen einmaliger Termine lassen blockierte Zeit aus; beim wöchentlichen Einplanen zählen
       Blocker nicht, damit eine einmalige Abwesenheit keinen Wochentermin verhindert.
     </li>
@@ -487,20 +487,16 @@
     </li>
     <li>
       <strong>Termine als PDF:</strong> Unten wählst du einen Zeitraum (anfangs der gewählte Berichtszeitraum) und die
-      Darstellung. Die <em>Liste</em> zeigt für jede Lehrkraft mit Name und Raum ihre Termine, Tag für Tag. Die
-      <em>Liste nur mit Einzelunterricht</em> enthält alle Lehrkräfte, aber nur Einzelunterricht; jede Lehrkraft beginnt
-      auf einer neuen Seite, ihre Tage folgen fortlaufend. Die <em>Liste ohne Einzelunterricht</em> zeigt nur Gruppentermine und allgemeine Termine aller Lehrkräfte, Tag für Tag,
-      jeweils mit Raum: bei Gruppen ihr eigener Ort oder der Raum der Lehrkraft, bei allgemeinen Terminen ihr Ort; die Lehrkraft steht nur
-      dabei, wenn es genau eine ist; als Überschrift steht der Name des Berichtszeitraums darüber, die eingestellte Überschrift der Liste vor den Daten. Blocker stehen nicht darin. In der <em>Liste</em> und der <em>Liste ohne
-      Einzelunterricht</em> beginnt jeder Tag auf einer neuen Seite; alle Seiten tragen dieselbe große Überschrift; in der <em>Liste</em> steht die Lehrkraft mit Raum auf jeder Seite darüber.
-      Die Überschriften, die Fußzeile, den Hinweis „keine Termine“ und die Bezeichnung der Blocker legst du unter
-      <a routerLink="/konfiguration">Konfiguration</a> → Kalender bei <em>Texte der Kalender-PDFs</em> fest. Der
-      <em>Wochenplan als Tabelle</em> zeigt im Querformat je Lehrkraft und Woche eine Seite mit den Tagen als Spalten;
-      die Unterrichtszeiten sind hell hinterlegt. Jede Woche beginnt am Wochentag des Zeitraum-Beginns; Tage nach dem
-      Zeitraum-Ende und Wochen ohne Termine fallen weg. Der <em>Tagesplan aller Lehrkräfte</em> zeigt je Tag eine Seite
-      mit den Lehrer:innen als Spalten – alle, die an dem Tag im Berichtszeitraum aktiv sind oder Termine haben.
-      Allgemeine Termine reichen über die Spalten ihrer Lehrer:innen; Tage ohne Termine fallen weg. Alle Darstellungen
-      enthalten immer alle Lehrer:innen, nicht nur die oben ausgewählte Lehrkraft.
+      Liste. Die <em>Liste nur mit Einzelunterricht</em> enthält nur Einzelunterricht und nur die Lehrkräfte, die im
+      gewählten Zeitraum mindestens eine Einzelstunde haben; jede Lehrkraft beginnt mit Name, Funktion und Raum auf einer
+      neuen Seite, ihre Tage folgen fortlaufend. Die <em>Liste ohne Einzelunterricht</em> zeigt nur Gruppentermine und
+      allgemeine Termine aller Lehrkräfte, Tag für Tag, jeweils mit Raum: bei Gruppen ihr eigener Ort oder der Raum der
+      Lehrkraft, bei allgemeinen Terminen ihr Ort; die Lehrkraft steht nur dabei, wenn es genau eine ist. Als Überschrift
+      steht der Name des Berichtszeitraums darüber, die eingestellte Überschrift der Liste vor den Daten; jeder Tag
+      beginnt auf einer neuen Seite. Blocker stehen in keiner der Listen. Die Überschriften, die Fußzeile, den Hinweis
+      „keine Termine“ und die Bezeichnung der Blocker legst du unter <a routerLink="/konfiguration">Konfiguration</a> →
+      Kalender bei <em>Texte der Kalender-PDFs</em> fest. Beide Listen enthalten alle Lehrer:innen, nicht nur die oben
+      ausgewählte Lehrkraft.
     </li>
     <li>
       <strong>Termine als Tabelle:</strong> Unten im Kalender exportierst du die Termine aller Lehrkräfte eines Zeitraums
@@ -552,11 +548,11 @@
       gilt der, in dem heute liegt – zwischen zwei Zeiträumen (z. B. in den Ferien) der nächste. Er legt fest, welche Personen und Gruppen aktiv sind, welche Stunden im PDF stehen, für welche Stunden die Haken im
       allgemeinen Teil gelten und welche Varianten der festen Inhalte greifen. <code>{{ '{zeitraum}' }}</code> setzt
       seinen Namen ins PDF. Gibt es mehrere Lehrer:innen, hakst du je Zeitraum die <em>aktiven Lehrer:innen</em> an: Sie sind bei
-      allgemeinen Terminen vorausgewählt und stehen im Tagesplan aller Lehrkräfte. Eine neue Lehrkraft ist gleich im oben
+      allgemeinen Terminen vorausgewählt. Eine neue Lehrkraft ist gleich im oben
       unter <em>Lehrer:innen</em> gewählten Zeitraum aktiv, außer du nimmst beim Anlegen den Haken <em>gleich in „…“
       eintragen</em> weg (vergangene Zeiträume und mit Server solche, in denen du nicht stehst, gehen nicht); ein neuer Zeitraum übernimmt die Lehrer:innen des vorigen, auch in ihrer
       Reihenfolge. Mit <kbd>↑</kbd>/<kbd>↓</kbd> legst du sie fest: In dieser Reihenfolge stehen die Lehrer:innen in
-      Auswahllisten, Filtern, im Tagesplan und in den Terminlisten, den/die ersten (z. B. die Leitung) also immer vorne.
+      Auswahllisten, Filtern und in den Terminlisten, den/die ersten (z. B. die Leitung) also immer vorne.
     </li>
     <li>
       <strong>Personen je Berichtszeitraum:</strong> Personen gehören zu den Berichtszeiträumen, in denen sie Unterricht
@@ -745,8 +741,7 @@
       holt <kbd>App-Logo verwenden</kbd> es zurück. Das Kopflogo steht auf der ersten Seite neben der Überschrift
       (mittig darüber) und kleiner neben der Kopfzeile der Folgeseiten, das Fußlogo auf jeder Seite in der
       Fußzeile; ein Text an derselben Stelle rückt daneben. Die Logos erscheinen in den Feedback-PDFs, im
-      Gruppen-PDF und in der Terminliste; der Wochenplan zeigt das Kopflogo oben auf jeder Seite (höchstens 12 mm
-      hoch).
+      Gruppen-PDF und in den Terminlisten; das Türschild zeigt das Kopflogo größer oben auf der Seite.
     </li>
     <li>
       <strong>Instrumente:</strong> Jede Person hat ein Instrument. Das als <em>Standard</em> markierte ist beim
@@ -768,7 +763,7 @@
     </li>
     <li>
       <strong>Türschild:</strong> <kbd>Türschild</kbd> bei einer Lehrkraft erstellt ein PDF im Querformat mit ihrem
-      Namen, ihrer <em>Funktion</em> (Feld bei der Lehrkraft, z. B. „Schulleitung“) und ihrem Ort im oben gewählten Zeitraum (die Funktion steht auch in Wochenplan, Tagesplan und Terminlisten neben dem Namen), in ihrer Farbe und mit dem Kopflogo aus den PDF-Einstellungen.
+      Namen, ihrer <em>Funktion</em> (Feld bei der Lehrkraft, z. B. „Schulleitung“) und ihrem Ort im oben gewählten Zeitraum (die Funktion steht auch in der Liste nur mit Einzelunterricht neben dem Namen), in ihrer Farbe und mit dem Kopflogo aus den PDF-Einstellungen.
       <kbd>Alle Türschilder (PDF)</kbd> erstellt eine Seite je Lehrkraft des Zeitraums.
     </li>
     <li>
