@@ -15,10 +15,10 @@ const LINE_FACTOR = 0.3528 * 1.15;
 const TEXT = '#1f2933';
 const MUTED = '#66727f';
 
-/** Ein Türschild: Name, Instrument und Ort einer Lehrkraft in ihrer Farbe */
+/** Ein Türschild: Name, Funktion und Ort einer Lehrkraft in ihrer Farbe */
 export interface DoorSign {
   name: string;
-  instrument: string;
+  role: string;
   location: string;
   theme: Theme;
 }
@@ -30,7 +30,7 @@ interface FittedText {
   height: number;
 }
 
-/** Türschilder im Querformat, je Lehrkraft eine Seite: Logo oben, darunter groß Name, Instrument und Ort. */
+/** Türschilder im Querformat, je Lehrkraft eine Seite: Logo oben, darunter groß Name, Funktion und Ort. */
 export function writeDoorSigns(doc: jsPDF, logo: PdfLogo | null, signs: DoorSign[]): void {
   signs.forEach((sign, index) => {
     if (index > 0) doc.addPage('a4', 'landscape');
@@ -42,15 +42,15 @@ function writeDoorSign(doc: jsPDF, logo: PdfLogo | null, sign: DoorSign): void {
   const top = writeLogo(doc, logo);
   const bottom = writeBand(doc, sign.theme);
   const name = fitText(doc, 'bold', sign.name, 72, 28, 2);
-  const instrument = fitText(doc, 'normal', sign.instrument, 32, 16, 1);
+  const role = fitText(doc, 'normal', sign.role, 32, 16, 2);
   const location = fitText(doc, 'normal', sign.location, 24, 12, 2);
   const ruleGap = 10;
-  const height = name.height + ruleGap + instrument.height + (location.lines.length ? 4 + location.height : 0);
+  const height = name.height + ruleGap + role.height + (location.lines.length ? 4 + location.height : 0);
   // Der Text steht mittig im Platz zwischen Logo und Band.
   let y = top + Math.max(0, (bottom - top - height) / 2);
   y = writeLines(doc, name, 'bold', TEXT, y);
   doc.setFillColor(sign.theme.primary).rect((PAGE_WIDTH - 40) / 2, y + ruleGap / 2 - 0.75, 40, 1.5, 'F');
-  y = writeLines(doc, instrument, 'normal', sign.theme.primaryText, y + ruleGap);
+  y = writeLines(doc, role, 'normal', sign.theme.primaryText, y + ruleGap);
   writeLines(doc, location, 'normal', MUTED, y + 4);
 }
 

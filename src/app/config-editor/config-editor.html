@@ -458,14 +458,8 @@
               <button class="icon" [disabled]="last" (click)="store.moveTeacher(teacher.id, 1)" title="Nach unten">↓</button>
               <button
                 class="icon"
-                (click)="store.duplicateTeacher(teacher.id)"
-                title="Duplizieren: neue Lehrkraft mit denselben Unterrichtszeiten"
-                aria-label="Lehrkraft duplizieren"
-              >⧉</button>
-              <button
-                class="icon"
                 (click)="doorSigns([teacher])"
-                title="Türschild mit Name, Instrument und Ort als PDF"
+                title="Türschild mit Name, Funktion und Ort als PDF"
               >Türschild</button>
               <button
                 class="icon"
@@ -481,6 +475,15 @@
                 <app-instrument-select
                   [value]="teacherInstrumentId(teacher)"
                   (valueChange)="store.updateTeacher(teacher.id, { instrumentId: $event })"
+                />
+              </label>
+              <label>
+                Funktion (für das Türschild)
+                <input
+                  type="text"
+                  [value]="teacher.role ?? ''"
+                  (change)="store.setTeacherRole(teacher.id, valueOf($event))"
+                  placeholder="z. B. Schulleitung, Klavier und Keyboard"
                 />
               </label>
               <label>

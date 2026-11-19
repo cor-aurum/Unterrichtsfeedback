@@ -506,7 +506,7 @@ export class ConfigEditor {
     const config = this.store.config();
     const signs = teachers.map((teacher) => ({
       name: teacher.name,
-      instrument: teacherInstrument(teacher, config).name,
+      role: teacher.role ?? '',
       location: this.locationOf(teacher),
       color: teacher.themeColor ?? config.themeColor,
     }));

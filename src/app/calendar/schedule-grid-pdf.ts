@@ -1,7 +1,7 @@
 import type { jsPDF } from 'jspdf';
 import { WithLane, withLanes } from './lanes';
 import { CalendarPdfTexts, formatDate, formatLongDate, logoSize, PdfLogo } from '../model';
-import type { DayPlan, ScheduleEntry, SchedulePeriod, ScheduleTeacher, SharedSpan } from '../pdf-export';
+import { teacherDetail, type DayPlan, type ScheduleEntry, type SchedulePeriod, type ScheduleTeacher, type SharedSpan } from '../pdf-export';
 import { GRAYSCALE_THEME, Theme } from '../theme';
 import { addDays, minutesOf, timeOf, WEEKDAY_NAMES, weekday } from './appointments';
 
@@ -105,13 +105,14 @@ function writeDay(doc: jsPDF, theme: Theme, logo: PdfLogo | null, texts: Calenda
     for (const window of column.teachingWindows) {
       doc.rect(columnX(i), y(minutesOf(window.from)), columnWidth, (minutesOf(window.to) - minutesOf(window.from)) * mmPerMinute, 'F');
     }
-    // Mit Raum steht der Name etwas höher, der Raum klein darunter.
+    // Mit Funktion oder Raum steht der Name etwas höher, beides klein darunter.
     const centerX = columnX(i) + columnWidth / 2;
+    const detail = teacherDetail(column);
     doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(TEXT);
-    doc.text(fit(doc, column.name, columnWidth - 2), centerX, column.location ? top - 5 : top - 3, { align: 'center' });
-    if (column.location) {
+    doc.text(fit(doc, column.name, columnWidth - 2), centerX, detail ? top - 5 : top - 3, { align: 'center' });
+    if (detail) {
       doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(MUTED);
-      doc.text(fit(doc, column.location, columnWidth - 2), centerX, top - 1.6, { align: 'center' });
+      doc.text(fit(doc, detail, columnWidth - 2), centerX, top - 1.6, { align: 'center' });
     }
   });
 
@@ -216,7 +217,7 @@ function writeHeader(doc: jsPDF, theme: Theme, logo: PdfLogo | null, teacher: Sc
   const [first, last] = [week[0], week.at(-1)!];
   // Beginnt die Woche nicht am Montag, reicht sie in die nächste Kalenderwoche.
   const weeks = isoWeek(first) === isoWeek(last) ? `KW ${isoWeek(first)}` : `KW ${isoWeek(first)}/${isoWeek(last)}`;
-  writeTitle(doc, theme, logo, teacher.name, teacher.location, `${weeks} · ${formatDate(first)} – ${formatDate(last)}`);
+  writeTitle(doc, theme, logo, teacher.name, teacherDetail(teacher), `${weeks} · ${formatDate(first)} – ${formatDate(last)}`);
 }
 
 /** Band, Logo, Überschrift mit Zusatz (z. B. dem Raum) links und Zeitangabe rechts */

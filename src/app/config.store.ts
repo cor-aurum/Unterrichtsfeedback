@@ -152,6 +152,14 @@ export class ConfigStore {
     this.mutateTeacher(teacherId, (teacher) => Object.assign(teacher, change));
   }
 
+  /** Funktion der Lehrkraft (siehe `Teacher.role`); leer entfernt sie. */
+  setTeacherRole(teacherId: string, role: string): void {
+    this.mutateTeacher(teacherId, (teacher) => {
+      if (role.trim()) teacher.role = role.trim();
+      else delete teacher.role;
+    });
+  }
+
   /**
    * Nimmt eine vorhandene Lehrkraft in den Berichtszeitraum auf, falls sie noch nicht darin steht, z. B. wenn jemand
    * eine Lehrkraft „neu“ anlegt, die es schon gibt, die er bisher aber nicht sehen konnte.
@@ -200,31 +208,6 @@ export class ConfigStore {
   /** Wieder aktiv; in künftige Berichtszeiträume trägt man sie bei Bedarf unter „Allgemein“ wieder ein. */
   reactivateTeacher(teacherId: string): void {
     this.mutateTeacher(teacherId, (teacher) => delete teacher.inactiveSince);
-  }
-
-  /**
-   * Kopie direkt hinter dem Lehrer: Instrument, Ort und Unterrichtszeiten gleich, aktiv in denselben
-   * Berichtszeiträumen. Personen, Termine und Textvarianten bleiben beim Original. Liefert die ID der Kopie.
-   */
-  duplicateTeacher(teacherId: string): string | null {
-    const original = this.config().teachers.find((t) => t.id === teacherId);
-    if (!original) return null;
-    const id = newId();
-    this.mutate((config) => {
-      const copy: Teacher = {
-        ...original,
-        id,
-        name: `${original.name} (Kopie)`,
-        teachingWindows: copyWindows(original.teachingWindows),
-        periodWindows: Object.fromEntries(
-          Object.entries(original.periodWindows).map(([periodId, windows]) => [periodId, copyWindows(windows)]),
-        ),
-        periodLocations: { ...original.periodLocations },
-      };
-      config.teachers.splice(config.teachers.findIndex((t) => t.id === teacherId) + 1, 0, copy);
-      config.reportPeriods.filter((period) => period.teacherIds.includes(teacherId)).forEach((period) => period.teacherIds.push(id));
-    });
-    return id;
   }
 
   moveTeacher(teacherId: string, offset: -1 | 1): void {
@@ -876,6 +859,7 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       // Ältere Lehrer haben noch keine Zeiten und Orte je Berichtszeitraum; dort gelten die allgemeinen.
       periodWindows: parsePeriodWindows(t.periodWindows),
       periodLocations: parsePeriodLocations(t.periodLocations),
+      ...(typeof t.role === 'string' && t.role.trim() ? { role: t.role.trim() } : {}),
       ...(isHexColor(t.themeColor) ? { themeColor: t.themeColor.toLowerCase() } : {}),
       ...(HOME_PAGES.some((page) => page.path === t.homePage) ? { homePage: t.homePage } : {}),
       ...(typeof t.inactiveSince === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.inactiveSince) ? { inactiveSince: t.inactiveSince } : {}),

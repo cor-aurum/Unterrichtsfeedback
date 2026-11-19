@@ -1071,6 +1071,7 @@ export class CalendarPage {
     }
     const teachers = teachersInOrderOn(this.config(), from).filter((t) => this.activeTeacher.isVisible(t.id)).map((teacher) => ({
       name: teacher.name,
+      role: teacher.role ?? '',
       // Der Ort am ersten Tag; meist liegt der Zeitraum der Liste in einem Berichtszeitraum.
       location: locationOn(teacher, this.config(), from, this.reportPeriod.period().id),
       windowsByDate: Object.fromEntries(
@@ -1155,6 +1156,7 @@ export class CalendarPage {
         date,
         columns: teachers.map((teacher) => ({
           name: teacher.name,
+          role: teacher.role ?? '',
           location: locationOn(teacher, config, date, this.reportPeriod.period().id),
           teachingWindows: teachingWindowsOn(teacher, config, date, this.reportPeriod.period().id),
           entries: entries.get(teacher.id)!,

@@ -375,6 +375,8 @@ export interface Teacher {
   location: string;
   /** Ort je Berichtszeitraum (Schlüssel: ID des Zeitraums); immer über `locationIn` oder `locationOn` auswerten */
   periodLocations: Record<string, string>;
+  /** Funktion, z. B. „Schulleitung“ oder „Klavier und Keyboard“; steht auf dem Türschild. Fehlt, wenn leer. */
+  role?: string;
   /**
    * Persönliche Themenfarbe (Hex) für App und PDFs dieser Lehrkraft; fehlt sie, gilt die allgemeine
    * (`FeedbackConfig.themeColor`). Andere Lehrkräfte beeinflusst sie nicht.

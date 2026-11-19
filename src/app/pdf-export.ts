@@ -241,7 +241,8 @@ export class PdfExport {
 /** Inhalt eines Türschilds; `color` ist die Farbe der Lehrkraft (im Schwarzweißmodus gilt Grau). */
 export interface DoorSignData {
   name: string;
-  instrument: string;
+  /** Funktion der Lehrkraft (`Teacher.role`), leer, wenn keine eingetragen ist */
+  role: string;
   location: string;
   color: string;
 }
@@ -312,9 +313,8 @@ function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, firs
   if (!first) list.newPage();
   const heading = () => {
     writer.text(teacher.name, { size: 15, bold: true, gapAfter: 0.5 });
-    if (teacher.location.trim()) {
-      writer.text(teacher.location, { size: 11, color: writer.colors.muted, gapAfter: 0 });
-    }
+    const detail = teacherDetail(teacher);
+    if (detail) writer.text(detail, { size: 11, color: writer.colors.muted, gapAfter: 0 });
     writer.gap(4, false);
   };
   heading();
@@ -349,10 +349,17 @@ function writeScheduleDays(list: ListDocument, days: ScheduleDay[], pagePerDay: 
 /** Ein Lehrer in der Terminliste mit seinen Terminen im Zeitraum. */
 export interface ScheduleTeacher {
   name: string;
+  /** Funktion der Lehrkraft (`Teacher.role`), leer ohne */
+  role: string;
   location: string;
   /** Für den Wochenplan: Unterrichtszeiten je Tag im Zeitraum, sie werden hinterlegt. */
   windowsByDate: Record<string, { from: string; to: string }[]>;
   days: ScheduleDay[];
+}
+
+/** Zusatz zum Namen einer Lehrkraft in den Zeitplänen: Funktion und Ort, z. B. „Schulleitung · Raum 3“ */
+export function teacherDetail({ role, location }: { role: string; location: string }): string {
+  return [role, location].map((part) => part.trim()).filter(Boolean).join(' · ');
 }
 
 /** Zeitraum der Terminliste als ISO-Daten und lesbarer Text, z. B. „2. November – 8. November 2026“ */
@@ -390,6 +397,8 @@ export interface DayPlan {
 
 export interface DayColumn {
   name: string;
+  /** Funktion der Lehrkraft (`Teacher.role`), leer ohne; steht mit dem Ort unter dem Namen */
+  role: string;
   /** Raum oder Ort des Lehrers; steht im Tagesplan unter dem Namen */
   location: string;
   /** Unterrichtszeiten an diesem Tag */
