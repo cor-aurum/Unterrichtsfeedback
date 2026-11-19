@@ -19,6 +19,7 @@ import {
   isVisibleTo,
   LEGACY_APP_LOGO_PATH,
   locationIn,
+  roleIn,
   LOGO_HEIGHT_LIMITS,
   newId,
   PdfLayout,
@@ -152,12 +153,9 @@ export class ConfigStore {
     this.mutateTeacher(teacherId, (teacher) => Object.assign(teacher, change));
   }
 
-  /** Funktion der Lehrkraft (siehe `Teacher.role`); leer entfernt sie. */
-  setTeacherRole(teacherId: string, role: string): void {
-    this.mutateTeacher(teacherId, (teacher) => {
-      if (role.trim()) teacher.role = role.trim();
-      else delete teacher.role;
-    });
+  /** Funktion der Lehrkraft in einem Berichtszeitraum (siehe `Teacher.periodRoles`); die anderen behalten ihre. */
+  setTeacherRole(teacherId: string, periodId: string, role: string): void {
+    this.mutateTeacher(teacherId, (teacher) => (teacher.periodRoles = { ...teacher.periodRoles, [periodId]: role.trim() }));
   }
 
   /**
@@ -412,8 +410,12 @@ export class ConfigStore {
       // Die Lehrer behalten ihre Unterrichtszeiten aus dem spätesten Zeitraum; ändern lassen sie sich danach je Zeitraum.
       const latest = [...config.reportPeriods].sort((a, b) => a.to.localeCompare(b.to)).at(-1);
       config.teachers.forEach((teacher) => (teacher.periodWindows[id] = copyWindows(teachingWindowsFor(teacher, latest?.id ?? null))));
-      // Ebenso ihren Ort; meist bleibt er gleich.
+      // Ebenso ihren Ort und ihre Funktion; meist bleiben sie gleich.
       config.teachers.forEach((teacher) => (teacher.periodLocations[id] = locationIn(teacher, latest?.id ?? null)));
+      config.teachers.forEach((teacher) => {
+        const role = roleIn(teacher, latest?.id ?? null);
+        if (role) teacher.periodRoles = { ...teacher.periodRoles, [id]: role };
+      });
       // Gemeinsame Zeiten übernimmt der neue Zeitraum ebenso.
       const shared = latest?.sharedWindows ? { sharedWindows: copyWindows(latest.sharedWindows) } : {};
       config.reportPeriods.push({ id, ...period, ...shared });
@@ -860,6 +862,7 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       periodWindows: parsePeriodWindows(t.periodWindows),
       periodLocations: parsePeriodLocations(t.periodLocations),
       ...(typeof t.role === 'string' && t.role.trim() ? { role: t.role.trim() } : {}),
+      ...(t.periodRoles && typeof t.periodRoles === 'object' ? { periodRoles: parsePeriodLocations(t.periodRoles) } : {}),
       ...(isHexColor(t.themeColor) ? { themeColor: t.themeColor.toLowerCase() } : {}),
       ...(HOME_PAGES.some((page) => page.path === t.homePage) ? { homePage: t.homePage } : {}),
       ...(typeof t.inactiveSince === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.inactiveSince) ? { inactiveSince: t.inactiveSince } : {}),
@@ -878,6 +881,7 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
   }];
 }
 
+/** Texte je Zeitraum (Ort, Funktion): nur Einträge mit Text bleiben */
 function parsePeriodLocations(data: unknown): Record<string, string> {
   if (!data || typeof data !== 'object') return {};
   return Object.fromEntries(Object.entries(data).filter(([, location]) => typeof location === 'string'));

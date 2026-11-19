@@ -120,7 +120,7 @@ interface ReportFile {
   version: 1;
   period: ReportPeriodEntry;
   /** Lehrer-ID → Unterrichtszeiten und Ort in diesem Zeitraum (nur, wenn sie eigene haben) */
-  teachers: Record<string, { windows?: TeachingWindow[]; location?: string }>;
+  teachers: Record<string, { windows?: TeachingWindow[]; location?: string; role?: string }>;
   sharedAppointments: SharedAppointment[];
 }
 
@@ -206,10 +206,12 @@ function reportFile(config: FeedbackConfig, period: ReportPeriodEntry, shared: S
   for (const teacher of config.teachers) {
     const windows = teacher.periodWindows[period.id];
     const hasLocation = Object.hasOwn(teacher.periodLocations, period.id);
-    if (!windows && !hasLocation) continue;
+    const hasRole = Object.hasOwn(teacher.periodRoles ?? {}, period.id);
+    if (!windows && !hasLocation && !hasRole) continue;
     teachers[teacher.id] = {
       ...(windows ? { windows } : {}),
       ...(hasLocation ? { location: teacher.periodLocations[period.id] } : {}),
+      ...(hasRole ? { role: teacher.periodRoles![period.id] } : {}),
     };
   }
   const { placeholder: _p, ...entry } = period;
@@ -321,16 +323,18 @@ export function fromSyncFiles(files: SyncFiles): AppData {
   };
 }
 
-/** Unterrichtszeiten und Orte des Lehrers aus den Zeitraumdateien; ältere Lehrerdateien enthalten sie selbst. */
+/** Unterrichtszeiten, Orte und Funktionen des Lehrers aus den Zeitraumdateien; ältere Lehrerdateien enthalten sie selbst. */
 function withReportData(teacher: Teacher, reportFiles: ReportFile[]): Teacher {
   const periodWindows = { ...(teacher.periodWindows ?? {}) };
   const periodLocations = { ...(teacher.periodLocations ?? {}) };
+  const periodRoles = { ...(teacher.periodRoles ?? {}) };
   for (const file of reportFiles) {
     const entry = file.teachers[teacher.id];
     if (entry?.windows) periodWindows[file.period.id] = entry.windows;
     if (entry && typeof entry.location === 'string') periodLocations[file.period.id] = entry.location;
+    if (entry && typeof entry.role === 'string') periodRoles[file.period.id] = entry.role;
   }
-  return { ...teacher, periodWindows, periodLocations };
+  return { ...teacher, periodWindows, periodLocations, ...(Object.keys(periodRoles).length ? { periodRoles } : {}) };
 }
 
 function parseReportFile(name: string, content: string): ReportFile {
@@ -451,8 +455,8 @@ function teacherFile(data: AppData, teacher: Teacher, position: number): Teacher
     (blocker) => blocker.teacherId === teacher.id || (position === 0 && !teacherIds.has(blocker.teacherId)),
   );
   const own = ownEntries(config, teacher.id);
-  // Unterrichtszeiten und Orte je Zeitraum stehen in den Zeitraumdateien, damit nur dessen Lehrer sie sehen.
-  const { periodWindows: _w, periodLocations: _l, ...withoutPeriods } = teacher;
+  // Unterrichtszeiten, Orte und Funktionen je Zeitraum stehen in den Zeitraumdateien, damit nur dessen Lehrer sie sehen.
+  const { periodWindows: _w, periodLocations: _l, periodRoles: _r, ...withoutPeriods } = teacher;
   return {
     format: 'unterricht-feedback/lehrer',
     version: 1,

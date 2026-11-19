@@ -196,7 +196,7 @@ export class PdfExport {
 /** Inhalt eines Türschilds; `color` ist die Farbe der Lehrkraft (im Schwarzweißmodus gilt Grau). */
 export interface DoorSignData {
   name: string;
-  /** Funktion der Lehrkraft (`Teacher.role`), leer, wenn keine eingetragen ist */
+  /** Funktion der Lehrkraft im Zeitraum (`roleIn`), leer, wenn keine eingetragen ist */
   role: string;
   location: string;
   color: string;
@@ -312,7 +312,7 @@ function writeScheduleDays(list: ListDocument, days: ScheduleDay[], pagePerDay: 
 /** Ein Lehrer in der Terminliste mit seinen Terminen im Zeitraum. */
 export interface ScheduleTeacher {
   name: string;
-  /** Funktion der Lehrkraft (`Teacher.role`), leer ohne */
+  /** Funktion der Lehrkraft im Zeitraum (`roleOn`), leer ohne */
   role: string;
   location: string;
   days: ScheduleDay[];

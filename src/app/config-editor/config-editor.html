@@ -959,11 +959,11 @@
       />
     </label>
     <label>
-      Funktion
+      Funktion in „{{ windowsPeriodName() }}“
       <input
         type="text"
-        [value]="teacher.role ?? ''"
-        (change)="store.setTeacherRole(teacher.id, valueOf($event))"
+        [value]="roleOf(teacher)"
+        (change)="store.setTeacherRole(teacher.id, windowsPeriodId(), valueOf($event))"
         placeholder="z. B. Schulleitung, Klavier und Keyboard"
       />
     </label>

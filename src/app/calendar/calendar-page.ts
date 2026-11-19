@@ -17,6 +17,7 @@ import {
   isTeachingDay,
   locationIn,
   locationOn,
+  roleOn,
   NO_TEACHING_TEXT,
   periodTeachers,
   ReportPeriodEntry,
@@ -1072,7 +1073,7 @@ export class CalendarPage {
       .filter((t) => this.activeTeacher.isVisible(t.id))
       .map((teacher) => ({
         name: teacher.name,
-        role: teacher.role ?? '',
+        role: roleOn(teacher, this.config(), from, this.reportPeriod.period().id),
         // Der Ort am ersten Tag; meist liegt der Zeitraum der Liste in einem Berichtszeitraum.
         location: locationOn(teacher, this.config(), from, this.reportPeriod.period().id),
         days: this.scheduleDays(teacher, from, to, false)

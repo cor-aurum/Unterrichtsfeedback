@@ -11,6 +11,7 @@ import { ConfigStore, isPeriod } from '../config.store';
 import {
   formatShortDate,
   locationIn,
+  roleIn,
   newId,
   ReportPeriodEntry,
   schoolHalfYear,
@@ -117,7 +118,7 @@ export class WelcomeDialog {
     const windows = current ? (current.sharedWindows ?? teachingWindowsFor(teacher, current.id)) : [];
     return {
       instrumentId: teacherInstrument(teacher, config).id,
-      role: teacher.role ?? '',
+      role: current ? roleIn(teacher, current.id) : '',
       periods: periods.map((period) => `${period.name} (${formatShortDate(period.from)} – ${formatShortDate(period.to)})`),
       currentName: current?.name ?? '',
       location: current ? locationIn(teacher, current.id) : '',

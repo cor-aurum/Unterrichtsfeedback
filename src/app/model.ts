@@ -375,8 +375,16 @@ export interface Teacher {
   location: string;
   /** Ort je Berichtszeitraum (Schlüssel: ID des Zeitraums); immer über `locationIn` oder `locationOn` auswerten */
   periodLocations: Record<string, string>;
-  /** Funktion, z. B. „Schulleitung“ oder „Klavier und Keyboard“; steht auf dem Türschild. Fehlt, wenn leer. */
+  /**
+   * Funktion aus älteren Daten, als sie noch für alle Berichtszeiträume galt; gilt nur noch in Zeiträumen ohne eigene
+   * (`periodRoles`). Immer über `roleIn` oder `roleOn` auswerten.
+   */
   role?: string;
+  /**
+   * Funktion je Berichtszeitraum (Schlüssel: ID des Zeitraums), z. B. „Schulleitung“ oder „Fachbereich Streicher“;
+   * steht auf dem Türschild und in den Terminlisten. Wie der Ort übernimmt ein neuer Zeitraum sie aus dem vorigen.
+   */
+  periodRoles?: Record<string, string>;
   /**
    * Persönliche Themenfarbe (Hex) für App und PDFs dieser Lehrkraft; fehlt sie, gilt die allgemeine
    * (`FeedbackConfig.themeColor`). Andere Lehrkräfte beeinflusst sie nicht.
@@ -434,6 +442,18 @@ export function teachingWindowsOn(
 export function locationIn(teacher: Teacher, periodId: string | null): string {
   const own = periodId !== null && Object.hasOwn(teacher.periodLocations, periodId);
   return (own ? teacher.periodLocations[periodId!] : teacher.location).trim();
+}
+
+/** Funktion der Lehrkraft im Berichtszeitraum; ohne eigene (oder ohne Zeitraum) die aus älteren Daten */
+export function roleIn(teacher: Teacher, periodId: string | null): string {
+  const roles = teacher.periodRoles ?? {};
+  const own = periodId !== null && Object.hasOwn(roles, periodId);
+  return (own ? roles[periodId!] : (teacher.role ?? '')).trim();
+}
+
+/** Funktion der Lehrkraft an einem Tag: die des Berichtszeitraums, in dem der Tag liegt (wie bei `locationOn`) */
+export function roleOn(teacher: Teacher, config: FeedbackConfig, date: string, preferredPeriodId?: string): string {
+  return roleIn(teacher, periodOfTeacherOn(teacher, config, date, preferredPeriodId)?.id ?? null);
 }
 
 /** Ort des Lehrers an einem Tag: der des Berichtszeitraums, in dem der Tag liegt (wie bei `teachingWindowsOn`) */

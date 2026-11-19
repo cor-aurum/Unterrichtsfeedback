@@ -17,6 +17,7 @@ import {
   Instrument,
   isVisibleTo,
   locationIn,
+  roleIn,
   LOGO_HEIGHT_LIMITS,
   PdfLogo,
   PLACEHOLDERS,
@@ -515,12 +516,17 @@ export class ConfigEditor {
     return locationIn(teacher, this.windowsPeriodId());
   }
 
+  /** Funktion im oben gewählten Berichtszeitraum; ein neuer Zeitraum übernimmt sie aus dem vorigen. */
+  protected roleOf(teacher: Teacher): string {
+    return roleIn(teacher, this.windowsPeriodId());
+  }
+
   /** Türschilder als PDF, mit dem Ort im oben gewählten Zeitraum; mehrere Lehrkräfte bekommen je eine Seite. */
   protected async doorSigns(teachers: Teacher[]): Promise<void> {
     const config = this.store.config();
     const signs = teachers.map((teacher) => ({
       name: teacher.name,
-      role: teacher.role ?? '',
+      role: this.roleOf(teacher),
       location: this.locationOf(teacher),
       color: teacher.themeColor ?? config.themeColor,
     }));
