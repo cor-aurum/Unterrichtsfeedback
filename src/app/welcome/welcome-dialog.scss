@@ -226,3 +226,22 @@ details {
     }
   }
 }
+
+.prepared {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 0.8rem;
+  margin: 0.8rem 0;
+
+  dt {
+    color: var(--muted);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.prepared-period {
+  display: block;
+}

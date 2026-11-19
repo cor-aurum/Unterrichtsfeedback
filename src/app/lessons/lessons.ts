@@ -37,10 +37,11 @@ import {
   today,
 } from '../model';
 import { sortedLessons, StudentsStore } from '../students.store';
+import { HelpLink } from '../help/help-link';
 
 @Component({
   selector: 'app-lessons',
-  imports: [RouterLink, QuickStart, GroupList, GroupPanel, StudentLabelPipe, FitViewport],
+  imports: [RouterLink, HelpLink, QuickStart, GroupList, GroupPanel, StudentLabelPipe, FitViewport],
   templateUrl: './lessons.html',
   styleUrl: './lessons.scss',
 })

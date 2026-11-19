@@ -17,12 +17,13 @@ import { StudentLabelPipe } from '../student-label.pipe';
 import { StudentsStore } from '../students.store';
 import { GroupsStore } from '../groups.store';
 import { Group, groupLabel, Lesson, Student } from '../model';
+import { HelpLink } from '../help/help-link';
 
 type Scope = 'all' | 'single';
 
 @Component({
   selector: 'app-export-page',
-  imports: [RouterLink, StudentLabelPipe, ServerLoginPanel, PasswordChange, TeacherHoursPanel],
+  imports: [RouterLink, HelpLink, StudentLabelPipe, ServerLoginPanel, PasswordChange, TeacherHoursPanel],
   templateUrl: './export-page.html',
   styleUrl: './export-page.scss',
 })

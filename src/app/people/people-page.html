@@ -1,7 +1,7 @@
 @if (oneColumn() && store.selectedStudent()) {
   <button class="back-bar" (click)="backToList()">← Alle Personen</button>
 } @else {
-<h1>Personen</h1>
+<h1>Personen<app-help-link topic="personen" label="Personen" /></h1>
 }
 
 @if (importOpen()) {
@@ -128,14 +128,18 @@
           </li>
         } @empty {
           <li class="empty muted">
-            {{ store.students().length === 0 ? 'Noch keine Personen angelegt.' : 'Keine Personen passen zum Filter.' }}
+            {{
+              store.students().length === 0
+                ? 'Noch keine Personen angelegt. Trag unter „Personen hinzufügen“ einen Namen ein oder importiere eine Excel-Liste.'
+                : 'Keine Personen passen zum Filter.'
+            }}
           </li>
         }
       </ul>
     </section>
 
     <section class="card">
-      <h2>Personen hinzufügen</h2>
+      <h2>Personen hinzufügen<app-help-link topic="personen-import" label="Personen anlegen und importieren" /></h2>
       <div class="new-student">
         <div class="row">
           <input

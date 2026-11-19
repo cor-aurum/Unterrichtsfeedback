@@ -1,5 +1,7 @@
 <div class="row head">
-  <h1 class="grow">Kalender <span class="teacher-name">{{ teacher().name }}</span></h1>
+  <h1 class="grow">
+    Kalender <span class="teacher-name">{{ teacher().name }}</span><app-help-link topic="kalender" label="Kalender" />
+  </h1>
   @if (!narrow()) {
     <button class="secondary" (click)="openSharedImport()" title="Allgemeine Termine aus einer Excel- oder CSV-Datei">
       Termine importieren …
@@ -471,7 +473,7 @@
 <app-lesson-load-panel />
 
 <section class="card">
-  <h2>Termine aller Lehrkräfte als PDF</h2>
+  <h2>Termine aller Lehrkräfte als PDF<app-help-link topic="termine-pdf" label="Termine als PDF" /></h2>
   <div class="row pdf-format" role="radiogroup" aria-label="Darstellung">
     <label>
       <input type="radio" name="pdf-format" [checked]="pdfFormat() === 'individual'" (change)="pdfFormat.set('individual')" />

@@ -1,9 +1,11 @@
 <div class="row head">
-  <h1 class="grow">Konfiguration</h1>
-  <button class="secondary" (click)="store.exportToFile()">Exportieren</button>
-  <button class="secondary" (click)="fileInput.click()">Importieren</button>
-  <input #fileInput type="file" accept=".json,application/json" hidden (change)="importFile(fileInput)" />
-  <button class="danger" (click)="reset()">Zurücksetzen</button>
+  <h1 class="grow">Konfiguration<app-help-link topic="konfiguration" label="Konfiguration" /></h1>
+  @if (adminVisible()) {
+    <button class="secondary" (click)="store.exportToFile()">Exportieren</button>
+    <button class="secondary" (click)="fileInput.click()">Importieren</button>
+    <input #fileInput type="file" accept=".json,application/json" hidden (change)="importFile(fileInput)" />
+    <button class="danger" (click)="reset()">Zurücksetzen</button>
+  }
 </div>
 
 @if (message(); as msg) {
@@ -12,28 +14,55 @@
 
 <div class="config-layout">
   <nav class="tabs" role="tablist" aria-label="Bereiche der Konfiguration">
-    @for (entry of tabs; track entry.id) {
-      <button
-        role="tab"
-        class="tab"
-        [class.active]="tab() === entry.id"
-        [attr.aria-selected]="tab() === entry.id"
-        (click)="tab.set(entry.id)"
-      >
-        {{ entry.label }}
-      </button>
+    <button
+      role="tab"
+      class="tab"
+      [class.active]="tab() === 'mine'"
+      [attr.aria-selected]="tab() === 'mine'"
+      (click)="tab.set('mine')"
+    >
+      Meine Einstellungen
+    </button>
+    <button class="tab admin-toggle" [attr.aria-expanded]="adminVisible()" (click)="toggleAdmin()">
+      {{ adminVisible() ? '▾' : '▸' }} Verwaltung
+    </button>
+    @if (adminVisible()) {
+      @for (entry of adminTabs; track entry.id) {
+        <button
+          role="tab"
+          class="tab admin-tab"
+          [class.active]="tab() === entry.id"
+          [attr.aria-selected]="tab() === entry.id"
+          (click)="tab.set(entry.id)"
+        >
+          {{ entry.label }}
+        </button>
+      }
+    } @else {
+      <p class="muted small admin-hint">
+        Berichtszeiträume, Textbausteine, PDF-Texte, Lehrkräfte und Kalender – stellt meist die Leitung ein.
+      </p>
     }
   </nav>
 
   <div class="tab-content" role="tabpanel">
     @switch (tab()) {
-      @case ('general') {
-        <h2 class="tab-title">Allgemein</h2>
-
+      @case ('mine') {
+        <h2 class="tab-title">Meine Einstellungen<app-help-link topic="meine-einstellungen" label="Meine Einstellungen" /></h2>
+        <p class="muted">
+          Was hier steht, gilt nur für {{ activeTeacher.teacher().name }}; andere Lehrkräfte behalten ihre Einstellungen.
+        </p>
         <section class="card">
-          <label for="config-color">
+          <label for="config-own-name"><strong>Dein Name</strong></label>
+          <input
+            id="config-own-name"
+            class="own-name"
+            type="text"
+            [value]="activeTeacher.teacher().name"
+            (change)="setTeacherName(activeTeacher.teacher(), $event)"
+          />
+          <label class="home-page" for="config-color">
             <strong>Deine Farbe für App und PDF</strong>
-            <span class="muted small">(nur für {{ activeTeacher.teacher().name }}, andere Lehrkräfte behalten ihre)</span>
           </label>
           <div class="row color-row">
             <input
@@ -62,14 +91,34 @@
 
           <label class="home-page" for="config-home-page">
             <strong>Das Logo oben links führt zu</strong>
-            <span class="muted small">(nur für {{ activeTeacher.teacher().name }})</span>
           </label>
           <select id="config-home-page" (change)="setHomePage(valueOf($event))">
             @for (page of homePages; track page.path) {
               <option [value]="page.path" [selected]="'/' + page.path === homeLink()">{{ page.label }}</option>
             }
           </select>
+        </section>
 
+        <section class="card">
+          <label class="windows-period">
+            Ort und Unterrichtszeiten für
+            <select (change)="windowsPeriodId.set(valueOf($event))">
+              @for (period of store.config().reportPeriods; track period.id) {
+                <option [value]="period.id" [selected]="period.id === windowsPeriodId()">{{ periodLabel(period) }}</option>
+              }
+            </select>
+          </label>
+          <ng-container *ngTemplateOutlet="teacherFields; context: { $implicit: activeTeacher.teacher() }" />
+          <ng-container *ngTemplateOutlet="teacherWindows; context: { $implicit: activeTeacher.teacher() }" />
+          <div>
+            <button class="secondary" (click)="doorSigns([activeTeacher.teacher()])">Mein Türschild (PDF)</button>
+          </div>
+        </section>
+      }
+      @case ('general') {
+        <h2 class="tab-title">Allgemein<app-help-link topic="zeitraum-anlegen" label="Allgemein" /></h2>
+
+        <section class="card">
           <label class="show-title">
             <input
               type="checkbox"
@@ -220,11 +269,11 @@
         </section>
       }
       @case ('sections') {
-        <h2 class="tab-title">Abschnitte</h2>
+        <h2 class="tab-title">Abschnitte<app-help-link topic="abschnitte" label="Abschnitte" /></h2>
         <ng-container *ngTemplateOutlet="sectionsPanel; context: { $implicit: 'single' }" />
       }
       @case ('blocks') {
-        <h2 class="tab-title">Feste Inhalte im PDF</h2>
+        <h2 class="tab-title">Feste Inhalte im PDF<app-help-link topic="feste-inhalte" label="Feste Inhalte im PDF" /></h2>
         <section class="card">
           <label for="config-title"><strong>Überschrift im PDF</strong></label>
           <input
@@ -248,7 +297,7 @@
         <ng-container *ngTemplateOutlet="blocksPanel; context: { $implicit: 'single' }" />
       }
       @case ('groupSections') {
-        <h2 class="tab-title">Gruppen-Abschnitte</h2>
+        <h2 class="tab-title">Gruppen-Abschnitte<app-help-link topic="abschnitte" label="Gruppen-Abschnitte" /></h2>
         <p class="muted group-hint">
           Diese Abschnitte erscheinen beim Erfassen einer Gruppenstunde und im Gruppen-PDF. Schreibe die Bausteine
           am besten in der Ihr-Form. {{ groupPlaceholderHint }}
@@ -256,7 +305,7 @@
         <ng-container *ngTemplateOutlet="sectionsPanel; context: { $implicit: 'group' }" />
       }
       @case ('groupBlocks') {
-        <h2 class="tab-title">Feste Inhalte im Gruppen-PDF</h2>
+        <h2 class="tab-title">Feste Inhalte im Gruppen-PDF<app-help-link topic="feste-inhalte" label="Feste Inhalte im Gruppen-PDF" /></h2>
         <p class="muted group-hint">
           Wie die festen Inhalte bei Personen, aber für das Gruppen-PDF. Eigene Varianten („Nur für mich“) richten
           sich nach der Lehrkraft der Gruppe. {{ groupPlaceholderHint }}
@@ -264,7 +313,7 @@
         <ng-container *ngTemplateOutlet="blocksPanel; context: { $implicit: 'group' }" />
       }
       @case ('layout') {
-        <h2 class="tab-title">Kopf- und Fußzeile im PDF</h2>
+        <h2 class="tab-title">Kopf- und Fußzeile im PDF<app-help-link topic="kopf-fusszeile" label="Kopf- und Fußzeile im PDF" /></h2>
         <p class="muted group-hint">
           Ein leeres Feld blendet die Zeile aus. Alle Platzhalter von oben sind möglich, zum Beispiel
           <code>{{ '{seite}' }}</code> und <code>{{ '{seiten}' }}</code> für die Seitenzahl.
@@ -373,7 +422,7 @@
         }
       }
       @case ('instruments') {
-        <h2 class="tab-title">Instrumente</h2>
+        <h2 class="tab-title">Instrumente<app-help-link topic="instrumente" label="Instrumente" /></h2>
         <p class="muted group-hint">
           Stehen beim Anlegen einer Person zur Auswahl, ersetzen den Platzhalter <code>{{ '{instrument}' }}</code>
           und steuern die Varianten der festen Inhalte. Jede Person hat ein Instrument; das Standardinstrument
@@ -424,7 +473,7 @@
         </section>
       }
       @case ('teachers') {
-        <h2 class="tab-title">Lehrer:innen</h2>
+        <h2 class="tab-title">Lehrer:innen<app-help-link topic="lehrerinnen" label="Lehrer:innen" /></h2>
         <p class="muted group-hint">
           Jede Person gehört zu einer Lehrkraft; deren Kalender enthält die Termine der Person. Platzhalter:
           <code>{{ '{lehrer}' }}</code>, <code>{{ '{lehrerinstrument}' }}</code>, <code>{{ '{ort}' }}</code>.
@@ -469,61 +518,10 @@
                 aria-label="Lehrkraft deaktivieren"
               >Deaktivieren</button>
             </div>
-            <div class="teacher-fields">
-              <label>
-                Instrument
-                <app-instrument-select
-                  [value]="teacherInstrumentId(teacher)"
-                  (valueChange)="store.updateTeacher(teacher.id, { instrumentId: $event })"
-                />
-              </label>
-              <label>
-                Funktion
-                <input
-                  type="text"
-                  [value]="teacher.role ?? ''"
-                  (change)="store.setTeacherRole(teacher.id, valueOf($event))"
-                  placeholder="z. B. Schulleitung, Klavier und Keyboard"
-                />
-              </label>
-              <label>
-                Ort in „{{ windowsPeriodName() }}“
-                <input
-                  type="text"
-                  [value]="locationOf(teacher)"
-                  (change)="store.setTeacherLocation(teacher.id, windowsPeriodId(), valueOf($event))"
-                  placeholder="z. B. Raum 3, Musikschule Mitte"
-                />
-              </label>
-            </div>
-
+            <ng-container *ngTemplateOutlet="teacherFields; context: { $implicit: teacher }" />
             <ng-container *ngTemplateOutlet="account; context: { $implicit: teacher }" />
 
-            <h3>Unterrichtszeiten <span class="muted">· {{ windowsPeriodName() }}</span></h3>
-            @if (windowsPeriodShared()) {
-              <p class="muted small inherit-hint">
-                In „{{ windowsPeriodName() }}“ gelten für alle Lehrkräfte dieselben Unterrichtszeiten. Du bearbeitest sie
-                unter <button type="button" class="link-button" (click)="tab.set('general')">Allgemein</button> beim
-                Berichtszeitraum.
-              </p>
-            } @else {
-              @if (inheritsWindows(teacher)) {
-                <p class="muted small inherit-hint">
-                  Noch keine eigenen Zeiten für diesen Zeitraum, es gelten die Standardzeiten der Lehrkraft. Eine
-                  Änderung gilt nur für diesen Zeitraum.
-                </p>
-              }
-              @if (!ownsWindows(teacher)) {
-                <p class="muted small inherit-hint">
-                  Ihre Unterrichtszeiten ändert nur {{ teacher.name }} selbst.
-                </p>
-              }
-              <app-teaching-windows-editor
-                [teacherId]="teacher.id"
-                [periodId]="windowsPeriodId()"
-                [readonly]="!ownsWindows(teacher)"
-              />
-            }
+            <ng-container *ngTemplateOutlet="teacherWindows; context: { $implicit: teacher }" />
           </section>
         } @empty {
           <p class="muted">In „{{ windowsPeriodName() }}“ ist noch keine Lehrkraft eingetragen.</p>
@@ -647,7 +645,7 @@
         }
       }
       @case ('calendar') {
-        <h2 class="tab-title">Kalender</h2>
+        <h2 class="tab-title">Kalender<app-help-link topic="standardzeiten" label="Kalender" /></h2>
         <p class="muted group-hint">
           Gilt für alle Lehrkräfte. Ihre Unterrichtszeiten legst du im Tab „Lehrer:innen“ fest; sie werden in Slots der
           Standardlänge geteilt.
@@ -949,4 +947,62 @@
       <button class="secondary" (click)="imageInput.click()">+ Bild</button>
       <input #imageInput type="file" accept="image/*" hidden (change)="addImage(imageInput, kind)" />
     </div>
+</ng-template>
+
+<ng-template #teacherFields let-teacher>
+  <div class="teacher-fields">
+    <label>
+      Instrument
+      <app-instrument-select
+        [value]="teacherInstrumentId(teacher)"
+        (valueChange)="store.updateTeacher(teacher.id, { instrumentId: $event })"
+      />
+    </label>
+    <label>
+      Funktion
+      <input
+        type="text"
+        [value]="teacher.role ?? ''"
+        (change)="store.setTeacherRole(teacher.id, valueOf($event))"
+        placeholder="z. B. Schulleitung, Klavier und Keyboard"
+      />
+    </label>
+    <label>
+      Ort in „{{ windowsPeriodName() }}“
+      <input
+        type="text"
+        [value]="locationOf(teacher)"
+        (change)="store.setTeacherLocation(teacher.id, windowsPeriodId(), valueOf($event))"
+        placeholder="z. B. Raum 3, Musikschule Mitte"
+      />
+    </label>
+  </div>
+</ng-template>
+
+<ng-template #teacherWindows let-teacher>
+  <h3>Unterrichtszeiten <span class="muted">· {{ windowsPeriodName() }}</span></h3>
+  @if (windowsPeriodShared()) {
+    <p class="muted small inherit-hint">
+      In „{{ windowsPeriodName() }}“ gelten für alle Lehrkräfte dieselben Unterrichtszeiten. Du bearbeitest sie
+      unter <button type="button" class="link-button" (click)="tab.set('general')">Allgemein</button> beim
+      Berichtszeitraum.
+    </p>
+  } @else {
+    @if (inheritsWindows(teacher)) {
+      <p class="muted small inherit-hint">
+        Noch keine eigenen Zeiten für diesen Zeitraum, es gelten die Standardzeiten der Lehrkraft. Eine
+        Änderung gilt nur für diesen Zeitraum.
+      </p>
+    }
+    @if (!ownsWindows(teacher)) {
+      <p class="muted small inherit-hint">
+        Ihre Unterrichtszeiten ändert nur {{ teacher.name }} selbst.
+      </p>
+    }
+    <app-teaching-windows-editor
+      [teacherId]="teacher.id"
+      [periodId]="windowsPeriodId()"
+      [readonly]="!ownsWindows(teacher)"
+    />
+  }
 </ng-template>

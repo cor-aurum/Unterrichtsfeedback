@@ -5,6 +5,7 @@ import { PlanLinkState, ServerLogin, serverApi } from '../sync/server-folder';
 import { ServerSync } from '../sync/server-sync';
 import { BoardPublisher } from './board-publisher';
 import { planServerId, realServerLogin } from './plan-access';
+import { HelpLink } from '../help/help-link';
 
 /**
  * Aushang-Link eines Berichtszeitraums: eine Seite mit allen Terminen für ein zentrales Tablet, das Schüler:innen
@@ -12,6 +13,7 @@ import { planServerId, realServerLogin } from './plan-access';
  */
 @Component({
   selector: 'app-board-link-panel',
+  imports: [HelpLink],
   templateUrl: './board-link-panel.html',
   styleUrl: './plan-link-panel.scss',
 })

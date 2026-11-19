@@ -70,6 +70,71 @@
         <p class="message error">{{ message }}</p>
       }
       <button type="button" class="secondary" (click)="serverStep.set('none')">Zurück, ohne Server einrichten</button>
+    } @else if (serverStep() === 'welcome' && ownTeacher(); as teacher) {
+      @let info = prepared()!;
+      <p class="muted">
+        Verbunden mit {{ serverName() }}. Willkommen, {{ teacher.name }}! Für dich ist schon einiges eingerichtet;
+        prüfe kurz, ob es passt. Ändern kannst du alles später unter „Konfiguration“ → „Meine Einstellungen“.
+      </p>
+      <form (submit)="confirmPrepared($event)">
+        <div class="fields">
+          <label>
+            Dein Name
+            <input name="name" type="text" required autocomplete="name" [value]="teacher.name" />
+          </label>
+          <label>
+            Dein Instrument
+            <app-instrument-select [value]="info.instrumentId" (valueChange)="setOwnInstrument($event)" />
+          </label>
+        </div>
+        <dl class="prepared">
+          @if (info.role) {
+            <dt>Funktion</dt>
+            <dd>{{ info.role }}</dd>
+          }
+          <dt>Berichtszeiträume</dt>
+          <dd>
+            @for (period of info.periods; track period) {
+              <span class="prepared-period">{{ period }}</span>
+            } @empty {
+              <span class="message warning">
+                Noch in keinem. Sobald dich eine andere Lehrkraft in einen Berichtszeitraum aufnimmt, siehst du dessen
+                Personen und Termine.
+              </span>
+            }
+          </dd>
+          @if (info.currentName) {
+            <dt>Ort in „{{ info.currentName }}“</dt>
+            <dd>{{ info.location || 'noch keiner eingetragen' }}</dd>
+            <dt>Unterrichtszeiten</dt>
+            <dd>{{ info.windows || 'noch keine eingetragen' }}</dd>
+          }
+        </dl>
+        <details>
+          <summary>Lieblingsfarbe <span class="muted">(optional)</span></summary>
+          <p class="muted small">Färbt die App und deine PDFs.</p>
+          <div class="colors">
+            @for (preset of colorPresets; track preset) {
+              <button
+                type="button"
+                class="swatch"
+                [class.selected]="preset === color()"
+                [style.background]="preset"
+                [attr.aria-label]="'Farbe ' + preset"
+                (click)="setColor(preset)"
+              ></button>
+            }
+            <label class="custom">
+              Eigene:
+              <input type="color" [value]="color()" (input)="setColor(valueOf($event))" aria-label="Eigene Farbe" />
+            </label>
+          </div>
+        </details>
+        @if (error(); as message) {
+          <p class="message error">{{ message }}</p>
+        }
+        <button type="submit" class="start">Los geht’s</button>
+      </form>
     } @else if (serverStep() === 'teacher') {
       <p class="muted">
         Verbunden mit {{ serverName() }}. Wie heißt du, und welches Instrument unterrichtest du? Personen siehst du,

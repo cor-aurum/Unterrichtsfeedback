@@ -1,5 +1,5 @@
-import { Component, inject } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { afterNextRender, Component, inject } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ActiveTeacher } from '../active-teacher';
 import { ConfigStore } from '../config.store';
 import { endDemo, startDemo } from '../demo';
@@ -17,6 +17,18 @@ export class Help {
   private readonly activeTeacher = inject(ActiveTeacher);
   private readonly config = inject(ConfigStore).config;
   protected readonly demoMode = demoMode;
+
+  constructor() {
+    // Von einem „?“ in der App (siehe `HelpLink`): zum Thema springen und es kurz hervorheben.
+    const topic = inject(ActivatedRoute).snapshot.queryParamMap.get('thema');
+    afterNextRender(() => {
+      const target = topic ? document.getElementById(topic) : null;
+      if (!target) return;
+      target.classList.add('help-target');
+      target.scrollIntoView({ block: 'start' });
+      setTimeout(() => target.classList.remove('help-target'), 2500);
+    });
+  }
 
   /** Man selbst ist in der Demo eine der Lehrkräfte, mit Name und Instrument wie bisher. */
   protected startDemo(): void {

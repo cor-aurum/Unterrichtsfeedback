@@ -8,6 +8,7 @@ import { planServerId, realServerLogin } from './plan-access';
 import { PlanPublisher } from './plan-publisher';
 import { SelfBookingSettings } from './self-booking-settings';
 import { ConfigStore } from '../config.store';
+import { HelpLink } from '../help/help-link';
 
 /**
  * Download-Link eines Berichtszeitraums in seinen Einstellungen: ein Link (mit QR-Code) für alle Personen darin.
@@ -18,7 +19,7 @@ import { ConfigStore } from '../config.store';
   selector: 'app-plan-link-panel',
   templateUrl: './plan-link-panel.html',
   styleUrl: './plan-link-panel.scss',
-  imports: [SelfBookingSettings],
+  imports: [SelfBookingSettings, HelpLink],
 })
 export class PlanLinkPanel {
   readonly period = input.required<ReportPeriodEntry>();

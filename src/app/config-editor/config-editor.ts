@@ -44,8 +44,10 @@ import { demoMode, storedSignal } from '../stored-signal';
 import { ServerError, serverApi } from '../sync/server-folder';
 import { ServerSync } from '../sync/server-sync';
 import { DEFAULT_THEME_COLOR, isHexColor } from '../theme';
+import { HelpLink } from '../help/help-link';
 
-const CONFIG_TABS = [
+/** Bereiche der Verwaltung; davor steht immer „Meine Einstellungen“ (`mine`). */
+const ADMIN_TABS = [
   { id: 'general', label: 'Allgemein' },
   { id: 'sections', label: 'Abschnitte' },
   { id: 'blocks', label: 'Feste Inhalte' },
@@ -57,7 +59,7 @@ const CONFIG_TABS = [
   { id: 'calendar', label: 'Kalender' },
 ] as const;
 
-type ConfigTab = (typeof CONFIG_TABS)[number]['id'];
+type ConfigTab = 'mine' | (typeof ADMIN_TABS)[number]['id'];
 
 const LOGO_SLOTS = [
   {
@@ -80,7 +82,7 @@ type LogoSlot = (typeof LOGO_SLOTS)[number];
 
 @Component({
   selector: 'app-config-editor',
-  imports: [BlockContentEditor, NgTemplateOutlet, InstrumentSelect, TeachingWindowsEditor, PlanLinkPanel, BoardLinkPanel],
+  imports: [BlockContentEditor, NgTemplateOutlet, HelpLink, InstrumentSelect, TeachingWindowsEditor, PlanLinkPanel, BoardLinkPanel],
   templateUrl: './config-editor.html',
   styleUrl: './config-editor.scss',
 })
@@ -92,11 +94,25 @@ export class ConfigEditor {
   protected readonly reportPeriod = inject(ReportPeriod);
   protected readonly activeTeacher = inject(ActiveTeacher);
   private readonly pdfExport = inject(PdfExport);
-  protected readonly tabs = CONFIG_TABS;
+  protected readonly adminTabs = ADMIN_TABS;
   /** Zuletzt geöffneter Bereich; gilt nur auf diesem Gerät. */
-  protected readonly tab = storedSignal<ConfigTab>('feedback.configTab', () => 'general', (data) =>
-    CONFIG_TABS.some((t) => t.id === data) ? (data as ConfigTab) : 'general',
+  protected readonly tab = storedSignal<ConfigTab>('feedback.configTab', () => 'mine', (data) =>
+    data === 'mine' || ADMIN_TABS.some((t) => t.id === data) ? (data as ConfigTab) : 'mine',
   );
+  /**
+   * Die Verwaltung ist aufgeklappt (gilt nur auf diesem Gerät). Mit Server ist sie anfangs zu, weil neue Lehrkräfte
+   * dort meist nichts einstellen müssen; ohne Server richtet man alles selbst ein.
+   */
+  private readonly adminOpen = storedSignal<boolean | null>('feedback.configAdminOpen', () => null, (data) =>
+    typeof data === 'boolean' ? data : null,
+  );
+  protected readonly adminVisible = computed(() => this.adminOpen() ?? (!this.sync.login() || this.tab() !== 'mine'));
+
+  protected toggleAdmin(): void {
+    const open = !this.adminVisible();
+    this.adminOpen.set(open);
+    if (!open) this.tab.set('mine');
+  }
   protected readonly placeholders = PLACEHOLDERS;
   protected readonly groupPlaceholderHint =
     'Platzhalter: ' + GROUP_PLACEHOLDERS.map((p) => p.key).join(', ') + '; {name} und {vorname} stehen für den Gruppennamen.';

@@ -66,6 +66,7 @@ import { RecurrenceFields } from './recurrence-fields';
 import { LessonLoadPanel } from './lesson-load-panel';
 import { newSharedDraft, SharedAppointmentForm, SharedDraft } from './shared-appointment-form';
 import { SharedAppointment, sharedSpanMinutes, sharedTimeText } from './shared-appointments';
+import { HelpLink } from '../help/help-link';
 
 /** `calendarTeacherId`: in wessen Kalender der Termin steht; nur fürs Formular, gespeichert als Ausnahme (`teacherId`). */
 type Draft = Omit<Appointment, 'id'> & { id: string | null; calendarTeacherId: string; extraGroupIds?: string[] };
@@ -87,7 +88,7 @@ const MAX_PDF_DAYS = 366;
 
 @Component({
   selector: 'app-calendar-page',
-  imports: [PlanningSetupPanel, NgTemplateOutlet,
+  imports: [PlanningSetupPanel, NgTemplateOutlet, HelpLink,
     RouterLink,
     AutoSchedulePanel,
     LessonLoadPanel,

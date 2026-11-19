@@ -31,6 +31,7 @@ import { sortedLessons, StudentsStore } from '../students.store';
 import { TeacherFilter } from '../teacher-filter';
 import { oneColumn } from '../viewport';
 import { FitViewport } from '../fit-viewport';
+import { HelpLink } from '../help/help-link';
 
 /** Statusfilter der Personenliste; leer zeigt alle. */
 type StatusFilter = '' | 'today' | 'noWeekly' | 'noLessonInPeriod';
@@ -42,7 +43,7 @@ type StatusFilter = '' | 'today' | 'noWeekly' | 'noLessonInPeriod';
  */
 @Component({
   selector: 'app-people-page',
-  imports: [RouterLink, StudentImportPanel, InstrumentSelect, FitViewport],
+  imports: [RouterLink, HelpLink, StudentImportPanel, InstrumentSelect, FitViewport],
   templateUrl: './people-page.html',
   styleUrls: ['../lessons/lessons.scss', './people-page.scss'],
 })

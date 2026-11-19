@@ -11,6 +11,7 @@ import { TeacherFilter } from '../teacher-filter';
 import { AgeChart, ChartGroup } from './age-chart';
 import { GroupChoiceSettings } from './group-choice-settings';
 import { ageOn, ageStats, formatAge, instrumentCounts, planAgeGroups, planByAge } from './age-groups';
+import { HelpLink } from '../help/help-link';
 
 /** Mögliche Anzahl Gruppen bei der automatischen Einteilung */
 const GROUP_COUNTS = [2, 3, 4, 5, 6, 7, 8];
@@ -36,7 +37,7 @@ interface BulkOption {
  */
 @Component({
   selector: 'app-group-planning-page',
-  imports: [RouterLink, AgeChart, StudentLabelPipe, GroupChoiceSettings],
+  imports: [RouterLink, HelpLink, AgeChart, StudentLabelPipe, GroupChoiceSettings],
   templateUrl: './group-planning-page.html',
   styleUrl: './group-planning-page.scss',
 })

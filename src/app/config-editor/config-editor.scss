@@ -543,7 +543,8 @@ code {
   margin-top: 1rem;
 }
 
-#config-home-page {
+#config-home-page,
+.own-name {
   display: block;
   margin-top: 0.35rem;
 }
@@ -597,4 +598,18 @@ code {
 
 .door-signs {
   margin-bottom: 1rem;
+}
+
+.admin-toggle {
+  margin-top: 0.6rem;
+  font-weight: 600;
+}
+
+.admin-tab {
+  padding-left: 1.6rem;
+}
+
+.admin-hint {
+  margin: 0 0.8rem;
+  max-width: 14rem;
 }

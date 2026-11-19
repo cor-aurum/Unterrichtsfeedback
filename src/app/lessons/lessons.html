@@ -20,7 +20,7 @@
   <div class="column" appFitViewport>
   <section class="card">
     <div class="row list-head">
-      <h2 class="grow">Personen</h2>
+      <h2 class="grow">Personen<app-help-link topic="stunden" label="Stunden erfassen" /></h2>
       <a routerLink="/personen" class="small">Verwalten</a>
     </div>
     <div class="person-filter">
@@ -112,7 +112,7 @@
             }
           </li>
         } @empty {
-          <li class="empty muted">Noch keine Stunden.</li>
+          <li class="empty muted">Noch keine Stunden. „+ Neue Stunde“ legt die erste an; geplante Termine beginnen von selbst.</li>
         }
       </ul>
 

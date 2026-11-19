@@ -191,7 +191,7 @@
       Status („mit Termin heute“, „ohne laufende
       Terminserie“, „ohne Stunde im Berichtszeitraum“).
     </li>
-    <li>
+    <li id="personen-import">
       <strong>Viele Personen auf einmal:</strong> <kbd>Aus Excel-Datei importieren …</kbd> liest eine Excel- (.xlsx)
       oder CSV-Datei. Du wählst, in welcher Spalte Vorname, Nachname, Geburtsdatum, Instrument, Lehrkraft und Gruppen stehen
       (Geburtsdaten wie „3.5.2015“, „03.05.15“ oder „2015-05-03“; zweistellige Jahre liegen nie in der Zukunft);
@@ -485,7 +485,7 @@
       Linie markiert den Durchschnitt; Personen ohne Termine stehen am Ende. Mit <em>Personen aller Lehrkräfte</em>
       siehst du auch die Personen der anderen Lehrkräfte.
     </li>
-    <li>
+    <li id="termine-pdf">
       <strong>Termine als PDF:</strong> Unten wählst du einen Zeitraum (anfangs der gewählte Berichtszeitraum) und die
       Liste. Die <em>Liste nur mit Einzelunterricht</em> enthält nur Einzelunterricht und nur die Lehrkräfte, die im
       gewählten Zeitraum mindestens eine Einzelstunde haben; jede Lehrkraft beginnt mit Name, Funktion und Raum auf einer
@@ -540,7 +540,7 @@
     und die Rückmeldungen im PDF. Welcher Zeitraum gerade gilt, wählst du oben in der Leiste.
   </p>
   <ul>
-    <li>
+    <li id="zeitraum-anlegen">
       <strong>Anlegen:</strong> Unter <a routerLink="/konfiguration">Konfiguration</a> → Allgemein haben
       Berichtszeiträume einen Namen, z. B. „1. Halbjahr
       2026/27“, und gelten für alle Geräte. <kbd>+ Berichtszeitraum</kbd> schlägt den nächsten Zeitraum vor. Welcher
@@ -608,7 +608,7 @@
       Berichtszeitraums, in dem er liegt. Ein neuer Berichtszeitraum übernimmt die Zeiten des vorigen – gemeinsame
       ebenso wie die der einzelnen Lehrer:innen.
     </li>
-    <li>
+    <li id="download-link">
       <strong>Pläne zum Herunterladen (mit Server):</strong> Unter jedem deiner Berichtszeiträume erzeugt
       <em>Download-Link für die Pläne</em> → <kbd>Link erzeugen</kbd> einen Link mit QR-Code für alle Personen im
       Zeitraum. Wer ihn öffnet, tippt auf seinen Namen (wie beim Eintragen am Tablet) und lädt seine Einzel- und
@@ -621,7 +621,7 @@
       Demomodus geht das auch, wenn du außerhalb der Demo mit einem Server verbunden bist: Der Link zeigt dann die
       Demodaten (die sonst nicht abgeglichen werden) und wird gelöscht, wenn du die Demo beendest.
     </li>
-    <li>
+    <li id="aushang">
       <strong>Aushang für ein Tablet (mit Server):</strong> Unter jedem deiner Berichtszeiträume erzeugt
       <em>Aushang-Link für ein Tablet</em> → <kbd>Link erzeugen</kbd> eine Seite mit allen Terminen des Zeitraums für
       ein zentrales Tablet, das Schüler:innen selbst bedienen. Sie zeigt einen Tag mit je einer Spalte pro Lehrkraft
@@ -677,18 +677,26 @@
     </figcaption>
   </figure>
   <ul>
-    <li>
-      <strong>Farbe:</strong> Unter <em>Allgemein</em> bestimmt <em>Deine Farbe für App und PDF</em>, wie die App
-      und die PDFs aussehen. Die Farbe ist persönlich: Sie gilt für die aktive Lehrkraft (mit Server: für dich) und
-      die PDFs, die sie erstellt; andere Lehrkräfte behalten ihre eigene.
+    <li id="meine-einstellungen">
+      <strong>Meine Einstellungen und Verwaltung:</strong> Oben links stehen <em>Meine Einstellungen</em>: dein Name,
+      deine Farbe, wohin das Logo führt, Instrument, Funktion, Ort und Unterrichtszeiten sowie dein Türschild. Das
+      gilt nur für die aktive Lehrkraft (mit Server: für dich). Alles, was für alle gilt (Berichtszeiträume,
+      Textbausteine, PDF-Texte, Lehrkräfte, Kalender), steht darunter unter <em>Verwaltung</em>. Mit Server ist sie
+      anfangs zugeklappt, weil das meist die Leitung einstellt; ein Klick auf <em>Verwaltung</em> klappt sie auf, und
+      das merkt sich das Gerät.
     </li>
     <li>
-      <strong>Logo:</strong> Ebenfalls unter <em>Allgemein</em> legst du mit <em>Das Logo oben links führt zu</em>
-      fest, welche Seite ein Klick auf das Logo öffnet, z. B. <em>Stunden erfassen</em> statt des Kalenders. Auch das
-      gilt nur für die aktive Lehrkraft.
+      <strong>Farbe:</strong> Unter <em>Meine Einstellungen</em> bestimmt <em>Deine Farbe für App und PDF</em>, wie die
+      App und die PDFs aussehen. Die Farbe ist persönlich: Sie gilt für die aktive Lehrkraft (mit Server: für dich)
+      und die PDFs, die sie erstellt; andere Lehrkräfte behalten ihre eigene.
     </li>
     <li>
-      <strong>PDFs in Schwarzweiß</strong> (ebenfalls unter <em>Allgemein</em>) spart Tinte: Alle PDFs, auch die
+      <strong>Logo:</strong> Ebenfalls unter <em>Meine Einstellungen</em> legst du mit <em>Das Logo oben links führt
+      zu</em> fest, welche Seite ein Klick auf das Logo öffnet, z. B. <em>Stunden erfassen</em> statt des Kalenders.
+      Auch das gilt nur für die aktive Lehrkraft.
+    </li>
+    <li>
+      <strong>PDFs in Schwarzweiß</strong> (unter <em>Verwaltung</em> → <em>Allgemein</em>) spart Tinte: Alle PDFs, auch die
       Kalender-PDFs, kommen dann in Grautönen, farbige Flächen werden schmale Linien und Bilder werden grau. Die App
       selbst bleibt farbig.
     </li>
@@ -696,12 +704,12 @@
       <strong>Berichtszeiträume</strong> legst du ebenfalls unter <em>Allgemein</em> an – siehe
       <button type="button" class="link" (click)="scrollTo('zeitraeume')">Berichtszeiträume</button>.
     </li>
-    <li>
+    <li id="abschnitte">
       <strong>Abschnitte</strong> sind entweder <em>Textbausteine</em> zum Anhaken oder ein <em>Freitextfeld</em>.
       Du legst fest, ob sie bei jeder Stunde oder im allgemeinen Teil erscheinen. Schreibe Bausteine am besten
       als ganze Sätze, zum Beispiel „Du hast gut geübt.“
     </li>
-    <li>
+    <li id="feste-inhalte">
       <strong>Feste Inhalte</strong> stehen in jedem PDF, zum Beispiel eine Anrede am Anfang, ein Gruß oder
       ein Logo am Ende. Oben in diesem Bereich legst du auch die <em>Überschrift im PDF</em> fest; sie steht auf
       jedem PDF, auch dem Gruppen-PDF. Mit <em>Varianten</em> kannst du einen Text oder ein Bild je Instrument oder
@@ -732,7 +740,7 @@
       gemeinsame Varianten zu eigenen Varianten jeder Lehrkraft; der gemeinsame Inhalt steht wieder auf der Vorlage,
       in den PDFs ändert sich dadurch nichts. Ohne Server lässt sich weiterhin alles bearbeiten.
     </li>
-    <li>
+    <li id="kopf-fusszeile">
       <strong>Kopf- und Fußzeile:</strong> Hier legst du den Untertitel unter der Überschrift, die Kopfzeile ab
       der zweiten Seite und die Fußzeile fest, zum Beispiel mit deinem Namen links und der Seitenzahl rechts.
       Ein leeres Feld blendet die Zeile aus. <em>Infozeile anzeigen</em> schaltet die Zeile mit Anzahl der Stunden
@@ -743,11 +751,11 @@
       Fußzeile; ein Text an derselben Stelle rückt daneben. Die Logos erscheinen in den Feedback-PDFs, im
       Gruppen-PDF und in den Terminlisten; das Türschild zeigt das Kopflogo größer oben auf der Seite.
     </li>
-    <li>
+    <li id="instrumente">
       <strong>Instrumente:</strong> Jede Person hat ein Instrument. Das als <em>Standard</em> markierte ist beim
       Anlegen einer Person schon ausgewählt.
     </li>
-    <li>
+    <li id="lehrerinnen">
       <strong>Lehrer:innen:</strong> Jede Lehrkraft hat einen Namen, ein Instrument, einen Ort und eigene Unterrichtszeiten.
       Ihre Unterrichtszeiten ändert jede Lehrkraft nur selbst (die aktive bzw. angemeldete); die der anderen sind nur zu
       sehen. Gemeinsame Zeiten eines Berichtszeitraums bearbeiten dessen Lehrkräfte unter „Allgemein“.
@@ -761,7 +769,7 @@
       <a routerLink="/personen">Personen</a>. Der Tab zeigt nur die Lehrkräfte des oben gewählten Berichtszeitraums; wer wo unterrichtet, legst du
       unter <em>Allgemein</em> beim Zeitraum fest.
     </li>
-    <li>
+    <li id="tuerschild">
       <strong>Türschild:</strong> <kbd>Türschild</kbd> bei einer Lehrkraft erstellt ein PDF im Querformat mit ihrem
       Namen, ihrer <em>Funktion</em> (Feld bei der Lehrkraft, z. B. „Schulleitung“) und ihrem Ort im oben gewählten Zeitraum (die Funktion steht auch in der Liste nur mit Einzelunterricht neben dem Namen), in ihrer Farbe und mit dem Kopflogo aus den PDF-Einstellungen.
       <kbd>Alle Türschilder (PDF)</kbd> erstellt eine Seite je Lehrkraft des Zeitraums.
@@ -783,7 +791,7 @@
       mit ihr in einem Berichtszeitraum ist oder war, aber nicht für sich selbst. Unter <em>Deaktivierte Lehrkräfte</em>
       ganz unten im Tab holst du sie mit <kbd>Wieder aktivieren</kbd> zurück.
     </li>
-    <li>
+    <li id="standardzeiten">
       <strong>Standardunterrichtszeiten:</strong> Im Tab „Kalender“ legst du eine Vorlage für einen Unterrichtstag
       fest, z. B. 14:00–18:30. Bei einer Lehrkraft übernimmt <kbd>Standard</kbd> sie auf einen Wochentag; neue Lehrer:innen
       bekommen sie von Montag bis Freitag.
@@ -888,7 +896,7 @@
 
   <h3>Mit einem Server arbeiten</h3>
   <ul>
-    <li>
+    <li id="einladung">
       <strong>Einladungscode:</strong> Jede Lehrkraft braucht ein Konto. Den Code für die erste Lehrkraft erzeugt die
       Administration auf dem Server; weitere Lehrkräfte lädt jede Lehrkraft selbst ein: <a routerLink="/konfiguration">Konfiguration</a>
       → Lehrer:innen → Lehrkraft anlegen → <kbd>Einladungscode erzeugen</kbd>. Der Code enthält die Adresse des Servers, gilt
@@ -898,7 +906,9 @@
       <strong>Einlösen:</strong> Beim ersten Start der App <kbd>Mit Server verbinden …</kbd> wählen (oder später unter
       <a routerLink="/export">Export &amp; Sicherung</a> → <em>Server</em>), den Code einfügen, Benutzername und
       Passwort vergeben. Ist der Server noch leer, richtest du dich wie gewohnt ein; sonst übernimmt die App die Daten
-      vom Server und fragt nur noch nach deinem Namen und Instrument, falls dich noch niemand angelegt hat.
+      vom Server. Hat dich die einladende Lehrkraft schon angelegt, zeigt die App, was für dich eingerichtet ist
+      (Instrument, Funktion, Berichtszeiträume, Ort und Unterrichtszeiten); du prüfst Name und Instrument, wählst
+      eine Farbe und kannst loslegen. Sonst fragt sie nur nach deinem Namen und Instrument.
     </li>
     <li>
       <strong>Weitere Geräte:</strong> Auf demselben Weg mit <em>Anmelden</em>, Benutzername und Passwort.
