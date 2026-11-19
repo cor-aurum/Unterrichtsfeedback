@@ -46,6 +46,8 @@ const RAIL_X = MARGIN + 2;
 const LESSON_INDENT = 8;
 /** Kleiner als diese Höhe in mm wird ein Bild am Ende nicht, sonst wäre es nicht mehr erkennbar. */
 const MIN_SHRUNK_IMAGE_HEIGHT = 15;
+/** Abstand zwischen Spalten, z. B. in der Liste nur mit Einzelunterricht */
+const COLUMN_GAP = 8;
 
 interface PdfColors {
   /** Schwarzweiß: statt des farbigen Bands oben nur eine dünne Linie */
@@ -258,8 +260,8 @@ function listDocumentWith(
 }
 
 /**
- * Eine Lehrkraft mit Name, Funktion und Raum, darunter ihre Tage fortlaufend. Die erste beginnt direkt unter der
- * Überschrift der Liste, jede weitere auf einer neuen Seite.
+ * Eine Lehrkraft mit Name, Funktion und Raum, darunter ihre Tage fortlaufend in zwei Spalten. Die erste beginnt direkt
+ * unter der Überschrift der Liste, jede weitere auf einer neuen Seite.
  */
 function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, first: boolean): void {
   const { writer } = list;
@@ -271,7 +273,14 @@ function writeScheduleTeacher(list: ListDocument, teacher: ScheduleTeacher, firs
     writer.gap(4, false);
   };
   heading();
+  writer.beginColumns(2);
   writeScheduleDays(list, teacher.days, false, heading);
+  writer.endColumns();
+}
+
+/** Geschätzte Höhe eines Tages in `writeScheduleDays` (Datum und eine Zeile je Termin) in mm */
+function dayHeight(day: ScheduleDay): number {
+  return 12 * 0.45 + 1.5 + day.entries.length * (11 * 0.53 + 0.5);
 }
 
 /**
@@ -288,9 +297,10 @@ function writeScheduleDays(list: ListDocument, days: ScheduleDay[], pagePerDay: 
       list.newPage();
       heading();
     } else if (index > 0) {
-      // Fortlaufend: Abstand zum vorigen Tag; ein Tag beginnt nicht ganz unten auf der Seite.
+      // Fortlaufend: Abstand zum vorigen Tag. Ein kurzer Tag bleibt in einer Spalte zusammen, ein langer beginnt
+      // zumindest nicht ganz unten.
       writer.gap(4, false);
-      writer.keepTogether(16);
+      writer.keepTogether(Math.min(dayHeight(day), 60));
     }
     writer.text(formatLongDate(day.date), { size: 12, bold: true, color: writer.colors.accentText, gapAfter: 1.5 });
     for (const entry of day.entries) {
@@ -677,6 +687,8 @@ class PdfWriter {
   /** Neben der Überschrift belegt das Kopflogo diesen Rand, bis `endTitleArea` aufgerufen wird. */
   private logoArea: { side: 'left' | 'right'; width: number; untilY: number } | null = null;
   private readonly students: { footer: FooterTexts; firstPage: number }[] = [];
+  /** Text läuft in Spalten (siehe `beginColumns`): erst die linke bis unten, dann die nächste, dann eine neue Seite. */
+  private columns: { count: number; index: number; top: number; bottom: number } | null = null;
 
   constructor(
     private readonly doc: jsPDF,
@@ -730,13 +742,13 @@ class PdfWriter {
     this.y += style.gapBefore ?? 0;
     const area = this.logoArea && this.y < this.logoArea.untilY ? this.logoArea : null;
     const indent = (style.indent ?? 0) + (area?.side === 'left' ? area.width : 0);
-    const width = CONTENT_WIDTH - indent - (area?.side === 'right' ? area.width : 0);
+    const width = this.columnWidth() - indent - (area?.side === 'right' ? area.width : 0);
     const lineHeight = style.size * (style.lineHeight ?? 0.45);
     this.applyStyle(style);
     for (const line of this.doc.splitTextToSize(text, width) as string[]) {
       if (this.keepTogether(lineHeight)) this.applyStyle(style);
       if (style.rail) this.railSegment(lineHeight);
-      this.doc.text(this.fillPagePlaceholders(line), MARGIN + indent, this.y, { baseline: 'top' });
+      this.doc.text(this.fillPagePlaceholders(line), this.columnX() + indent, this.y, { baseline: 'top' });
       this.y += lineHeight;
     }
     this.y += style.gapAfter ?? 1;
@@ -778,11 +790,42 @@ class PdfWriter {
     this.text(text, { size: 12, bold: true, color: this.colors.accentText, indent: LESSON_INDENT, gapAfter: 2 });
   }
 
-  /** Beginnt eine neue Seite, wenn weniger als `height` mm Platz bleiben. Liefert true bei Seitenwechsel. */
+  /**
+   * Beginnt die nächste Spalte oder eine neue Seite, wenn weniger als `height` mm Platz bleiben. Liefert true, wenn
+   * der Text dadurch woanders weitergeht.
+   */
   keepTogether(height: number): boolean {
     if (this.y + height <= CONTENT_BOTTOM) return false;
+    const columns = this.columns;
+    if (columns && columns.index < columns.count - 1) {
+      columns.bottom = Math.max(columns.bottom, this.y);
+      columns.index++;
+      this.y = columns.top;
+      return true;
+    }
     this.newPage();
+    if (columns) Object.assign(columns, { index: 0, top: this.y, bottom: this.y });
     return true;
+  }
+
+  /** Ab hier läuft der Text in `count` Spalten nebeneinander, bis `endColumns`. */
+  beginColumns(count: number): void {
+    this.columns = { count, index: 0, top: this.y, bottom: this.y };
+  }
+
+  /** Zurück zu einer Spalte, unterhalb der längsten Spalte der Seite */
+  endColumns(): void {
+    if (this.columns) this.y = Math.max(this.columns.bottom, this.y);
+    this.columns = null;
+  }
+
+  private columnWidth(): number {
+    const count = this.columns?.count ?? 1;
+    return (CONTENT_WIDTH - (count - 1) * COLUMN_GAP) / count;
+  }
+
+  private columnX(): number {
+    return MARGIN + (this.columns?.index ?? 0) * (this.columnWidth() + COLUMN_GAP);
   }
 
   addFooters(): void {
