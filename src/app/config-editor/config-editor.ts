@@ -36,7 +36,7 @@ import {
 import { BlockContentEditor } from './block-content-editor';
 import { readImageFile } from './image-file';
 import { InstrumentSelect } from '../instrument-select';
-import { PdfExport } from '../pdf-export';
+import { DoorSignData, PdfExport } from '../pdf-export';
 import { TeachingWindowsEditor } from './teaching-windows-editor';
 import { PlanLinkPanel } from '../plans/plan-link-panel';
 import { BoardLinkPanel } from '../plans/board-link-panel';
@@ -121,7 +121,7 @@ export class ConfigEditor {
   protected readonly defaultThemeColor = DEFAULT_THEME_COLOR;
   protected readonly isDefaultPdfLayout = computed(
     () =>
-      JSON.stringify({ ...this.store.config().pdfLayout, headerLogo: null, footerLogo: null, grayscale: false }) ===
+      JSON.stringify({ ...this.store.config().pdfLayout, headerLogo: null, footerLogo: null }) ===
       JSON.stringify(DEFAULT_PDF_LAYOUT),
   );
   protected readonly logoSlots = LOGO_SLOTS;
@@ -522,34 +522,54 @@ export class ConfigEditor {
     return roleIn(teacher, this.windowsPeriodId());
   }
 
+  /** Zeitraum, dessen Türschilder für Räume bearbeitet werden; anfangs der auf dem Gerät gewählte */
+  protected readonly roomSignsPeriodId = linkedSignal<string>(() => this.activePeriodId());
+  protected readonly roomSignsPeriod = computed(
+    () => this.store.config().reportPeriods.find((p) => p.id === this.roomSignsPeriodId()) ?? this.reportPeriod.period(),
+  );
+
+  /** Aktive Lehrkräfte des Zeitraums in seiner Reihenfolge, für die Türschilder */
+  protected periodSignTeachers(period: ReportPeriodEntry): Teacher[] {
+    const teachers = this.store.config().teachers.filter((t) => period.teacherIds.includes(t.id) && isActiveTeacher(t));
+    return byPeriodOrder(teachers, period.teacherIds);
+  }
+
   /** Türschilder ohne Lehrkraft als PDF, in der allgemeinen Farbe; ohne Bezeichnung entfällt eins. */
   protected async roomSignsPdf(signs: RoomSign[]): Promise<void> {
-    const config = this.store.config();
-    const printable = signs
-      .filter((sign) => sign.title.trim())
-      .map((sign) => ({ name: sign.title.trim(), role: sign.subtitle.trim(), location: '', color: config.themeColor }));
+    const printable = signs.filter((sign) => sign.title.trim()).map((sign) => this.roomSignData(sign));
     if (printable.length === 0) {
       this.showError('Das Türschild braucht eine Bezeichnung, z. B. „Speisesaal“.');
       return;
     }
-    try {
-      await this.pdfExport.exportDoorSigns(config, printable, 'share');
-    } catch (e) {
-      this.showError(`Das Türschild ließ sich nicht erstellen: ${e instanceof Error ? e.message : e}`);
-    }
+    await this.exportSigns(printable);
   }
 
-  /** Türschilder als PDF, mit dem Ort im oben gewählten Zeitraum; mehrere Lehrkräfte bekommen je eine Seite. */
+  /** Alle Türschilder eines Zeitraums: erst die Lehrkräfte in seiner Reihenfolge, dann die Räume */
+  protected async allSignsPdf(period: ReportPeriodEntry): Promise<void> {
+    const rooms = (period.roomSigns ?? []).filter((sign) => sign.title.trim());
+    await this.exportSigns([
+      ...this.periodSignTeachers(period).map((teacher) => this.teacherSignData(teacher, period.id)),
+      ...rooms.map((sign) => this.roomSignData(sign)),
+    ]);
+  }
+
+  /** Türschilder als PDF, mit Funktion und Ort im oben gewählten Zeitraum; mehrere Lehrkräfte bekommen je eine Seite. */
   protected async doorSigns(teachers: Teacher[]): Promise<void> {
-    const config = this.store.config();
-    const signs = teachers.map((teacher) => ({
-      name: teacher.name,
-      role: this.roleOf(teacher),
-      location: this.locationOf(teacher),
-      color: teacher.themeColor ?? config.themeColor,
-    }));
+    await this.exportSigns(teachers.map((teacher) => this.teacherSignData(teacher, this.windowsPeriodId())));
+  }
+
+  private teacherSignData(teacher: Teacher, periodId: string): DoorSignData {
+    const color = teacher.themeColor ?? this.store.config().themeColor;
+    return { name: teacher.name, role: roleIn(teacher, periodId), location: locationIn(teacher, periodId), color };
+  }
+
+  private roomSignData(sign: RoomSign): DoorSignData {
+    return { name: sign.title.trim(), role: sign.subtitle.trim(), location: '', color: this.store.config().themeColor };
+  }
+
+  private async exportSigns(signs: DoorSignData[]): Promise<void> {
     try {
-      await this.pdfExport.exportDoorSigns(config, signs, 'share');
+      await this.pdfExport.exportDoorSigns(this.store.config(), signs, 'share');
     } catch (e) {
       this.showError(`Das Türschild ließ sich nicht erstellen: ${e instanceof Error ? e.message : e}`);
     }

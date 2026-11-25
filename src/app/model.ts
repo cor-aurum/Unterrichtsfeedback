@@ -141,6 +141,11 @@ export interface ReportPeriodEntry extends Period {
   selfBooking?: SelfBooking;
   /** Gruppenwahl: Jede Person wählt selbst genau eine dieser Gruppen; fehlt, wenn sie nicht läuft */
   groupChoice?: GroupChoiceSettings;
+  /**
+   * Türschilder ohne Lehrkraft in diesem Zeitraum, z. B. „Speisesaal“ oder „Damen-WC“; fehlt, solange es keine gibt.
+   * Ein neuer Zeitraum übernimmt sie aus dem vorigen.
+   */
+  roomSigns?: RoomSign[];
 }
 
 /**
@@ -279,7 +284,10 @@ export interface PdfLayout {
   headerLogo: PdfLogo | null;
   /** Logo in der Fußzeile jeder Seite */
   footerLogo: PdfLogo | null;
-  /** Alle PDFs in Graustufen, ohne farbige Flächen und mit grauen Bildern, um beim Drucken Farbe zu sparen */
+  /**
+   * PDF in Graustufen, ohne farbige Flächen und mit grauen Bildern. Gespeichert ist es immer `false`: Ob jemand
+   * schwarzweiß druckt, ist persönlich (`Teacher.grayscalePdf`); `PdfExport` setzt es beim Erstellen.
+   */
   grayscale: boolean;
 }
 
@@ -390,6 +398,8 @@ export interface Teacher {
    * (`FeedbackConfig.themeColor`). Andere Lehrkräfte beeinflusst sie nicht.
    */
   themeColor?: string;
+  /** Persönlich: eigene PDFs in Schwarzweiß, um beim Drucken Farbe zu sparen; andere Lehrkräfte behalten ihre Wahl. */
+  grayscalePdf?: true;
   /** Wohin das Logo oben links führt (Pfad einer Seite aus `HOME_PAGES`); fehlt es, zum Kalender */
   homePage?: string;
   /**
@@ -538,8 +548,6 @@ export interface FeedbackConfig {
   reportPeriods: ReportPeriodEntry[];
   /** Feste Texte der Kalender-PDFs (Terminlisten, Wochen- und Tagesplan) */
   calendarPdf: CalendarPdfTexts;
-  /** Türschilder ohne Lehrkraft, z. B. „Speisesaal“ oder „Damen-WC“; fehlt, solange es keine gibt */
-  roomSigns?: RoomSign[];
   /**
    * Mit Server ändert jede Lehrkraft nur eigene Inhalte und Varianten. Früher geänderte gemeinsame Texte wurden dafür
    * einmal zu eigenen Varianten aller Lehrkräfte (siehe `ConfigStore.migrateSharedContents`).

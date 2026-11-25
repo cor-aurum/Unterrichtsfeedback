@@ -303,3 +303,37 @@ main {
   color: var(--muted);
   text-align: center;
 }
+
+// Neue bereitgestellte PDFs in der Navigation
+.nav-count {
+  display: inline-block;
+  min-width: 1.2rem;
+  margin-left: 0.3rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: white;
+  color: var(--primary-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+// Neue PDFs am Menü-Knopf, solange das Menü zu ist
+.menu-toggle {
+  position: relative;
+}
+
+.toggle-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 1.1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: white;
+  color: var(--primary-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  text-align: center;
+}

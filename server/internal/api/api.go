@@ -100,6 +100,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/boards/{period}", s.authed(s.deleteBoard))
 	mux.HandleFunc("POST /api/boards/{period}/address", s.authed(s.newBoardAddress))
 	mux.HandleFunc("GET /api/aushang/{token}", s.publicBoard)
+	mux.HandleFunc("POST /api/shared-files", s.authed(s.shareFile))
+	mux.HandleFunc("GET /api/shared-files", s.authed(s.sharedFiles))
+	mux.HandleFunc("GET /api/shared-files/{id}", s.authed(s.sharedFile))
+	mux.HandleFunc("DELETE /api/shared-files/{id}", s.authed(s.deleteSharedFile))
 	return s.cors(mux)
 }
 

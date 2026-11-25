@@ -80,9 +80,10 @@ export class PdfExport {
   private readonly reportPeriod = inject(ReportPeriod);
   private readonly activeTeacher = inject(ActiveTeacher);
 
-  /** Wer das PDF erstellt, bekommt es in seiner persönlichen Farbe. */
+  /** Wer das PDF erstellt, bekommt es in seiner persönlichen Farbe und, wenn eingestellt, schwarzweiß. */
   private personal(config: FeedbackConfig): FeedbackConfig {
-    return { ...config, themeColor: this.activeTeacher.color() };
+    const grayscale = !!this.activeTeacher.teacher().grayscalePdf;
+    return { ...config, themeColor: this.activeTeacher.color(), pdfLayout: { ...config.pdfLayout, grayscale } };
   }
 
   /**
@@ -90,10 +91,16 @@ export class PdfExport {
    * Varianten und {zeitraum} richten sich nach dem Berichtszeitraum dieses Geräts.
    */
   async export(config: FeedbackConfig, students: Student[], fileName: string, action: 'open' | 'share' = 'share'): Promise<void> {
+    const file = await this.feedbackPdf(config, students, fileName);
+    await deliver(file.name, file.content, action);
+  }
+
+  /** Das Feedback-PDF als Datei, z. B. um es einer anderen Lehrkraft bereitzustellen (siehe `SharedFiles`). */
+  async feedbackPdf(config: FeedbackConfig, students: Student[], fileName: string): Promise<PdfFile> {
     config = this.personal(config);
     const prepared = await forPrint(config);
     const period = this.reportPeriod.period();
-    return this.exportRecipients(prepared, students.map((student) => recipient(prepared, student, period)), fileName, action);
+    return this.recipientsPdf(prepared, students.map((student) => recipient(prepared, student, period)), fileName);
   }
 
   /**
@@ -107,19 +114,20 @@ export class PdfExport {
     fileName: string,
     action: 'open' | 'share' = 'share',
   ): Promise<void> {
+    const file = await this.groupPdf(config, groups, students, fileName);
+    await deliver(file.name, file.content, action);
+  }
+
+  /** Das Gruppen-PDF als Datei (wie `feedbackPdf`) */
+  async groupPdf(config: FeedbackConfig, groups: Group[], students: Student[], fileName: string): Promise<PdfFile> {
     config = this.personal(config);
     const prepared = await forPrint(config);
     const period = this.reportPeriod.period();
     const recipients = groups.map((group) => groupRecipient(group, students, prepared, period));
-    return this.exportRecipients(prepared, recipients, fileName, action);
+    return this.recipientsPdf(prepared, recipients, fileName);
   }
 
-  private async exportRecipients(
-    config: FeedbackConfig,
-    recipients: Recipient[],
-    fileName: string,
-    action: 'open' | 'share',
-  ): Promise<void> {
+  private async recipientsPdf(config: FeedbackConfig, recipients: Recipient[], fileName: string): Promise<PdfFile> {
     // jsPDF ist groß und wird deshalb erst beim ersten Export geladen.
     const { jsPDF } = await import('jspdf');
     const colors = pdfColors(pdfTheme(config));
@@ -132,7 +140,7 @@ export class PdfExport {
     // {seiten} im Text steht erst fest, wenn alle Seiten geschrieben sind. Deshalb zählt ein erster
     // Durchlauf die Seiten je Person, der zweite schreibt die echten Zahlen.
     const writer = render(render().pageCounts());
-    await deliver(`${safeFileName(fileName)}_${today()}.pdf`, writer.toBlob(), action);
+    return { name: `${safeFileName(fileName)}_${today()}.pdf`, content: writer.toBlob() };
   }
 
   /**
@@ -179,6 +187,8 @@ export class PdfExport {
    * aus den PDF-Einstellungen.
    */
   async exportDoorSigns(config: FeedbackConfig, signs: DoorSignData[], action: 'open' | 'share'): Promise<void> {
+    // Die Farben bringen die Schilder selbst mit; persönlich ist nur, ob schwarzweiß gedruckt wird.
+    config = this.personal(config);
     const [{ jsPDF }, { writeDoorSigns }, prepared] = await Promise.all([
       import('jspdf'),
       import('./door-sign-pdf'),
@@ -191,6 +201,12 @@ export class PdfExport {
     await deliver(`${name}.pdf`, doc.output('blob'), action);
   }
 
+}
+
+/** Ein fertiges PDF mit Dateinamen */
+export interface PdfFile {
+  name: string;
+  content: Blob;
 }
 
 /** Inhalt eines Türschilds; `color` ist die Farbe der Lehrkraft (im Schwarzweißmodus gilt Grau). */

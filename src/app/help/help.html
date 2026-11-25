@@ -679,7 +679,8 @@
   <ul>
     <li id="meine-einstellungen">
       <strong>Meine Einstellungen und Verwaltung:</strong> Oben links stehen <em>Meine Einstellungen</em>: dein Name,
-      deine Farbe, wohin das Logo führt, Instrument, Funktion, Ort und Unterrichtszeiten sowie dein Türschild. Das
+      deine Farbe, ob deine PDFs schwarzweiß sind, wohin das Logo führt, Instrument, Funktion, Ort und
+      Unterrichtszeiten sowie dein Türschild. Das
       gilt nur für die aktive Lehrkraft (mit Server: für dich). Alles, was für alle gilt (Berichtszeiträume,
       Textbausteine, PDF-Texte, Lehrkräfte, Kalender), steht darunter unter <em>Verwaltung</em>. Mit Server ist sie
       anfangs zugeklappt, weil das meist die Leitung einstellt; ein Klick auf <em>Verwaltung</em> klappt sie auf, und
@@ -696,9 +697,10 @@
       Auch das gilt nur für die aktive Lehrkraft.
     </li>
     <li>
-      <strong>PDFs in Schwarzweiß</strong> (unter <em>Verwaltung</em> → <em>Allgemein</em>) spart Tinte: Alle PDFs, auch die
-      Kalender-PDFs, kommen dann in Grautönen, farbige Flächen werden schmale Linien und Bilder werden grau. Die App
-      selbst bleibt farbig.
+      <strong>PDFs in Schwarzweiß</strong> (unter <em>Meine Einstellungen</em>) spart Tinte: Deine PDFs, auch
+      Türschilder und Terminlisten, kommen dann in Grautönen, farbige Flächen werden schmale Linien und Bilder werden
+      grau. Die Einstellung ist persönlich wie die Farbe; andere Lehrkräfte drucken weiter farbig, wenn sie es nicht
+      selbst einschalten. Die App selbst bleibt farbig.
     </li>
     <li>
       <strong>Berichtszeiträume</strong> legst du ebenfalls unter <em>Allgemein</em> an – siehe
@@ -771,9 +773,13 @@
     </li>
     <li id="raum-tuerschilder">
       <strong>Türschilder für Räume:</strong> Unter <em>Verwaltung</em> → <em>Allgemein</em> legst du Türschilder ohne
-      Lehrkraft an, z. B. „Speisesaal“ oder „Damen-WC“, optional mit einer Unterzeile wie „Erdgeschoss, links“. Sie
-      sehen aus wie die Türschilder der Lehrkräfte, in der allgemeinen Farbe und mit dem Kopflogo; <kbd>PDF</kbd>
-      erstellt eins, <kbd>Alle als PDF</kbd> alle auf je einer Seite. Die Liste gilt für alle Lehrkräfte.
+      Lehrkraft an, z. B. „Speisesaal“ oder „Damen-WC“, optional mit einer Unterzeile wie „Erdgeschoss, links“. Jeder
+      Berichtszeitraum hat eigene (oben im Bereich wählst du den Zeitraum); ein neuer Zeitraum übernimmt die des vorigen,
+      danach ändern sie sich je Zeitraum. Sie sehen aus wie die Türschilder der Lehrkräfte, in der allgemeinen Farbe
+      und mit dem Kopflogo; <kbd>PDF</kbd> erstellt eins, <kbd>Alle als PDF</kbd> alle Türschilder des Zeitraums auf je einer
+      Seite: erst die der Lehrkräfte des Zeitraums (in seiner Reihenfolge, mit Funktion und Ort dort), dann die der
+      Räume. Mit Server
+      sehen und ändern sie die Lehrkräfte des Zeitraums.
     </li>
     <li id="tuerschild">
       <strong>Türschild:</strong> <kbd>Türschild</kbd> bei einer Lehrkraft erstellt ein PDF im Querformat mit ihrem
@@ -851,6 +857,20 @@
     <li>
       Gibt es Gruppen, erstellst du darunter das <strong>Gruppen-PDF</strong> für alle Gruppen mit Gruppenstunden im
       Berichtszeitraum oder für eine Gruppe – mit den Gruppen-Abschnitten und Gruppen-Inhalten.
+    </li>
+    <li id="bereitstellen">
+      <strong>PDFs bereitstellen (mit Server):</strong> <kbd>Bereitstellen …</kbd> neben <kbd>PDF erstellen</kbd> gibt
+      das Feedback- oder Gruppen-PDF einer anderen Lehrkraft, z. B. der Leitung oder dem Sekretariat, damit sie es
+      druckt oder versendet – auch wenn sie keinen Zugriff auf die Personen des Zeitraums hat. Du wählst <em>alle
+      Lehrkräfte des Zeitraums</em> oder einzelne mit Konto auf dem Server. Bei ihnen erscheint es oben unter
+      <em>Bereitgestellte PDFs</em> → <em>Für dich bereitgestellt</em> mit
+      <kbd>Öffnen</kbd> zum Ansehen und Drucken, <kbd>Herunterladen</kbd> bzw. <kbd>Teilen</kbd> zum Versenden und
+      <kbd>Erledigt</kbd>, das es aus ihrer Liste nimmt. Unter <em>Von dir bereitgestellt</em> siehst du je Lehrkraft,
+      ob sie es schon geöffnet (✓) und als erledigt markiert hat, und kannst es für alle zurückziehen. Nach 30 Tagen löscht der Server die Datei
+      von selbst. Die PDFs enthalten persönliche Rückmeldungen: Gib sie nur an Lehrkräfte, die sie wirklich brauchen.
+      Auf ein neues PDF weist die App einmal oben hin („… hat dir „…“ bereitgestellt“, auf jedem Gerät einmal), und
+      die Navigation zeigt die Zahl ungeöffneter PDFs, auf dem Handy auch am Menüknopf (☰). Die App fragt dafür alle
+      drei Minuten beim Server nach, solange sie geöffnet ist; ist sie geschlossen, siehst du es beim nächsten Öffnen.
     </li>
     <li>
       Das PDF enthält nur Personen mit mindestens einer Stunde im Berichtszeitraum und nur diese Stunden. Gibt es

@@ -1,5 +1,7 @@
 <h1>Export &amp; Sicherung<app-help-link topic="export" label="Export und Sicherung" /></h1>
 
+<app-shared-files-panel />
+
 <app-teacher-hours-panel />
 
 <section class="card">
@@ -58,7 +60,18 @@
       } @else {
         <button [disabled]="studentsToExport().length === 0" (click)="exportPdf('share')">PDF erstellen</button>
       }
+      @if (canShare()) {
+        <button class="secondary" [disabled]="studentsToExport().length === 0" (click)="toggleSharing('feedback')">
+          Bereitstellen …
+        </button>
+      }
     </div>
+    @if (sharing() === 'feedback') {
+      <app-share-pdf-panel title="Feedback-PDF" [build]="buildFeedbackPdf" (closed)="sharingClosed($event)" />
+    }
+  }
+  @if (shareMessage(); as text) {
+    <p class="message small" role="status">{{ text }}</p>
   }
 </section>
 
@@ -100,7 +113,15 @@
       } @else {
         <button [disabled]="groupsToExport().length === 0" (click)="exportGroupPdf('share')">PDF erstellen</button>
       }
+      @if (canShare()) {
+        <button class="secondary" [disabled]="groupsToExport().length === 0" (click)="toggleSharing('groups')">
+          Bereitstellen …
+        </button>
+      }
     </div>
+    @if (sharing() === 'groups') {
+      <app-share-pdf-panel title="Gruppen-PDF" [build]="buildGroupPdf" (closed)="sharingClosed($event)" />
+    }
   </section>
 }
 

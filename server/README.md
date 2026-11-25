@@ -218,6 +218,17 @@ Wie beim Download-Link ist der Link selbst der Schlüssel, ein neuer macht den a
 `demo-konto-<Lehrer-ID>`, gültig bis drei Tage nach der letzten Aktualisierung. Wer ihn nicht in den
 Zugriffsprotokollen haben will, schließt `/api/aushang/` vom Protokoll aus.
 
+## Bereitgestellte PDFs
+
+Eine Lehrkraft kann ein fertiges Feedback- oder Gruppen-PDF anderen Lehrkräften bereitstellen, einzeln gewählten oder
+allen Lehrkräften eines Berichtszeitraums (dann muss sie selbst darin stehen). Die Empfängerinnen brauchen keinen
+Zugriff auf die Daten des Zeitraums. Sehen kann eine Datei nur, wer sie bereitgestellt hat oder für wen sie
+bereitliegt; die Absenderin sieht, wer sie schon geöffnet hat. Der Server speichert das PDF einmal (höchstens 25 MB)
+und löscht es nach 30 Tagen oder wenn die Absenderin es zurückzieht; markiert eine Empfängerin es als erledigt,
+verschwindet es nur aus ihrer Liste. Höchstens
+200 Dateien je Lehrkraft liegen gleichzeitig bereit. Die PDFs enthalten personenbezogene Rückmeldungen und gehören
+damit wie die übrigen Daten in die Sicherung und das Löschkonzept.
+
 ## Konten
 
 Jede Lehrkraft ändert ihr Passwort in der App mit dem bisherigen (`POST /api/password`); andere Geräte des Kontos
@@ -281,5 +292,9 @@ Für Entwickler; die App nutzt sie in `src/app/sync/server-folder.ts`.
 | `POST /api/boards/{Zeitraum}/address` | Neuer Aushang-Link (der alte gilt nicht mehr)                  |
 | `DELETE /api/boards/{Zeitraum}` | Aushang-Link und Termine löschen                                 |
 | `GET /api/aushang/{Schlüssel}[?tag=JJJJ-MM-TT]` | Aushang eines Tages, ohne Anmeldung                    |
+| `POST /api/shared-files?name=…&to=ID,ID` oder `&period=Zeitraum` | PDF als Base64-Text im Body bereitstellen; Antwort `{id, recipients}` |
+| `GET /api/shared-files` | `{received: […], sent: […]}` mit Name, Größe, Zeiten, Absenderin bzw. Empfängerinnen und „geöffnet“ |
+| `GET /api/shared-files/{ID}[?format=base64]` | Inhalt (PDF oder Base64); vermerkt „geöffnet“ bei der Empfängerin |
+| `DELETE /api/shared-files/{ID}` | Absenderin: für alle zurückziehen; Empfängerin: als erledigt markieren (Absenderin sieht `doneAt`) |
 
 Angemeldet wird mit `Authorization: Bearer <token>`. Fehler kommen als `{error: "…"}` mit einem Text für die App.

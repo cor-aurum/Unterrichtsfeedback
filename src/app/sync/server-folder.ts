@@ -285,7 +285,63 @@ export const serverApi = {
   async putBoard(login: ServerLogin, periodId: string, board: string): Promise<void> {
     await checked(await request(login.url, 'PUT', boardPath(periodId), { token: login.token, body: board }));
   },
+
+  /** Was für die angemeldete Lehrkraft bereitliegt und was sie selbst bereitgestellt hat */
+  sharedFiles(login: ServerLogin): Promise<SharedFilesState> {
+    return json(request(login.url, 'GET', '/api/shared-files', { token: login.token }));
+  },
+
+  /**
+   * Stellt ein PDF einzelnen Lehrkräften (`to`) oder allen Lehrkräften eines Zeitraums (`period`) bereit; liefert die
+   * Lehrkräfte, die es bekommen. Übertragen wird Base64-Text, weil die Android-App nur Text schicken kann.
+   */
+  async shareFile(
+    login: ServerLogin,
+    name: string,
+    base64: string,
+    target: { to: string[] } | { period: string },
+  ): Promise<string[]> {
+    const query = new URLSearchParams({ name, ...('to' in target ? { to: target.to.join(',') } : { period: target.period }) });
+    const answer = await json<{ recipients: string[] }>(
+      request(login.url, 'POST', `/api/shared-files?${query}`, { token: login.token, body: base64, contentType: 'text/plain' }),
+    );
+    return answer.recipients;
+  },
+
+  /** Inhalt als Base64; öffnet ihn eine Empfängerin, sieht die Absenderin danach „geöffnet“. */
+  async sharedFileContent(login: ServerLogin, id: string): Promise<string> {
+    const response = await checked(
+      await request(login.url, 'GET', `/api/shared-files/${encodeURIComponent(id)}?format=base64`, { token: login.token }),
+    );
+    return response.text();
+  },
+
+  /** Die Absenderin zieht die Datei für alle zurück, eine Empfängerin entfernt sie nur für sich. */
+  async deleteSharedFile(login: ServerLogin, id: string): Promise<void> {
+    await checked(await request(login.url, 'DELETE', `/api/shared-files/${encodeURIComponent(id)}`, { token: login.token }));
+  },
 };
+
+/** Bereitgestellte Dateien, wie der Server sie liefert (siehe server/internal/api/shared_files.go); Zeiten in ISO */
+export interface SharedFilesState {
+  received: SharedFileEntry[];
+  sent: SharedFileEntry[];
+}
+
+export interface SharedFileEntry {
+  id: string;
+  name: string;
+  size: number;
+  /** Für alle Lehrkräfte dieses Zeitraums bereitgestellt; fehlt bei einzeln gewählten */
+  periodId?: string;
+  createdAt: string;
+  expiresAt: string;
+  /** Nur bei erhaltenen: wer sie bereitgestellt hat (Lehrer-ID) und wann man sie geöffnet hat */
+  from?: string;
+  openedAt?: string;
+  /** Nur bei eigenen: die Empfängerinnen, wann sie sie geöffnet und wann sie sie als erledigt markiert haben */
+  to?: { teacherId: string; openedAt?: string; doneAt?: string }[];
+}
 
 function boardPath(periodId: string): string {
   return `/api/boards/${encodeURIComponent(periodId)}`;

@@ -8,7 +8,7 @@ import { TeacherHoursPanel } from '../reports/teacher-hours-panel';
 import { ServerSync } from '../sync/server-sync';
 import { GENERAL_FILE, SHARED_FILE } from '../sync/sync-files';
 import { ConfigStore } from '../config.store';
-import { PdfExport } from '../pdf-export';
+import { PdfExport, PdfFile } from '../pdf-export';
 import { labelOf, ReportPeriod } from '../report-period';
 import { isNativeApp } from '../save-file';
 import { demoMode, storageKey } from '../stored-signal';
@@ -18,12 +18,23 @@ import { StudentsStore } from '../students.store';
 import { GroupsStore } from '../groups.store';
 import { Group, groupLabel, Lesson, Student } from '../model';
 import { HelpLink } from '../help/help-link';
+import { SharePdfPanel } from '../shared-files/share-pdf-panel';
+import { SharedFilesPanel } from '../shared-files/shared-files-panel';
 
 type Scope = 'all' | 'single';
 
 @Component({
   selector: 'app-export-page',
-  imports: [RouterLink, HelpLink, StudentLabelPipe, ServerLoginPanel, PasswordChange, TeacherHoursPanel],
+  imports: [
+    RouterLink,
+    HelpLink,
+    StudentLabelPipe,
+    ServerLoginPanel,
+    PasswordChange,
+    TeacherHoursPanel,
+    SharePdfPanel,
+    SharedFilesPanel,
+  ],
   templateUrl: './export-page.html',
   styleUrl: './export-page.scss',
 })
@@ -103,9 +114,37 @@ export class ExportPage {
   }
 
   protected exportGroupPdf(action: 'open' | 'share'): void {
+    this.pdf.exportGroups(this.config(), this.groupsToExport(), this.store.students(), this.groupFileName(), action);
+  }
+
+  /** Bereitstellen für andere Lehrkräfte: welches Formular offen ist und die Meldung danach */
+  protected readonly sharing = signal<'feedback' | 'groups' | null>(null);
+  protected readonly shareMessage = signal<string | null>(null);
+  /** Bereitstellen geht nur mit Server und nicht in der Demo (die Demodaten bleiben auf dem Gerät). */
+  protected readonly canShare = computed(() => !demoMode && !!this.sync.login());
+  /** Das PDF entsteht erst beim Bereitstellen, mit der Auswahl von dann. */
+  protected readonly buildFeedbackPdf = (): Promise<PdfFile> =>
+    this.pdf.feedbackPdf(this.config(), this.studentsToExport(), this.feedbackFileName());
+  protected readonly buildGroupPdf = (): Promise<PdfFile> =>
+    this.pdf.groupPdf(this.config(), this.groupsToExport(), this.store.students(), this.groupFileName());
+
+  protected toggleSharing(kind: 'feedback' | 'groups'): void {
+    this.shareMessage.set(null);
+    this.sharing.update((open) => (open === kind ? null : kind));
+  }
+
+  protected sharingClosed(message: string | null): void {
+    this.sharing.set(null);
+    this.shareMessage.set(message);
+  }
+
+  private groupFileName(): string {
     const groups = this.groupsToExport();
-    const fileName = this.groupScope() === 'all' ? 'Feedback_Gruppen' : `Feedback_Gruppe_${this.groupLabel(groups[0])}`;
-    this.pdf.exportGroups(this.config(), groups, this.store.students(), fileName, action);
+    return this.groupScope() === 'all' ? 'Feedback_Gruppen' : `Feedback_Gruppe_${this.groupLabel(groups[0])}`;
+  }
+
+  private feedbackFileName(): string {
+    return this.scope() === 'all' ? 'Feedback_alle' : `Feedback_${this.studentsToExport()[0].name}`;
   }
 
   protected setScope(event: Event): void {
@@ -236,8 +275,6 @@ export class ExportPage {
 
 
   protected exportPdf(action: 'open' | 'share'): void {
-    const students = this.studentsToExport();
-    const fileName = this.scope() === 'all' ? 'Feedback_alle' : `Feedback_${students[0].name}`;
-    this.pdf.export(this.config(), students, fileName, action);
+    this.pdf.export(this.config(), this.studentsToExport(), this.feedbackFileName(), action);
   }
 }

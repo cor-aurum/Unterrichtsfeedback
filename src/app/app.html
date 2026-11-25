@@ -16,7 +16,12 @@
     <a routerLink="/gruppen" routerLinkActive="active">Gruppenplanung</a>
     <a routerLink="/kalender" routerLinkActive="active">Kalender</a>
     <a routerLink="/konfiguration" routerLinkActive="active">Konfiguration</a>
-    <a routerLink="/export" routerLinkActive="active">Export &amp; Sicherung</a>
+    <a routerLink="/export" routerLinkActive="active">
+      Export &amp; Sicherung
+      @if (sharedFiles.unopened() > 0) {
+        <span class="nav-count" [title]="sharedFiles.unopened() + ' neue bereitgestellte PDF(s)'">{{ sharedFiles.unopened() }}</span>
+      }
+    </a>
   </nav>
   <div class="tools">
     @if (demoMode) {
@@ -66,10 +71,15 @@
     class="menu-toggle"
     aria-controls="main-menu"
     [attr.aria-expanded]="menuOpen()"
-    [attr.aria-label]="menuOpen() ? 'Menü schließen' : 'Menü öffnen'"
+    [attr.aria-label]="
+      menuOpen() ? 'Menü schließen' : sharedFiles.unopened() > 0 ? 'Menü öffnen, ' + sharedFiles.unopened() + ' neue PDFs' : 'Menü öffnen'
+    "
     (click)="menuOpen.set(!menuOpen())"
   >
     <span class="bars" [class.open]="menuOpen()" aria-hidden="true"><span></span></span>
+    @if (sharedFiles.unopened() > 0 && !menuOpen()) {
+      <span class="toggle-count" aria-hidden="true">{{ sharedFiles.unopened() }}</span>
+    }
   </button>
 </header>
 
@@ -83,6 +93,20 @@
   @if (syncNeedsAttention()) {
     <p class="message warning sync-banner">
       Der Abgleich mit dem Server wartet auf dich. <a routerLink="/export">Zu Export &amp; Sicherung</a>
+    </p>
+  }
+  @if (sharedFiles.announcements()[0]; as file) {
+    @let more = sharedFiles.announcements().length - 1;
+    <p class="update-hint shared-hint" role="status">
+      <span>
+        {{ sharedFiles.teacherName(file.from) }} hat dir „{{ file.name }}“ bereitgestellt{{
+          more > 0 ? (more === 1 ? ', dazu ein weiteres PDF' : ', dazu ' + more + ' weitere PDFs') : ''
+        }}.
+      </span>
+      <a routerLink="/export" (click)="sharedFiles.dismissAnnouncements()">Ansehen</a>
+      <button type="button" class="link" (click)="sharedFiles.dismissAnnouncements()" aria-label="Hinweis ausblenden">
+        Ausblenden
+      </button>
     </p>
   }
   @if (update.offer(); as offer) {

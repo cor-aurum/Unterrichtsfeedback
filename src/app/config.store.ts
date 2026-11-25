@@ -92,7 +92,6 @@ export class ConfigStore {
           ...DEFAULT_PDF_LAYOUT,
           headerLogo: config.pdfLayout.headerLogo,
           footerLogo: config.pdfLayout.footerLogo,
-          grayscale: config.pdfLayout.grayscale,
         }),
     );
   }
@@ -104,6 +103,14 @@ export class ConfigStore {
   }
 
   /** Persönliche Farbe einer Lehrkraft; die anderen behalten ihre. */
+  /** Eigene PDFs in Schwarzweiß (siehe `Teacher.grayscalePdf`); die anderen Lehrkräfte behalten ihre Wahl. */
+  setTeacherGrayscale(teacherId: string, grayscale: boolean): void {
+    this.mutateTeacher(teacherId, (teacher) => {
+      if (grayscale) teacher.grayscalePdf = true;
+      else delete teacher.grayscalePdf;
+    });
+  }
+
   setTeacherColor(teacherId: string, color: string): void {
     if (isHexColor(color)) this.mutateTeacher(teacherId, (teacher) => (teacher.themeColor = color.toLowerCase()));
   }
@@ -116,24 +123,26 @@ export class ConfigStore {
     this.mutate((config) => Object.assign(config.calendarPdf, change));
   }
 
-  /** Neues Türschild ohne Lehrkraft am Ende der Liste; liefert seine ID. */
-  addRoomSign(): string {
-    const id = newId();
-    this.mutate((config) => (config.roomSigns = [...(config.roomSigns ?? []), { id, title: '', subtitle: '' }]));
-    return id;
+  /** Neues Türschild ohne Lehrkraft am Ende der Liste des Zeitraums */
+  addRoomSign(periodId: string): void {
+    this.mutateRoomSigns(periodId, (signs) => [...signs, { id: newId(), title: '', subtitle: '' }]);
   }
 
-  updateRoomSign(id: string, change: Partial<Pick<RoomSign, 'title' | 'subtitle'>>): void {
-    this.mutate((config) => {
-      config.roomSigns = (config.roomSigns ?? []).map((sign) => (sign.id === id ? { ...sign, ...change } : sign));
-    });
+  updateRoomSign(periodId: string, id: string, change: Partial<Pick<RoomSign, 'title' | 'subtitle'>>): void {
+    this.mutateRoomSigns(periodId, (signs) => signs.map((sign) => (sign.id === id ? { ...sign, ...change } : sign)));
   }
 
-  removeRoomSign(id: string): void {
+  removeRoomSign(periodId: string, id: string): void {
+    this.mutateRoomSigns(periodId, (signs) => signs.filter((sign) => sign.id !== id));
+  }
+
+  private mutateRoomSigns(periodId: string, change: (signs: RoomSign[]) => RoomSign[]): void {
     this.mutate((config) => {
-      const rest = (config.roomSigns ?? []).filter((sign) => sign.id !== id);
-      if (rest.length > 0) config.roomSigns = rest;
-      else delete config.roomSigns;
+      const period = config.reportPeriods.find((p) => p.id === periodId);
+      if (!period) return;
+      const signs = change(period.roomSigns ?? []);
+      if (signs.length > 0) period.roomSigns = signs;
+      else delete period.roomSigns;
     });
   }
 
@@ -438,9 +447,10 @@ export class ConfigStore {
         const role = roleIn(teacher, latest?.id ?? null);
         if (role) teacher.periodRoles = { ...teacher.periodRoles, [id]: role };
       });
-      // Gemeinsame Zeiten übernimmt der neue Zeitraum ebenso.
+      // Gemeinsame Zeiten und Türschilder übernimmt der neue Zeitraum ebenso.
       const shared = latest?.sharedWindows ? { sharedWindows: copyWindows(latest.sharedWindows) } : {};
-      config.reportPeriods.push({ id, ...period, ...shared });
+      const signs = latest?.roomSigns ? { roomSigns: latest.roomSigns.map((sign) => ({ ...sign, id: newId() })) } : {};
+      config.reportPeriods.push({ id, ...period, ...shared, ...signs });
       // Ein echter Zeitraum ersetzt den vorläufigen.
       config.reportPeriods = config.reportPeriods.filter((p) => !p.placeholder);
     });
@@ -793,9 +803,8 @@ export function parseConfig(data: unknown): FeedbackConfig {
     // … und noch keine Inhalte für Gruppen; dann gilt die Vorlage.
     groupBlocks: Array.isArray(config.groupBlocks) ? config.groupBlocks.map(parseBlock) : defaultGroupBlocks(),
     groupSections: Array.isArray(config.groupSections) ? config.groupSections.map(parseSection) : defaultGroupSections(),
-    reportPeriods: parseReportPeriods(config.reportPeriods, teachers.map((t) => t.id)),
+    reportPeriods: withLegacyRoomSigns(parseReportPeriods(config.reportPeriods, teachers.map((t) => t.id)), config),
     calendarPdf: parseCalendarPdfTexts(config.calendarPdf),
-    ...roomSignsOf(config.roomSigns),
     ...(config.sharedContentsMigrated ? { sharedContentsMigrated: true } : {}),
   };
 }
@@ -817,6 +826,7 @@ function parseReportPeriods(data: unknown, allTeacherIds: string[]): ReportPerio
       ...(p.placeholder ? { placeholder: true } : {}),
       ...parseSelfBooking(p.selfBooking),
       ...parseGroupChoice(p.groupChoice),
+      ...roomSignsOf(p.roomSigns),
     }));
   return periods.length > 0 ? periods : [{ ...schoolHalfYear(today()), teacherIds: [...allTeacherIds], placeholder: true }];
 }
@@ -873,6 +883,7 @@ function parseCalendarSettings(data: Partial<CalendarSettings> | undefined): Cal
  * bisher gemeinsamen Unterrichtszeiten (`calendar.teachingWindows`) übernimmt.
  */
 function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
+  const legacyGrayscale = (config.pdfLayout as Partial<PdfLayout> | undefined)?.grayscale === true;
   const teachers = Array.isArray(config.teachers) ? config.teachers.filter((t) => typeof t?.name === 'string') : [];
   if (teachers.length > 0) {
     return teachers.map((t: Teacher) => ({
@@ -887,6 +898,8 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
       ...(typeof t.role === 'string' && t.role.trim() ? { role: t.role.trim() } : {}),
       ...(t.periodRoles && typeof t.periodRoles === 'object' ? { periodRoles: parsePeriodLocations(t.periodRoles) } : {}),
       ...(isHexColor(t.themeColor) ? { themeColor: t.themeColor.toLowerCase() } : {}),
+      // Früher galt Schwarzweiß für alle; wer es damals hatte, behält es als eigene Einstellung.
+      ...(t.grayscalePdf === true || legacyGrayscale ? { grayscalePdf: true as const } : {}),
       ...(HOME_PAGES.some((page) => page.path === t.homePage) ? { homePage: t.homePage } : {}),
       ...(typeof t.inactiveSince === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.inactiveSince) ? { inactiveSince: t.inactiveSince } : {}),
       ...(t.withoutPeriod === true ? { withoutPeriod: true as const } : {}),
@@ -904,8 +917,20 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
   }];
 }
 
+/**
+ * Kurz galten die Türschilder für Räume für alle Zeiträume (`roomSigns` an der Konfiguration). Solche bekommen die
+ * laufenden und künftigen Zeiträume, die noch keine eigenen haben.
+ */
+function withLegacyRoomSigns(periods: ReportPeriodEntry[], config: object): ReportPeriodEntry[] {
+  const legacy = roomSignsOf((config as { roomSigns?: unknown }).roomSigns).roomSigns;
+  if (!legacy) return periods;
+  return periods.map((period) =>
+    period.roomSigns || period.to < today() ? period : { ...period, roomSigns: legacy.map((sign) => ({ ...sign, id: newId() })) },
+  );
+}
+
 /** Türschilder ohne Lehrkraft; ohne gültige entfällt das Feld. */
-function roomSignsOf(data: unknown): Pick<FeedbackConfig, 'roomSigns'> {
+function roomSignsOf(data: unknown): Pick<ReportPeriodEntry, 'roomSigns'> {
   if (!Array.isArray(data)) return {};
   const signs = data
     .filter((sign) => sign && typeof sign.id === 'string' && typeof sign.title === 'string')
@@ -957,7 +982,8 @@ function parsePdfLayout(data: Partial<PdfLayout> | undefined): PdfLayout {
     headerLogo:
       data?.headerLogo === undefined ? DEFAULT_PDF_LAYOUT.headerLogo : parseLogo(data.headerLogo, LOGO_HEIGHT_LIMITS.headerLogo),
     footerLogo: parseLogo(data?.footerLogo, LOGO_HEIGHT_LIMITS.footerLogo),
-    grayscale: data?.grayscale === true,
+    // Persönlich je Lehrkraft (`Teacher.grayscalePdf`); ein älterer allgemeiner Wert geht in `parseTeachers` auf.
+    grayscale: false,
   };
 }
 

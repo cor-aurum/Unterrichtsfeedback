@@ -17,6 +17,7 @@ import { WelcomeDialog } from './welcome/welcome-dialog';
 import { ShareSheet } from './share-sheet';
 import { StudentPlanning } from './planning/student-planning';
 import { StudentPlanningPage } from './planning/student-planning-page';
+import { SharedFiles } from './shared-files/shared-files';
 
 @Component({
   selector: 'app-root',
@@ -48,6 +49,8 @@ export class App {
   );
   /** Startet den Abgleich mit dem Server, falls die App mit einem verbunden ist */
   protected readonly serverSync = inject(ServerSync);
+  /** Neue PDFs, die andere Lehrkräfte bereitgestellt haben, zählt die Navigation. */
+  protected readonly sharedFiles = inject(SharedFiles);
   protected readonly syncNeedsAttention = computed(() =>
     ['reconnect', 'initial', 'conflict', 'error'].includes(this.serverSync.status()),
   );

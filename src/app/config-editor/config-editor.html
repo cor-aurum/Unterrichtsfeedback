@@ -89,6 +89,15 @@
             </button>
           </div>
 
+          <label class="show-title">
+            <input
+              type="checkbox"
+              [checked]="!!activeTeacher.teacher().grayscalePdf"
+              (change)="store.setTeacherGrayscale(activeTeacher.teacher().id, $any($event.target).checked)"
+            />
+            Meine PDFs in Schwarzweiß – spart Farbe beim Drucken (Grautöne, keine farbigen Flächen, Bilder in Graustufen)
+          </label>
+
           <label class="home-page" for="config-home-page">
             <strong>Das Logo oben links führt zu</strong>
           </label>
@@ -119,15 +128,6 @@
         <h2 class="tab-title">Allgemein<app-help-link topic="zeitraum-anlegen" label="Allgemein" /></h2>
 
         <section class="card">
-          <label class="show-title">
-            <input
-              type="checkbox"
-              [checked]="store.config().pdfLayout.grayscale"
-              (change)="store.setPdfLayout({ grayscale: $any($event.target).checked })"
-            />
-            PDFs in Schwarzweiß – spart Farbe beim Drucken (Grautöne, keine farbigen Flächen, Bilder in Graustufen)
-          </label>
-
           <p class="muted small">
             Platzhalter für alle Texte im PDF (Überschrift, Kopf- und Fußzeile, feste Texte, Textbausteine und
             Freitextfelder):
@@ -272,9 +272,20 @@
           <strong>Türschilder für Räume<app-help-link topic="raum-tuerschilder" label="Türschilder für Räume" /></strong>
           <p class="muted small">
             Im Design der Türschilder der Lehrkräfte, aber ohne Lehrkraft, z. B. „Speisesaal“ oder „Damen-WC“. Die
-            Unterzeile (z. B. „Erdgeschoss, links“) ist optional.
+            Unterzeile (z. B. „Erdgeschoss, links“) ist optional. Jeder Berichtszeitraum hat eigene; ein neuer übernimmt
+            die des vorigen.
           </p>
-          @for (sign of store.config().roomSigns ?? []; track sign.id) {
+          <label class="windows-period">
+            Türschilder für
+            <select (change)="roomSignsPeriodId.set(valueOf($event))">
+              @for (period of store.config().reportPeriods; track period.id) {
+                <option [value]="period.id" [selected]="period.id === roomSignsPeriod().id">{{ periodLabel(period) }}</option>
+              }
+            </select>
+          </label>
+          @let signPeriod = roomSignsPeriod();
+          @let signs = signPeriod.roomSigns ?? [];
+          @for (sign of signs; track sign.id) {
             <div class="row room-sign">
               <input
                 type="text"
@@ -282,7 +293,8 @@
                 placeholder="Bezeichnung, z. B. Speisesaal"
                 aria-label="Bezeichnung des Türschilds"
                 [value]="sign.title"
-                (change)="store.updateRoomSign(sign.id, { title: valueOf($event) })"
+                [disabled]="locked(signPeriod)"
+                (change)="store.updateRoomSign(signPeriod.id, sign.id, { title: valueOf($event) })"
               />
               <input
                 type="text"
@@ -290,16 +302,34 @@
                 placeholder="Unterzeile (optional)"
                 aria-label="Unterzeile des Türschilds"
                 [value]="sign.subtitle"
-                (change)="store.updateRoomSign(sign.id, { subtitle: valueOf($event) })"
+                [disabled]="locked(signPeriod)"
+                (change)="store.updateRoomSign(signPeriod.id, sign.id, { subtitle: valueOf($event) })"
               />
               <button class="secondary" (click)="roomSignsPdf([sign])">PDF</button>
-              <button class="icon" title="Türschild entfernen" (click)="store.removeRoomSign(sign.id)">✕</button>
+              <button
+                class="icon"
+                title="Türschild entfernen"
+                [disabled]="locked(signPeriod)"
+                (click)="store.removeRoomSign(signPeriod.id, sign.id)"
+              >✕</button>
             </div>
+          } @empty {
+            <p class="muted small">In „{{ signPeriod.name }}“ gibt es noch keine.</p>
           }
           <div class="row">
-            <button class="secondary" (click)="store.addRoomSign()">+ Türschild</button>
-            @if ((store.config().roomSigns ?? []).length > 1) {
-              <button class="secondary" (click)="roomSignsPdf(store.config().roomSigns ?? [])">Alle als PDF</button>
+            <button
+              class="secondary"
+              [disabled]="locked(signPeriod)"
+              [title]="locked(signPeriod) ? lockedText : ''"
+              (click)="store.addRoomSign(signPeriod.id)"
+            >+ Türschild</button>
+            @let signTeachers = periodSignTeachers(signPeriod);
+            @if (signs.length + signTeachers.length > 1) {
+              <button
+                class="secondary"
+                title="Erst die Türschilder der Lehrkräfte des Zeitraums, dann die der Räume, je auf einer Seite"
+                (click)="allSignsPdf(signPeriod)"
+              >Alle als PDF{{ signTeachers.length ? ' (mit Lehrkräften)' : '' }}</button>
             }
           </div>
         </section>
