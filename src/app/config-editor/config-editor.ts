@@ -301,6 +301,37 @@ export class ConfigEditor {
     if (login && period && !period.teacherIds.includes(login.teacherId)) {
       this.store.toggleReportPeriodTeacher(id, login.teacherId);
     }
+    this.openPeriods.set([...this.openPeriodIds(), id]);
+  }
+
+  /**
+   * Aufgeklappte Berichtszeiträume (nur auf diesem Gerät). Solange man nichts auf- oder zuklappt, ist nur der
+   * markierte Zeitraum offen.
+   */
+  private readonly openPeriods = storedSignal<string[] | null>('feedback.openPeriods', () => null, (data) =>
+    Array.isArray(data) ? data.filter((id): id is string => typeof id === 'string') : null,
+  );
+
+  private openPeriodIds(): string[] {
+    return this.openPeriods() ?? [this.reportPeriod.period().id];
+  }
+
+  protected isPeriodOpen(period: ReportPeriodEntry): boolean {
+    return this.openPeriodIds().includes(period.id);
+  }
+
+  protected togglePeriod(period: ReportPeriodEntry): void {
+    const open = this.openPeriodIds().filter((id) => this.store.config().reportPeriods.some((p) => p.id === id));
+    this.openPeriods.set(open.includes(period.id) ? open.filter((id) => id !== period.id) : [...open, period.id]);
+  }
+
+  /** Kurz, was im zugeklappten Zeitraum steckt */
+  protected periodSummary(period: ReportPeriodEntry): string {
+    const teachers = period.teacherIds.length;
+    return [
+      teachers === 1 ? '1 Lehrkraft' : `${teachers} Lehrkräfte`,
+      period.sharedWindows ? 'gemeinsame Unterrichtszeiten' : 'eigene Unterrichtszeiten',
+    ].join(' · ');
   }
 
   protected setTeacherName(teacher: Teacher, event: Event): void {

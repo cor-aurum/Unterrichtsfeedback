@@ -141,7 +141,15 @@
           <strong>Berichtszeiträume</strong>
           <ul class="periods">
             @for (period of store.config().reportPeriods; track period.id) {
+              @let open = isPeriodOpen(period);
               <li class="period" [class.active]="period.id === reportPeriod.period().id">
+                <button
+                  class="icon"
+                  [title]="open ? 'Zuklappen' : 'Aufklappen'"
+                  [attr.aria-label]="period.name + (open ? ' zuklappen' : ' aufklappen')"
+                  [attr.aria-expanded]="open"
+                  (click)="togglePeriod(period)"
+                >{{ open ? '▾' : '▸' }}</button>
                 <input
                   type="radio"
                   name="active-period"
@@ -180,6 +188,9 @@
                 >
                   ✕
                 </button>
+                @if (!open) {
+                  <span class="period-windows muted">{{ periodSummary(period) }}</span>
+                } @else {
                 <div class="period-windows">
                   <label>
                     <span class="choice-label">Unterrichtszeiten</span>
@@ -239,6 +250,7 @@
                 @if (planLinkLogin() && !period.placeholder && !locked(period)) {
                   <app-plan-link-panel [period]="period" />
                   <app-board-link-panel [period]="period" />
+                }
                 }
               </li>
             }
