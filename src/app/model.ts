@@ -538,11 +538,22 @@ export interface FeedbackConfig {
   reportPeriods: ReportPeriodEntry[];
   /** Feste Texte der Kalender-PDFs (Terminlisten, Wochen- und Tagesplan) */
   calendarPdf: CalendarPdfTexts;
+  /** Türschilder ohne Lehrkraft, z. B. „Speisesaal“ oder „Damen-WC“; fehlt, solange es keine gibt */
+  roomSigns?: RoomSign[];
   /**
    * Mit Server ändert jede Lehrkraft nur eigene Inhalte und Varianten. Früher geänderte gemeinsame Texte wurden dafür
    * einmal zu eigenen Varianten aller Lehrkräfte (siehe `ConfigStore.migrateSharedContents`).
    */
   sharedContentsMigrated?: boolean;
+}
+
+/** Türschild ohne Lehrkraft im Design der Türschilder: groß die Bezeichnung, darunter optional eine Unterzeile */
+export interface RoomSign {
+  id: string;
+  /** z. B. „Speisesaal“ */
+  title: string;
+  /** z. B. „Erdgeschoss, links“; leer ohne */
+  subtitle: string;
 }
 
 export interface CalendarPdfTexts {

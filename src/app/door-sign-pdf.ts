@@ -44,12 +44,13 @@ function writeDoorSign(doc: jsPDF, logo: PdfLogo | null, sign: DoorSign): void {
   const name = fitText(doc, 'bold', sign.name, 72, 28, 2);
   const role = fitText(doc, 'normal', sign.role, 32, 16, 2);
   const location = fitText(doc, 'normal', sign.location, 24, 12, 2);
-  const ruleGap = 10;
+  // Die kurze Linie trennt den Namen vom Rest; ohne Funktion und Ort (z. B. „Damen-WC“) steht der Name allein.
+  const ruleGap = role.lines.length || location.lines.length ? 10 : 0;
   const height = name.height + ruleGap + role.height + (location.lines.length ? 4 + location.height : 0);
   // Der Text steht mittig im Platz zwischen Logo und Band.
   let y = top + Math.max(0, (bottom - top - height) / 2);
   y = writeLines(doc, name, 'bold', TEXT, y);
-  doc.setFillColor(sign.theme.primary).rect((PAGE_WIDTH - 40) / 2, y + ruleGap / 2 - 0.75, 40, 1.5, 'F');
+  if (ruleGap) doc.setFillColor(sign.theme.primary).rect((PAGE_WIDTH - 40) / 2, y + ruleGap / 2 - 0.75, 40, 1.5, 'F');
   y = writeLines(doc, role, 'normal', sign.theme.primaryText, y + ruleGap);
   writeLines(doc, location, 'normal', MUTED, y + 4);
 }

@@ -20,6 +20,7 @@ import {
   LEGACY_APP_LOGO_PATH,
   locationIn,
   roleIn,
+  RoomSign,
   LOGO_HEIGHT_LIMITS,
   newId,
   PdfLayout,
@@ -113,6 +114,27 @@ export class ConfigStore {
 
   setCalendarPdfTexts(change: Partial<CalendarPdfTexts>): void {
     this.mutate((config) => Object.assign(config.calendarPdf, change));
+  }
+
+  /** Neues Türschild ohne Lehrkraft am Ende der Liste; liefert seine ID. */
+  addRoomSign(): string {
+    const id = newId();
+    this.mutate((config) => (config.roomSigns = [...(config.roomSigns ?? []), { id, title: '', subtitle: '' }]));
+    return id;
+  }
+
+  updateRoomSign(id: string, change: Partial<Pick<RoomSign, 'title' | 'subtitle'>>): void {
+    this.mutate((config) => {
+      config.roomSigns = (config.roomSigns ?? []).map((sign) => (sign.id === id ? { ...sign, ...change } : sign));
+    });
+  }
+
+  removeRoomSign(id: string): void {
+    this.mutate((config) => {
+      const rest = (config.roomSigns ?? []).filter((sign) => sign.id !== id);
+      if (rest.length > 0) config.roomSigns = rest;
+      else delete config.roomSigns;
+    });
   }
 
   resetCalendarPdfTexts(): void {
@@ -773,6 +795,7 @@ export function parseConfig(data: unknown): FeedbackConfig {
     groupSections: Array.isArray(config.groupSections) ? config.groupSections.map(parseSection) : defaultGroupSections(),
     reportPeriods: parseReportPeriods(config.reportPeriods, teachers.map((t) => t.id)),
     calendarPdf: parseCalendarPdfTexts(config.calendarPdf),
+    ...roomSignsOf(config.roomSigns),
     ...(config.sharedContentsMigrated ? { sharedContentsMigrated: true } : {}),
   };
 }
@@ -879,6 +902,15 @@ function parseTeachers(config: Partial<FeedbackConfig>): Teacher[] {
     periodWindows: {},
     periodLocations: {},
   }];
+}
+
+/** Türschilder ohne Lehrkraft; ohne gültige entfällt das Feld. */
+function roomSignsOf(data: unknown): Pick<FeedbackConfig, 'roomSigns'> {
+  if (!Array.isArray(data)) return {};
+  const signs = data
+    .filter((sign) => sign && typeof sign.id === 'string' && typeof sign.title === 'string')
+    .map((sign) => ({ id: sign.id, title: sign.title, subtitle: typeof sign.subtitle === 'string' ? sign.subtitle : '' }));
+  return signs.length > 0 ? { roomSigns: signs } : {};
 }
 
 /** Texte je Zeitraum (Ort, Funktion): nur Einträge mit Text bleiben */

@@ -18,6 +18,7 @@ import {
   isVisibleTo,
   locationIn,
   roleIn,
+  RoomSign,
   LOGO_HEIGHT_LIMITS,
   PdfLogo,
   PLACEHOLDERS,
@@ -519,6 +520,23 @@ export class ConfigEditor {
   /** Funktion im oben gewählten Berichtszeitraum; ein neuer Zeitraum übernimmt sie aus dem vorigen. */
   protected roleOf(teacher: Teacher): string {
     return roleIn(teacher, this.windowsPeriodId());
+  }
+
+  /** Türschilder ohne Lehrkraft als PDF, in der allgemeinen Farbe; ohne Bezeichnung entfällt eins. */
+  protected async roomSignsPdf(signs: RoomSign[]): Promise<void> {
+    const config = this.store.config();
+    const printable = signs
+      .filter((sign) => sign.title.trim())
+      .map((sign) => ({ name: sign.title.trim(), role: sign.subtitle.trim(), location: '', color: config.themeColor }));
+    if (printable.length === 0) {
+      this.showError('Das Türschild braucht eine Bezeichnung, z. B. „Speisesaal“.');
+      return;
+    }
+    try {
+      await this.pdfExport.exportDoorSigns(config, printable, 'share');
+    } catch (e) {
+      this.showError(`Das Türschild ließ sich nicht erstellen: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   /** Türschilder als PDF, mit dem Ort im oben gewählten Zeitraum; mehrere Lehrkräfte bekommen je eine Seite. */

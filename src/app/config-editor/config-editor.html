@@ -264,8 +264,44 @@
             diesem Zeitraum und nur diese Stunden, und die Textbausteine im allgemeinen Teil gelten für alle Stunden im
             Zeitraum. Ohne eigene Wahl gilt der Zeitraum, in dem heute liegt. Unter „Feste Inhalte“ kann jeder Zeitraum
             eigene Varianten bekommen; <code>{{ '{zeitraum}' }}</code> setzt seinen Namen ins PDF. Die aktiven Lehrer:innen
-            sind bei allgemeinen Terminen im Kalender vorausgewählt und stehen im Tagesplan aller Lehrkräfte.
+            sind bei allgemeinen Terminen im Kalender vorausgewählt.
           </p>
+        </section>
+
+        <section class="card room-signs">
+          <strong>Türschilder für Räume<app-help-link topic="raum-tuerschilder" label="Türschilder für Räume" /></strong>
+          <p class="muted small">
+            Im Design der Türschilder der Lehrkräfte, aber ohne Lehrkraft, z. B. „Speisesaal“ oder „Damen-WC“. Die
+            Unterzeile (z. B. „Erdgeschoss, links“) ist optional.
+          </p>
+          @for (sign of store.config().roomSigns ?? []; track sign.id) {
+            <div class="row room-sign">
+              <input
+                type="text"
+                class="grow"
+                placeholder="Bezeichnung, z. B. Speisesaal"
+                aria-label="Bezeichnung des Türschilds"
+                [value]="sign.title"
+                (change)="store.updateRoomSign(sign.id, { title: valueOf($event) })"
+              />
+              <input
+                type="text"
+                class="grow"
+                placeholder="Unterzeile (optional)"
+                aria-label="Unterzeile des Türschilds"
+                [value]="sign.subtitle"
+                (change)="store.updateRoomSign(sign.id, { subtitle: valueOf($event) })"
+              />
+              <button class="secondary" (click)="roomSignsPdf([sign])">PDF</button>
+              <button class="icon" title="Türschild entfernen" (click)="store.removeRoomSign(sign.id)">✕</button>
+            </div>
+          }
+          <div class="row">
+            <button class="secondary" (click)="store.addRoomSign()">+ Türschild</button>
+            @if ((store.config().roomSigns ?? []).length > 1) {
+              <button class="secondary" (click)="roomSignsPdf(store.config().roomSigns ?? [])">Alle als PDF</button>
+            }
+          </div>
         </section>
       }
       @case ('sections') {
